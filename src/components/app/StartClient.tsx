@@ -28,7 +28,7 @@ function ageOf(birthDate: string, asOf = "2026-09-03"): number {
 export function StartClient({ items }: { items: Item[] }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [phase, setPhase] = useState<"pick" | "analyzing" | "result">("pick");
+  const [phase, setPhase] = useState<"pick" | "analyzing" | "result" | "form">("pick");
   const [step, setStep] = useState(0);
 
   const selected = items.find((i) => i.persona.id === selectedId) ?? null;
@@ -122,8 +122,23 @@ export function StartClient({ items }: { items: Item[] }) {
               </button>
             ))}
           </div>
+
+          {/* 직접 입력 시작 */}
+          <button
+            onClick={() => setPhase("form")}
+            className="mt-4 w-full rounded-[24px] border-2 border-dashed border-line bg-card/60 p-6 text-left transition hover:border-ink hover:bg-card"
+          >
+            <span className="text-2xl">🙋</span>
+            <p className="mt-2 text-lg font-bold">내 정보로 직접 시작하기</p>
+            <p className="mt-1 text-[13.5px] text-mute">
+              간단한 설문을 입력하면 내 조건으로 시작합니다. 입력한 정보는 DB에 저장돼요.
+            </p>
+          </button>
         </section>
       )}
+
+      {/* ── 직접 입력 설문 ─────────────────────── */}
+      {phase === "form" && <SignupForm onBack={() => setPhase("pick")} />}
 
       {/* ── 2단계: 마이데이터 분석 연출 ───────────── */}
       {phase === "analyzing" && selected && (
@@ -276,4 +291,281 @@ function Stat({ label, value, hint, warn }: { label: string; value: string; hint
 
 function Chip({ children }: { children: React.ReactNode }) {
   return <span className="rounded-full bg-card px-3 py-1.5">{children}</span>;
+}
+
+
+const SIDO_LIST = [
+  "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시",
+  "울산광역시", "세종특별자치시", "경기도", "강원특별자치도", "충청북도", "충청남도",
+  "전북특별자치도", "전라남도", "경상북도", "경상남도", "제주특별자치도",
+];
+
+function SignupForm({ onBack }: { onBack: () => void }) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [f, setF] = useState({
+    // ① 설문 정보
+    name: "",
+    birthDate: "",
+    gender: "",
+    sido: "서울특별시",
+    sigungu: "",
+    education: "졸업",
+    targetJob: "",
+    household: "1인 가구",
+    housingType: "월세",
+    incomeBracket: "모름",
+    military: "해당 없음",
+    // ② 금융 정보 (본래 마이데이터로 자동 수집 — 데모에서는 직접 입력)
+    monthlyIncomeMan: "", // 만원 단위
+    assetsMan: "",
+    monthlyRentMan: "",
+    benefitName: "없음",
+    benefitMonthlyMan: "",
+    loanBalanceMan: "",
+  });
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setF((prev) => ({ ...prev, [k]: e.target.value }));
+
+  /** ⚡ 자동기입 — 그럴듯한 랜덤값으로 채움 (귀찮은 사람용) */
+  const autofill = () => {
+    const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
+    const ri = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const year = ri(1994, 2004);
+    const birth = `${year}-${String(ri(1, 12)).padStart(2, "0")}-${String(ri(1, 28)).padStart(2, "0")}`;
+    const sido = pick(["서울특별시", "경기도", "인천광역시", "부산광역시", "대전광역시"]);
+    const sigungu = pick({
+      서울특별시: ["관악구", "중랑구", "노원구", "강서구"],
+      경기도: ["수원시", "성남시", "부천시", "안양시"],
+      인천광역시: ["부평구", "미추홀구"],
+      부산광역시: ["부산진구", "해운대구"],
+      대전광역시: ["서구", "유성구"],
+    }[sido]!);
+    const household = pick(["1인 가구", "부모님과 거주"]);
+    const housing = household === "부모님과 거주" ? "본가" : pick(["월세", "전세"]);
+    setF({
+      name: pick(["김취준", "이준비", "박도전", "최시작", "정새벽"]) + ri(1, 99),
+      birthDate: birth,
+      gender: pick(["여성", "남성"]),
+      sido,
+      sigungu,
+      education: pick(["졸업", "졸업", "졸업유예", "휴학"]),
+      targetJob: pick(["데이터 분석", "백엔드 개발", "마케팅", "품질관리", "UX 디자인"]),
+      household,
+      housingType: housing,
+      incomeBracket: pick(["모름", "~60%", "60~100%", "100~150%"]),
+      military: pick(["해당 없음", "군필"]),
+      monthlyIncomeMan: String(pick([0, 0, 30, 50, 80, 120])),
+      assetsMan: String(ri(50, 1500)),
+      monthlyRentMan: housing === "월세" ? String(pick([35, 45, 50, 55])) : "",
+      benefitName: (() => {
+        const pool = sido === "서울특별시" ? ["없음", "없음", "구직급여", "서울 청년수당"] : ["없음", "없음", "없음", "구직급여"];
+        return pick(pool);
+      })(),
+      benefitMonthlyMan: "",
+      loanBalanceMan: pick(["", "", "300", "600"]),
+    });
+    // 수당 월액 보정 (수당별 통상 금액)
+    setF((prev) => ({
+      ...prev,
+      benefitMonthlyMan:
+        prev.benefitName === "구직급여" ? "180" : prev.benefitName === "서울 청년수당" ? "50" : "",
+    }));
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(f),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "저장 실패");
+      localStorage.setItem(
+        "tikkeul.session",
+        JSON.stringify({
+          personaId: null,
+          profileId: json.profileId,
+          userId: json.userId,
+          name: json.name,
+          startedAt: new Date().toISOString(),
+        }),
+      );
+      router.push("/app");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setSaving(false);
+    }
+  };
+
+  const input = "w-full rounded-[8px] border border-line bg-card px-3 py-2.5 text-[14px]";
+  const label = "text-[12.5px] font-bold text-mute";
+
+  return (
+    <section className="mx-auto w-full max-w-xl px-5 pb-24 pt-6">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">내 정보로 시작하기</h1>
+          <p className="mt-2 text-[13.5px] text-mute">
+            정책 자격 판정에 실제로 쓰이는 항목만 묻습니다. 모르는 항목은 비워두거나
+            &ldquo;모름&rdquo;으로 두세요.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={autofill}
+          className="shrink-0 rounded-full border border-line bg-card px-4 py-2 text-[13px] font-bold transition hover:border-ink"
+        >
+          ⚡ 자동기입
+        </button>
+      </div>
+
+      <form onSubmit={submit} className="mt-6">
+        {/* ── ① 설문 정보 ── */}
+        <p className="text-[13px] font-bold text-leaf-deep">① 설문 정보</p>
+        <div className="mt-2 grid gap-4 rounded-[16px] border border-line bg-card p-4 sm:grid-cols-2">
+          <div>
+            <p className={label}>이름 (닉네임) *</p>
+            <input className={input} value={f.name} onChange={set("name")} required placeholder="홍길동" />
+          </div>
+          <div>
+            <p className={label}>생년월일 *</p>
+            <input className={input} type="date" value={f.birthDate} onChange={set("birthDate")} required />
+          </div>
+          <div>
+            <p className={label}>성별</p>
+            <select className={input} value={f.gender} onChange={set("gender")}>
+              <option value="">선택 안 함</option>
+              <option>여성</option>
+              <option>남성</option>
+            </select>
+          </div>
+          <div>
+            <p className={label}>병역</p>
+            <select className={input} value={f.military} onChange={set("military")}>
+              <option>해당 없음</option>
+              <option>군필</option>
+              <option>미필</option>
+            </select>
+          </div>
+          <div>
+            <p className={label}>거주지 (시·도) *</p>
+            <select className={input} value={f.sido} onChange={set("sido")}>
+              {SIDO_LIST.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <p className={label}>거주지 (시·군·구)</p>
+            <input className={input} value={f.sigungu} onChange={set("sigungu")} placeholder="예: 관악구" />
+          </div>
+          <div>
+            <p className={label}>학력 상태</p>
+            <select className={input} value={f.education} onChange={set("education")}>
+              <option>재학</option>
+              <option>휴학</option>
+              <option>졸업유예</option>
+              <option>졸업</option>
+            </select>
+          </div>
+          <div>
+            <p className={label}>목표 직무</p>
+            <input className={input} value={f.targetJob} onChange={set("targetJob")} placeholder="예: 데이터 분석" />
+          </div>
+          <div>
+            <p className={label}>가구 형태</p>
+            <select className={input} value={f.household} onChange={set("household")}>
+              <option>1인 가구</option>
+              <option>부모님과 거주</option>
+              <option>기타</option>
+            </select>
+          </div>
+          <div>
+            <p className={label}>주거 형태</p>
+            <select className={input} value={f.housingType} onChange={set("housingType")}>
+              <option>월세</option>
+              <option>전세</option>
+              <option>본가</option>
+              <option>기타</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <p className={label}>가구 중위소득 구간 (건강보험료 기준 — 모르면 &ldquo;모름&rdquo;)</p>
+            <select className={input} value={f.incomeBracket} onChange={set("incomeBracket")}>
+              <option>모름</option>
+              <option value="~60%">중위소득 60% 이하</option>
+              <option value="60~100%">60~100%</option>
+              <option value="100~150%">100~150%</option>
+              <option value="150%~">150% 초과</option>
+            </select>
+          </div>
+        </div>
+
+        {/* ── ② 금융 정보 (마이데이터 대체 입력) ── */}
+        <p className="mt-6 text-[13px] font-bold text-leaf-deep">② 금융 정보</p>
+        <p className="mt-1 text-[12.5px] text-mute">
+          ⚠ 이 항목들은 <b className="text-ink">실서비스에서는 마이데이터 연동으로 자동
+          수집·계산</b>됩니다 (계좌 잔액·거래내역 분석). 데모에서는 직접 입력으로 대체합니다.
+        </p>
+        <div className="mt-2 grid gap-4 rounded-[16px] border border-dashed border-line bg-mint-soft/50 p-4 sm:grid-cols-2">
+          <div>
+            <p className={label}>월 평균 소득 — 알바 포함 (만원)</p>
+            <input className={input} type="number" min="0" value={f.monthlyIncomeMan} onChange={set("monthlyIncomeMan")} placeholder="예: 50 (없으면 0)" />
+          </div>
+          <div>
+            <p className={label}>보유 금융자산 — 예적금·잔고 (만원)</p>
+            <input className={input} type="number" min="0" value={f.assetsMan} onChange={set("assetsMan")} placeholder="예: 300" />
+          </div>
+          <div>
+            <p className={label}>월세 (만원, 월세 거주 시)</p>
+            <input className={input} type="number" min="0" value={f.monthlyRentMan} onChange={set("monthlyRentMan")} placeholder="예: 45" />
+          </div>
+          <div>
+            <p className={label}>대출 잔액 (만원)</p>
+            <input className={input} type="number" min="0" value={f.loanBalanceMan} onChange={set("loanBalanceMan")} placeholder="없으면 비워두기" />
+          </div>
+          <div>
+            <p className={label}>수급 중인 수당</p>
+            <select className={input} value={f.benefitName} onChange={set("benefitName")}>
+              <option>없음</option>
+              <option>구직급여</option>
+              <option>서울 청년수당</option>
+              <option>구직촉진수당</option>
+              <option>기타</option>
+            </select>
+          </div>
+          <div>
+            <p className={label}>수당 월 수령액 (만원)</p>
+            <input className={input} type="number" min="0" value={f.benefitMonthlyMan} onChange={set("benefitMonthlyMan")} placeholder="수급 중일 때만" disabled={f.benefitName === "없음"} />
+          </div>
+        </div>
+
+        {error && <p className="mt-3 text-[13px] font-bold text-[#d33]">⚠ {error}</p>}
+
+        <div className="mt-5 flex gap-3">
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-full bg-leaf px-6 py-3 text-[15px] font-medium text-white transition hover:bg-[#333333] disabled:opacity-60"
+          >
+            {saving ? "저장 중…" : "이 정보로 시작하기 →"}
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="rounded-full border border-line bg-card px-6 py-3 text-[15px] font-medium transition hover:border-ink"
+          >
+            뒤로
+          </button>
+        </div>
+      </form>
+    </section>
+  );
 }

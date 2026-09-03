@@ -29,5 +29,20 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // 페르소나의 초기 일정을 캘린더에 시드 (source='seed')
+  const seedRows = persona.seedEvents.map((e) => ({
+    user_id: data.user_id,
+    start_at: e.date,
+    title: e.title,
+    location: e.location ?? null,
+    source: "seed",
+  }));
+  const seedRes = await db.from("user_calendar").insert(seedRows);
+  if (seedRes.error) {
+    // 시드 실패는 치명적이지 않음 — 사용자 생성은 유지하고 경고만
+    console.error("seed events 실패:", seedRes.error.message);
+  }
+
   return NextResponse.json({ userId: data.user_id, createdAt: data.created_at });
 }
