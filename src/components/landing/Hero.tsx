@@ -13,7 +13,7 @@ export function Hero() {
           <span className="h-1.5 w-1.5 rounded-full bg-leaf" />
           취업준비생 금융 AI Agent
         </div>
-        <h1 className="text-[44px] font-medium leading-[1.16] tracking-[-0.02em] sm:text-[64px]">
+        <h1 className="text-[44px] font-semibold leading-[1.07] tracking-[-0.02em] sm:text-[56px]">
           영끌 아닌,
           <br />
           <em className="not-italic text-leaf">
@@ -26,12 +26,12 @@ export function Hero() {
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <a
             href="#cta"
-            className="rounded-full bg-leaf-deep px-8 py-3.5 text-[15px] font-bold text-white transition hover:bg-[#444950]"
+            className="rounded-full bg-leaf px-[22px] py-[11px] text-[17px] text-white transition hover:bg-[#0071e3]"
           >
             내 혜택 캘린더 시작하기 →
           </a>
-          <a href="#how" className="rounded-full border-2 border-leaf-deep px-7 py-3 text-[15px] font-bold text-leaf-deep transition hover:bg-mint">
-            어떻게 작동하나요?
+          <a href="#how" className="text-[17px] text-leaf transition hover:underline">
+            어떻게 작동하나요? ›
           </a>
         </div>
 
@@ -44,7 +44,7 @@ export function Hero() {
 
       {/* ── 제품 목업: 일정을 적으면 돈이 붙는 캘린더 ── */}
       <div className="relative pb-16" aria-label="서비스 화면 미리보기">
-        <div className="rounded-[32px] border border-line bg-card p-6">
+        <div className="rounded-[18px] border border-line bg-card p-6">
           {/* 창 상단 */}
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
@@ -72,7 +72,7 @@ export function Hero() {
                   <span
                     className={
                       day === 18
-                        ? "inline-grid h-7 w-7 place-items-center rounded-full bg-leaf font-extrabold text-white"
+                        ? "inline-grid h-7 w-7 place-items-center rounded-full bg-leaf font-semibold text-white"
                         : "inline-grid h-7 w-7 place-items-center rounded-full font-semibold text-ink/70"
                     }
                   >
@@ -96,7 +96,7 @@ export function Hero() {
 
           {/* AI가 붙여준 혜택 */}
           <div className="mt-4 rounded-2xl border border-line bg-card p-4">
-            <p className="flex items-center gap-2 text-[13px] font-extrabold text-leaf-deep">
+            <p className="flex items-center gap-2 text-[13px] font-semibold text-leaf-deep">
               <span className="grid h-5 w-5 place-items-center rounded-md bg-lime text-[11px]">
                 AI
               </span>
@@ -117,7 +117,7 @@ export function Hero() {
 
           {/* 채팅 한 줄 */}
           <div className="mt-4 flex items-center gap-2.5 rounded-2xl border border-line bg-mint-soft/50 px-4 py-3 text-[13px]">
-            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-leaf text-[12px] font-extrabold text-white">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-leaf text-[12px] font-semibold text-white">
               티
             </span>
             <p className="text-ink/80">
@@ -129,7 +129,7 @@ export function Hero() {
         {/* 떠 있는 절약액 카드 */}
         <div className="absolute bottom-0 -left-3 rounded-2xl border border-line bg-card px-5 py-4 shadow-lift sm:-left-8">
           <p className="text-[12px] font-bold text-mute">이번 달 모은 티끌</p>
-          <p className="text-[22px] font-extrabold tracking-tight text-leaf">
+          <p className="text-[22px] font-semibold tracking-tight text-leaf">
             +140,000<span className="text-[14px] text-ink">원</span>
           </p>
         </div>

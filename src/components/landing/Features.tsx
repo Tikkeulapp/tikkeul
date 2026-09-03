@@ -61,10 +61,10 @@ export function Features() {
     <section id="features" className="bg-mint-soft/60 py-24">
       <div className="mx-auto w-full max-w-6xl px-5">
         <div className="max-w-xl">
-          <p className="text-[13px] font-extrabold tracking-widest text-leaf">
+          <p className="text-[13px] font-semibold tracking-widest text-leaf">
             YOUR JOB-HUNT CO-PILOT
           </p>
-          <h2 className="mt-3 text-3xl font-medium leading-snug sm:text-[44px] sm:leading-[1.2]">
+          <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-[40px] sm:leading-[1.1]">
             검색 포털이 아니라,
             <br />
             먼저 움직이는 Agent
@@ -85,14 +85,14 @@ export function Features() {
                 }`}
               >
                 <span
-                  className={`text-sm font-extrabold ${
+                  className={`text-sm font-semibold ${
                     active === f.key ? "text-leaf" : "text-mute"
                   }`}
                 >
                   0{i + 1}
                 </span>
                 <span>
-                  <strong className="block text-[15px] font-extrabold">{f.label}</strong>
+                  <strong className="block text-[15px] font-semibold">{f.label}</strong>
                   <small className="text-[13px] text-mute">{f.small}</small>
                 </span>
               </button>
@@ -100,13 +100,13 @@ export function Features() {
           </div>
 
           {/* 미리보기 */}
-          <div className="rounded-[32px] border border-line bg-card p-8">
+          <div className="rounded-[18px] border border-line bg-card p-8">
             <div className="flex items-center justify-between">
-              <span className="font-extrabold text-leaf-deep">{current.preview.title}</span>
+              <span className="font-semibold text-leaf-deep">{current.preview.title}</span>
               <small className="text-[12px] font-bold text-mute">미리보기</small>
             </div>
             <p className="mt-6">
-              <strong className="text-[44px] font-extrabold tracking-tight text-leaf">
+              <strong className="text-[44px] font-semibold tracking-tight text-leaf">
                 {current.preview.stat}
               </strong>
               <span className="ml-1.5 font-bold text-mute">{current.preview.unit}</span>

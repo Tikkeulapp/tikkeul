@@ -20,10 +20,10 @@ const STEPS = [
     visual: (
       <div className="grid h-full place-items-center">
         <div className="relative grid h-24 w-24 place-items-center rounded-full border-2 border-dashed border-leaf/40">
-          <span className="grid h-12 w-12 place-items-center rounded-full bg-leaf text-sm font-extrabold text-white">
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-leaf text-sm font-semibold text-white">
             AI
           </span>
-          <span className="absolute -right-1 top-2 rounded-full bg-lime px-2 py-0.5 text-[10px] font-extrabold text-leaf-deep">
+          <span className="absolute -right-1 top-2 rounded-full bg-lime px-2 py-0.5 text-[10px] font-semibold text-leaf-deep">
             면접이구나
           </span>
         </div>
@@ -50,8 +50,8 @@ export function HowItWorks() {
   return (
     <section id="how" className="mx-auto w-full max-w-6xl px-5 py-24">
       <div className="mx-auto max-w-xl text-center">
-        <p className="text-[13px] font-extrabold tracking-widest text-leaf">HOW IT WORKS</p>
-        <h2 className="mt-3 text-3xl font-medium leading-snug sm:text-[44px] sm:leading-[1.2]">
+        <p className="text-[13px] font-semibold tracking-widest text-leaf">HOW IT WORKS</p>
+        <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-[40px] sm:leading-[1.1]">
           일정을 적으면,
           <br />
           돈이 따라옵니다
@@ -65,11 +65,11 @@ export function HowItWorks() {
         {STEPS.map((s) => (
           <article
             key={s.step}
-            className="rounded-[24px] border border-line bg-card p-7"
+            className="rounded-[18px] border border-line bg-card p-7"
           >
-            <span className="text-[13px] font-extrabold text-leaf">{s.step}</span>
+            <span className="text-[13px] font-semibold text-leaf">{s.step}</span>
             <div className="mt-4 h-36 rounded-2xl bg-mint-soft/70 p-4">{s.visual}</div>
-            <h3 className="mt-5 text-lg font-extrabold">{s.title}</h3>
+            <h3 className="mt-5 text-lg font-semibold">{s.title}</h3>
             <p className="mt-2 text-[14px] leading-relaxed text-mute">{s.body}</p>
           </article>
         ))}

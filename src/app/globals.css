@@ -5,15 +5,15 @@
   /* 색 */
   --color-paper: #ffffff; /* 페이지 배경 */
   --color-card: #ffffff; /* 카드 배경 */
-  --color-mint: #f1f4f7; /* 파스텔 민트 */
-  --color-mint-soft: #f1f4f7; /* 더 옅은 민트 */
-  --color-leaf: #0064e0; /* 프라이머리 그린 */
-  --color-leaf-deep: #0a1317; /* 딥 그린 (강조 텍스트) */
-  --color-lime: #f7b928; /* 라임 포인트 */
-  --color-butter: #f7b928; /* 보조 파스텔 (알림/하이라이트) */
-  --color-ink: #1c1e21; /* 본문 텍스트 */
-  --color-mute: #5d6c7b; /* 보조 텍스트 */
-  --color-line: #dee3e9; /* 경계선 */
+  --color-mint: #f5f5f7; /* 파스텔 민트 */
+  --color-mint-soft: #f5f5f7; /* 더 옅은 민트 */
+  --color-leaf: #0066cc; /* 프라이머리 그린 */
+  --color-leaf-deep: #1d1d1f; /* 딥 그린 (강조 텍스트) */
+  --color-lime: #2997ff; /* 라임 포인트 */
+  --color-butter: #f5f5f7; /* 보조 파스텔 (알림/하이라이트) */
+  --color-ink: #1d1d1f; /* 본문 텍스트 */
+  --color-mute: #7a7a7a; /* 보조 텍스트 */
+  --color-line: #e0e0e0; /* 경계선 */
 
   /* 폰트 */
   --font-sans:
@@ -22,7 +22,7 @@
 
   /* 그림자 */
   --shadow-soft: 0 1px 4px rgba(20, 22, 26, 0.08);
-  --shadow-lift: 0 1px 4px rgba(20, 22, 26, 0.14);
+  --shadow-lift: 0 5px 30px rgba(0, 0, 0, 0.12);
 }
 
 html {

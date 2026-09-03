@@ -5,7 +5,7 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 bg-paper/85 backdrop-blur-md border-b border-line/60">
       <div className="mx-auto flex h-[72px] w-full max-w-6xl items-center justify-between px-5">
-        <a href="#" className="flex items-center gap-2.5 font-extrabold tracking-tight">
+        <a href="#" className="flex items-center gap-2.5 font-semibold tracking-tight">
           <LogoMark />
           <span className="text-[17px]">{BRAND.name}</span>
         </a>
@@ -22,7 +22,7 @@ export function Nav() {
         </nav>
         <a
           href="#cta"
-          className="rounded-full bg-leaf-deep px-6 py-2.5 text-sm font-bold text-white transition hover:bg-[#444950]"
+          className="rounded-full bg-leaf px-5 py-2 text-sm text-white transition hover:bg-[#0071e3]"
         >
           시작하기
         </a>

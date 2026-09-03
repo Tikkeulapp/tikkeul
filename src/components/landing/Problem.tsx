@@ -36,10 +36,10 @@ export function Problem() {
   return (
     <section className="bg-leaf-deep py-20 text-white">
       <div className="mx-auto w-full max-w-6xl px-5">
-        <p className="text-[13px] font-extrabold tracking-widest text-lime">
+        <p className="text-[13px] font-semibold tracking-widest text-lime">
           THE REAL COST OF JOB HUNTING
         </p>
-        <h2 className="mt-3 text-3xl font-medium leading-snug sm:text-[44px] sm:leading-[1.2]">
+        <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-[40px] sm:leading-[1.1]">
           취업 준비에는
           <br />
           생각보다 돈이 듭니다
@@ -65,8 +65,8 @@ export function Problem() {
               key={reason.title}
               className="rounded-2xl border border-white/15 bg-white/[0.07] p-6"
             >
-              <span className="text-[13px] font-extrabold text-lime">0{i + 1}</span>
-              <h3 className="mt-1 text-lg font-extrabold">{reason.title}</h3>
+              <span className="text-[13px] font-semibold text-lime">0{i + 1}</span>
+              <h3 className="mt-1 text-lg font-semibold">{reason.title}</h3>
               <p className="mt-2 text-[14px] leading-relaxed text-white/75">{reason.body}</p>
             </article>
           ))}
