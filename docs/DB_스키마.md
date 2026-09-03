@@ -5,7 +5,8 @@
 > 구조 원칙:
 > - **PROFILE_SURVEY** — 마이데이터로 알 수 없어 설문으로 받는 정보 (페르소나: 임의 설정)
 > - **MYDATA_[업권]** — 마이데이터 API가 주는 **RAW 원천 데이터 그대로** (가공 없음)
-> - 도출값(월평균소득·월세감지·취준지출 등)은 **DB에 저장하지 않는다** — `src/lib/derive.ts`가 RAW에서 계산 (재계산 가능하므로 원천만 저장이 정석)
+> - **FINANCE** — 정책 판정에 직접 쓰이는 금융 피처만 담는 가공 테이블 (RAW·설문에서 계산·복사, 매칭 엔진의 입력). 피처 정의·근거: [FINANCE_피처정의.md](./FINANCE_피처정의.md)
+> - 그 외 도출값은 저장하지 않고 `src/lib/derive.ts`가 RAW에서 계산
 
 ## ERD (현재)
 
@@ -17,6 +18,7 @@ erDiagram
     PROFILE_SURVEY ||--o{ MYDATA_INSURANCE : "ID"
     PROFILE_SURVEY ||--o{ MYDATA_INVESTMENT : "ID"
     MYDATA_ACCOUNT ||--o{ MYDATA_TRANSACTION : "계좌별 거래"
+    PROFILE_SURVEY ||--|| FINANCE : "설문값 복사"
 
     PROFILE_SURVEY {
         text ID PK "USER01 - 페르소나는 minji 등"
@@ -99,6 +101,28 @@ erDiagram
         date 만기일
     }
 
+    FINANCE {
+        text ID PK "사용자 - 정책 판정용 피처 스토어"
+        date 기준일
+        int 월평균근로소득 "RAW 도출"
+        int 연환산소득 "햇살론 등 절대액 요건"
+        text 가구중위소득구간 "설문 복사"
+        text 원가구부모연소득구간 "무소득 취준생은 부모 소득 판정"
+        text 건보자격
+        int 월건보료
+        jsonb 수급중제도 "중복수급 배제"
+        bigint 금융재산총액 "예적금과 투자 합산"
+        text 가구재산구간
+        boolean 무주택여부
+        int 임차보증금
+        int 월세액 "RAW 도출"
+        jsonb 대출잔액유형별 "학자금, 신용, 전세"
+        boolean 연체여부
+        text 기초수급차상위여부
+        int 고용보험가입개월
+        int 미취업지속개월
+    }
+
     MYDATA_INVESTMENT {
         text 상품ID PK
         text ID FK "사용자"
@@ -121,6 +145,7 @@ erDiagram
 | MYDATA_LOAN | 📐 스키마만 | 학자금 대출 페르소나 추가 시 |
 | MYDATA_INSURANCE | 📐 스키마만 | 보험료는 지금 거래내역 적요로 대체 중 |
 | MYDATA_INVESTMENT | 📐 스키마만 | |
+| FINANCE | 📐 스키마만 | 피처 15종 — [FINANCE_피처정의.md](./FINANCE_피처정의.md), derive.ts 확장으로 채울 예정 |
 
 ## RAW → 도출 (테이블이 아니라 계산)
 
