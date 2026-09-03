@@ -107,3 +107,13 @@ create table if not exists finance (
   employment_insurance_months int,              -- 고용보험가입개월 (설문 복사)
   unemployed_months         int                 -- 미취업지속개월 (도출+보정)
 );
+
+-- ── USERS: 서비스 이용 주체 (데모=페르소나 선택, 실서비스=회원) ──
+create table if not exists users (
+  user_id      uuid primary key default gen_random_uuid(),
+  kind         text not null default 'demo',      -- demo | member
+  persona_id   text references profile_survey(id), -- kind=demo일 때
+  nickname     text,
+  created_at   timestamptz default now(),
+  last_login_at timestamptz default now()
+);

@@ -50,13 +50,33 @@ export function StartClient({ items }: { items: Item[] }) {
     setPhase("analyzing");
   };
 
-  const start = () => {
-    if (!selected) return;
-    localStorage.setItem(
-      "tikkeul.session",
-      JSON.stringify({ personaId: selected.persona.id, startedAt: new Date().toISOString() }),
-    );
-    router.push("/app");
+  const [starting, setStarting] = useState(false);
+
+  const start = async () => {
+    if (!selected || starting) return;
+    setStarting(true);
+    try {
+      // DB에 데모 사용자 생성 (users 테이블)
+      const res = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personaId: selected.persona.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "세션 생성 실패");
+      localStorage.setItem(
+        "tikkeul.session",
+        JSON.stringify({
+          personaId: selected.persona.id,
+          userId: json.userId,
+          startedAt: new Date().toISOString(),
+        }),
+      );
+      router.push("/app");
+    } catch (e) {
+      alert(`시작에 실패했어요: ${e instanceof Error ? e.message : e}`);
+      setStarting(false);
+    }
   };
 
   return (
@@ -137,13 +157,13 @@ export function StartClient({ items }: { items: Item[] }) {
 
       {/* ── 3단계: 도출 프로필 ────────────────────── */}
       {phase === "result" && selected && (
-        <ResultView item={selected} onStart={start} onBack={() => setPhase("pick")} />
+        <ResultView item={selected} onStart={start} starting={starting} onBack={() => setPhase("pick")} />
       )}
     </main>
   );
 }
 
-function ResultView({ item, onStart, onBack }: { item: Item; onStart: () => void; onBack: () => void }) {
+function ResultView({ item, onStart, starting, onBack }: { item: Item; onStart: () => void; starting: boolean; onBack: () => void }) {
   const { persona, derived } = item;
   const d = persona.declared;
   return (
@@ -229,9 +249,10 @@ function ResultView({ item, onStart, onBack }: { item: Item; onStart: () => void
       <div className="mt-8 flex flex-wrap items-center gap-3">
         <button
           onClick={onStart}
-          className="rounded-full bg-leaf px-6 py-3 text-[16px] font-medium text-white transition hover:bg-[#333333]"
+          disabled={starting}
+          className="rounded-full bg-leaf px-6 py-3 text-[16px] font-medium text-white transition hover:bg-[#333333] disabled:opacity-60"
         >
-          이 프로필로 시작하기 →
+          {starting ? "시작하는 중…" : "이 프로필로 시작하기 →"}
         </button>
         <button onClick={onBack} className="rounded-full border border-line bg-card px-6 py-3 text-[16px] font-medium transition hover:border-ink">
           다른 프로필 보기
