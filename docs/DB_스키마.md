@@ -1,118 +1,86 @@
-# DB 스키마 구조도 (현재 설계 기준)
+# DB 스키마 구조도 — 현재 시점 (테이블 2개)
 
-> GitHub에서 이 파일을 열면 아래 다이어그램이 그림으로 렌더링됩니다.
-> 원칙: **페르소나(데모)와 실사용자는 같은 구조** — `personas`는 템플릿, `users`+`profiles`는 인스턴스.
+> GitHub에서 이 파일을 열면 다이어그램이 그림으로 렌더링됩니다.
+> 지금까지 구현된 것은 **프로필 데이터**뿐이므로 테이블도 2개만 정의한다.
+> 두 테이블은 같은 `ID`(사용자 식별자)를 키로 공유하는 1:1 관계다.
 
-## ERD
+## ERD (현재)
 
 ```mermaid
 erDiagram
-    PERSONAS ||--o{ USERS : "선택 시 사용자 생성"
-    USERS ||--|| PROFILES : "1:1 프로필"
-    USERS ||--o{ EVENTS : "캘린더 일정"
-    EVENTS ||--o{ MATCHES : "일정에 붙은 혜택"
-    USERS ||--o{ MATCHES : "절약 리포트 집계"
-    USERS ||--o{ CHAT_MESSAGES : "AI 채팅"
+    PROFILE_SURVEY ||--|| PROFILE_MYDATA : "같은 ID (1:1)"
 
-    PERSONAS {
-        text id PK "minji | junho | seoyeon"
-        text name "김민지"
-        text tagline "시험이 몰린 달"
-        text intro "카드에 보여줄 소개"
-        jsonb declared "임의 설정값 (설문 항목)"
-        jsonb mydata "mock 거래내역·계좌"
-        jsonb seed_events "초기 캘린더 일정"
+    PROFILE_SURVEY {
+        text ID PK "USER01 (페르소나: minji 등)"
+        text 이름
+        date 생년월일 "나이는 조회 시 계산"
+        text 성별
+        boolean 병역여부
+        int 복무개월
+        text 거주지_시도 "서울특별시"
+        text 거주지_시군구 "중랑구"
+        date 거주시작일 "'관내 1년 이상' 요건 판정"
+        text 학력상태 "재학|휴학|졸업유예|졸업"
+        text 전공
+        date 졸업일
+        text 목표직무
+        boolean 부모동거여부
+        int 가구원수
+        text 주거형태 "본가|월세|전세"
+        int 보증금
+        text 가구중위소득구간 "~60%|60~100%|100~150%|150%~|모름"
+        text 가구재산구간 "2억미만|2~4억|4억초과|모름"
+        text 수급이력 "과거 받은 정책 (쉼표 구분)"
+        text 보유자격증 "쉼표 구분"
     }
 
-    USERS {
-        uuid id PK
-        text kind "demo(페르소나) | member(실서비스)"
-        text persona_id FK "kind=demo일 때만"
-        text nickname
-        timestamptz created_at
-    }
-
-    PROFILES {
-        uuid user_id PK,FK "users 1:1"
-        jsonb declared "설문: 생년월일·병역·거주지·학력·가구·중위소득구간·재산·수급이력·자격증"
-        jsonb mydata "마이데이터 스냅샷 (demo: 페르소나 복사 / member: API)"
-        jsonb derived "도출 캐시: 월소득·월세·수급감지·취준지출 (derive.ts 계산)"
-        timestamptz updated_at
-    }
-
-    EVENTS {
-        uuid id PK
-        uuid user_id FK
-        date date
-        text title "SKT 면접 (사용자 원문)"
-        text event_type "INTERVIEW|EXAM|EDUCATION|APPLICATION|BENEFIT_END|OTHER"
-        text location "LLM 추출: 성남"
-        text source "user | ai | seed"
-        timestamptz created_at
-    }
-
-    MATCHES {
-        uuid id PK
-        uuid event_id FK
-        uuid user_id FK "집계용 비정규화"
-        text policy_name "경기도 청년 면접수당"
-        text policy_url "공식 링크 (Trust 원칙)"
-        text benefit_type "CASH|VOUCHER|RENTAL|SERVICE"
-        int saving_min_krw
-        int saving_max_krw "절약액 상한: 50000"
-        text eligibility "LIKELY|NEEDS_CHECK|UNLIKELY"
-        text ai_reason "판단 근거"
-        text[] evidence_todo "면접확인서 수령, 영수증 보관"
-        date deadline "신청 마감"
-        text status "SUGGESTED|PLANNED|APPLIED|RECEIVED|DISMISSED"
-        timestamptz created_at
-    }
-
-    CHAT_MESSAGES {
-        uuid id PK
-        uuid user_id FK
-        text role "user | assistant"
-        text content
-        timestamptz created_at
+    PROFILE_MYDATA {
+        text ID PK "PROFILE_SURVEY.ID와 동일"
+        date 기준일 "스냅샷 날짜"
+        int 유동자산 "수시입출금+CMA 잔액 합"
+        int 월평균근로소득 "정기 입금 패턴에서 계산"
+        int 소득관측개월수 "몇 개월 패턴인지"
+        int 가족지원월액 "가족 이체 감지"
+        int 월세이체액 "정기이체 감지"
+        text 수급제도명 "구직급여 등 (입금 감지)"
+        int 수급월액
+        text 수급시작월 "YYYY-MM"
+        text 수급종료추정월 "YYYY-MM — 통상 수급기간 기준 추정"
+        int 통신비월액
+        int 보험료월액
+        int 취준지출총액 "응시료·정장·교통 등 감지 합계"
+        int 취준지출건수
     }
 ```
 
-## 테이블 역할 한 줄 요약
+## 예시 데이터
 
-| 테이블 | 역할 | 생성 시점 |
+**PROFILE_SURVEY**
+
+| ID | 이름 | 생년월일 | 거주지_시도 | 거주지_시군구 | 학력상태 | 가구중위소득구간 | 보유자격증 |
+|---|---|---|---|---|---|---|---|
+| minji | 김민지 | 2002-03-14 | 서울특별시 | 중랑구 | 졸업 | 100~150% | 컴퓨터활용능력 1급 |
+| junho | 박준호 | 1999-07-02 | 경기도 | 수원시 | 졸업 | ~60% | 품질경영기사 |
+| seoyeon | 이서연 | 1997-11-20 | 서울특별시 | 관악구 | 졸업 | 60~100% | |
+
+**PROFILE_MYDATA**
+
+| ID | 유동자산 | 월평균근로소득 | 월세이체액 | 수급제도명 | 수급월액 | 수급종료추정월 | 취준지출총액 |
+|---|---|---|---|---|---|---|---|
+| minji | 1,830,000 | 503,333 | | | | | 211,000 |
+| junho | 920,000 | (없음→미취업 추정) | 450,000 | | | | 150,000 |
+| seoyeon | 4,200,000 | | 550,000 | 고용노동부 구직급여 | 1,800,000 | 2026-11 | 203,000 |
+
+## 데이터 출처와 코드 대응
+
+| 테이블 | 출처 | 대응 코드 |
 |---|---|---|
-| `personas` | 데모용 **템플릿** (시드 데이터, 3행 고정) | 배포 시 시드 |
-| `users` | 서비스 이용 **주체** — 데모(익명)든 실회원이든 여기로 통일 | 페르소나 선택 / 회원가입 |
-| `profiles` | users와 1:1 — declared(설문)+mydata(연동)+derived(도출) | users 생성 직후 (페르소나에서 복사) |
-| `events` | 캘린더 일정 — **서비스의 심장** | 시드 자동등록 + 사용자 입력 + AI 제안 |
-| `matches` | 일정에 붙은 혜택 = "일정에 붙은 돈" | 일정 등록 시 LLM 매칭 |
-| `chat_messages` | AI 채팅 기록 | 채팅 시 |
+| PROFILE_SURVEY | 페르소나: 임의 설정 / 실서비스: 설문 입력 | `src/data/personas.ts` → `Declared` 타입 |
+| PROFILE_MYDATA | 마이데이터 거래내역에서 **도출 코드가 계산** (LLM 아님) | `src/lib/derive.ts` → `DerivedProfile` 타입 |
 
-## 흐름 위 데이터 생성 순서
+- 원천 거래내역(transactions) 자체는 현재 DB에 넣지 않고 코드(mock)에 둔다. DB에는 **도출된 결과값**만 저장.
+- 값이 없는 칸은 `NULL`("모름") — AI는 추측 대신 "추가 확인 필요"로 답한다.
 
-```
-페르소나 선택
-  → users 1행 (kind='demo', persona_id='minji')
-  → profiles 1행 (페르소나의 declared·mydata 복사 + derived 계산)
-  → events N행 (페르소나 seed_events 복사, source='seed')
-일정 추가 ("9/18 ○○기업 면접")
-  → events 1행 (source='user')
-  → LLM 분류·매칭 → matches N행 (eligibility·절약액·증빙·마감)
-절약 리포트
-  → SELECT sum(saving_max_krw) FROM matches WHERE user_id=? AND 기간·status 조건
-```
+## 나중에 추가될 테이블 (아직 미구현 — 연결하지 않음)
 
-## jsonb 내부 구조 (profiles)
-
-- `declared` — [2차설계 2-1절](./2차설계_페르소나_DB.md) 설문 항목과 동일. 코드 타입: `src/data/personas.ts`의 `Declared`
-- `mydata` — `{ asOf, accounts[], transactions[] }`. 코드 타입: `MyDataSnapshot`
-- `derived` — `src/lib/derive.ts`의 `DerivedProfile` (재계산 가능한 캐시)
-
-> jsonb로 둔 이유: 설문 항목이 아직 변동 가능하고, 정책 요건이 추가될 때마다 ALTER TABLE 없이 확장하기 위함.
-> 자주 조회·필터하는 필드가 생기면 (예: 거주지로 인덱스 검색) 그때 컬럼으로 승격한다.
-
-## 아직 없는 것 (다음 단계에서 논의)
-
-- `policies` — 정책 원본 캐시 테이블 (지금은 LLM 매칭 결과를 matches에 바로 저장)
-- `notifications` — 마감 D-day 알림 큐
-- 실서비스 인증(users.auth) — Supabase Auth 연결 시 추가
+캘린더(EVENTS), 정책 매칭(MATCHES), 채팅(CHAT_MESSAGES) 기능이 구현되는 시점에 추가하고, 그때 이 문서의 ERD를 갱신한다.
