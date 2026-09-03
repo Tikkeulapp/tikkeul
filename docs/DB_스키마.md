@@ -6,12 +6,14 @@
 
 ## ERD (현재)
 
+> 렌더링이 안 보이면: [ERD_현재.png](./ERD_현재.png)
+
 ```mermaid
 erDiagram
-    PROFILE_SURVEY ||--|| PROFILE_MYDATA : "같은 ID (1:1)"
+    PROFILE_SURVEY ||--|| PROFILE_MYDATA : "same-id 1:1"
 
     PROFILE_SURVEY {
-        text ID PK "USER01 (페르소나: minji 등)"
+        text ID PK "USER01 - 페르소나는 minji 등"
         text 이름
         date 생년월일 "나이는 조회 시 계산"
         text 성별
@@ -19,36 +21,36 @@ erDiagram
         int 복무개월
         text 거주지_시도 "서울특별시"
         text 거주지_시군구 "중랑구"
-        date 거주시작일 "'관내 1년 이상' 요건 판정"
-        text 학력상태 "재학|휴학|졸업유예|졸업"
+        date 거주시작일 "관내 1년 이상 요건 판정"
+        text 학력상태 "재학, 휴학, 졸업유예, 졸업"
         text 전공
         date 졸업일
         text 목표직무
         boolean 부모동거여부
         int 가구원수
-        text 주거형태 "본가|월세|전세"
+        text 주거형태 "본가, 월세, 전세"
         int 보증금
-        text 가구중위소득구간 "~60%|60~100%|100~150%|150%~|모름"
-        text 가구재산구간 "2억미만|2~4억|4억초과|모름"
-        text 수급이력 "과거 받은 정책 (쉼표 구분)"
-        text 보유자격증 "쉼표 구분"
+        text 가구중위소득구간 "60이하, 60-100, 100-150, 150이상, 모름"
+        text 가구재산구간 "2억미만, 2-4억, 4억초과, 모름"
+        text 수급이력 "과거 받은 정책 목록"
+        text 보유자격증 "쉼표로 구분한 목록"
     }
 
     PROFILE_MYDATA {
         text ID PK "PROFILE_SURVEY.ID와 동일"
         date 기준일 "스냅샷 날짜"
-        int 유동자산 "수시입출금+CMA 잔액 합"
+        int 유동자산 "수시입출금과 CMA 잔액 합"
         int 월평균근로소득 "정기 입금 패턴에서 계산"
-        int 소득관측개월수 "몇 개월 패턴인지"
+        int 소득관측개월수 "관측한 개월 수"
         int 가족지원월액 "가족 이체 감지"
         int 월세이체액 "정기이체 감지"
-        text 수급제도명 "구직급여 등 (입금 감지)"
+        text 수급제도명 "구직급여 등 - 입금에서 감지"
         int 수급월액
         text 수급시작월 "YYYY-MM"
-        text 수급종료추정월 "YYYY-MM — 통상 수급기간 기준 추정"
+        text 수급종료추정월 "YYYY-MM 통상 수급기간 기준 추정"
         int 통신비월액
         int 보험료월액
-        int 취준지출총액 "응시료·정장·교통 등 감지 합계"
+        int 취준지출총액 "응시료 정장 교통 등 감지 합계"
         int 취준지출건수
     }
 ```
