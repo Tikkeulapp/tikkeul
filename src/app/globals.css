@@ -1,26 +1,44 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── 티끌 디자인 토큰: 파스텔 그린, 밝은 톤 ───────────────── */
+@theme {
+  /* 색 */
+  --color-paper: #f4faf5; /* 페이지 배경 */
+  --color-card: #ffffff; /* 카드 배경 */
+  --color-mint: #dcf2e2; /* 파스텔 민트 */
+  --color-mint-soft: #eaf7ee; /* 더 옅은 민트 */
+  --color-leaf: #2f9e63; /* 프라이머리 그린 */
+  --color-leaf-deep: #1b5e40; /* 딥 그린 (강조 텍스트) */
+  --color-lime: #d9f174; /* 라임 포인트 */
+  --color-butter: #fff3c4; /* 보조 파스텔 (알림/하이라이트) */
+  --color-ink: #1d2a22; /* 본문 텍스트 */
+  --color-mute: #5f6f65; /* 보조 텍스트 */
+  --color-line: #dfeae1; /* 경계선 */
+
+  /* 폰트 */
+  --font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+
+  /* 그림자 */
+  --shadow-soft: 0 24px 64px rgba(27, 94, 64, 0.1);
+  --shadow-lift: 0 12px 32px rgba(27, 94, 64, 0.14);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+  line-height: 1.6;
+  word-break: keep-all; /* 한글: 단어 중간에서 줄바꿈 금지 */
+}
+
+::selection {
+  background: var(--color-lime);
+  color: var(--color-leaf-deep);
 }
