@@ -38,7 +38,7 @@ export default function AppPage() {
     const res = await fetch(`/api/events?userId=${encodeURIComponent(userId)}`);
     const json = await res.json();
     if (res.ok) setEvents(json.events);
-    else setError(json.error);
+    // 캘린더 테이블 미구축 단계에서는 에러를 띄우지 않는다 (다음 단계에서 연결)
   }, []);
 
   useEffect(() => {
