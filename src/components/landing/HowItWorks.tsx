@@ -51,7 +51,7 @@ export function HowItWorks() {
     <section id="how" className="mx-auto w-full max-w-6xl px-5 py-24">
       <div className="mx-auto max-w-xl text-center">
         <p className="text-[13px] font-semibold tracking-widest text-leaf">HOW IT WORKS</p>
-        <h2 className="mt-3 text-3xl font-medium leading-tight sm:text-[36px] sm:leading-[1.2]">
+        <h2 className="mt-3 text-3xl font-light leading-tight sm:text-[44px] sm:leading-[1.1]">
           일정을 적으면,
           <br />
           돈이 따라옵니다
@@ -65,10 +65,10 @@ export function HowItWorks() {
         {STEPS.map((s) => (
           <article
             key={s.step}
-            className="rounded-none border border-line bg-card p-7"
+            className="rounded-[24px] border border-line bg-card p-7"
           >
             <span className="text-[13px] font-semibold text-leaf">{s.step}</span>
-            <div className="mt-4 h-36 rounded-none bg-mint-soft/70 p-4">{s.visual}</div>
+            <div className="mt-4 h-36 rounded-[12px] bg-mint-soft/70 p-4">{s.visual}</div>
             <h3 className="mt-5 text-lg font-semibold">{s.title}</h3>
             <p className="mt-2 text-[14px] leading-relaxed text-mute">{s.body}</p>
           </article>

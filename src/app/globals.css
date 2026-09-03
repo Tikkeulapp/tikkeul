@@ -3,17 +3,17 @@
 /* ── 티끌 디자인 토큰: 파스텔 그린, 밝은 톤 ───────────────── */
 @theme {
   /* 색 */
-  --color-paper: #181818; /* 페이지 배경 */
-  --color-card: #212121; /* 카드 배경 */
-  --color-mint: #303030; /* 파스텔 민트 */
-  --color-mint-soft: #1e1e1e; /* 더 옅은 민트 */
-  --color-leaf: #da291c; /* 프라이머리 그린 */
-  --color-leaf-deep: #da291c; /* 딥 그린 (강조 텍스트) */
-  --color-lime: #f6e500; /* 라임 포인트 */
-  --color-butter: #303030; /* 보조 파스텔 (알림/하이라이트) */
-  --color-ink: #ffffff; /* 본문 텍스트 */
-  --color-mute: #969696; /* 보조 텍스트 */
-  --color-line: #303030; /* 경계선 */
+  --color-paper: #ffffff; /* 페이지 배경 */
+  --color-card: #ffffff; /* 카드 배경 */
+  --color-mint: #dceeb1; /* 파스텔 민트 */
+  --color-mint-soft: #f7f7f5; /* 더 옅은 민트 */
+  --color-leaf: #000000; /* 프라이머리 그린 */
+  --color-leaf-deep: #1f1d3d; /* 딥 그린 (강조 텍스트) */
+  --color-lime: #dceeb1; /* 라임 포인트 */
+  --color-butter: #efd4d4; /* 보조 파스텔 (알림/하이라이트) */
+  --color-ink: #000000; /* 본문 텍스트 */
+  --color-mute: #6b6b6b; /* 보조 텍스트 */
+  --color-line: #e6e6e6; /* 경계선 */
 
   /* 폰트 */
   --font-sans:
