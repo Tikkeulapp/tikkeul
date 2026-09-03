@@ -1,8 +1,8 @@
 const STEPS = [
   {
     step: "01",
-    title: "일정을 적으면",
-    body: "노션처럼 캘린더에 적기만 하세요. “9/18 ○○기업 면접”, “10월 파이썬 교육” — 그거면 충분합니다.",
+    title: "내 상황을 알려주면",
+    body: "간단한 설문과 마이데이터 연동이면 끝. 나이·거주지·소득·일정 — 정책 자격 판정에 필요한 것만 봅니다.",
     visual: (
       <div className="flex h-full flex-col justify-center gap-2 text-[12.5px] font-bold">
         <span className="w-fit rounded-lg bg-card px-3 py-1.5">9/5 토익</span>
@@ -15,8 +15,8 @@ const STEPS = [
   },
   {
     step: "02",
-    title: "AI가 일정의 의미를 읽고",
-    body: "‘면접’이라는 걸 이해하고, 나이·거주지역·구직 상태와 조합해 지금 받을 수 있는 지원사업을 찾습니다.",
+    title: "AI가 전국 정책과 대조하고",
+    body: "전국 2,750여 개 청년·취준 정책과 내 조건을 대조합니다. 면접 일정을 적으면 면접수당이, 시험을 적으면 응시료 지원이 붙습니다.",
     visual: (
       <div className="grid h-full place-items-center">
         <div className="relative grid h-24 w-24 place-items-center rounded-full border-2 border-dashed border-leaf/40">
@@ -32,8 +32,8 @@ const STEPS = [
   },
   {
     step: "03",
-    title: "혜택·증빙·마감을 먼저 챙깁니다",
-    body: "신청 가능한 정책과 예상 절약액, 미리 받아둘 증빙 서류, 신청 마감일까지 — 놓치기 전에 알려드립니다.",
+    title: "혜택·증빙·마감을 챙깁니다",
+    body: "추천 정책은 마이티끌에 담아 관리하고, 예상 절약액·증빙 서류·신청 마감일까지 놓치기 전에 알려드립니다.",
     visual: (
       <div className="flex h-full flex-col justify-center gap-2 text-[12.5px] font-bold">
         <span className="w-fit rounded-full bg-mint px-3 py-1.5 text-leaf-deep">
@@ -52,12 +52,12 @@ export function HowItWorks() {
       <div className="mx-auto max-w-xl text-center">
         <p className="text-[13px] font-semibold tracking-widest text-leaf">HOW IT WORKS</p>
         <h2 className="mt-3 text-3xl font-light leading-tight sm:text-[44px] sm:leading-[1.1]">
-          일정을 적으면,
+          내 상황을 알려주면,
           <br />
           돈이 따라옵니다
         </h2>
         <p className="mt-4 text-mute">
-          정책을 검색하지 마세요. 취준 일정을 적는 것만으로 필요한 순간에 혜택이 연결됩니다.
+          정책을 검색하지 마세요. 프로필과 일정만으로, 필요한 순간에 혜택이 연결됩니다.
         </p>
       </div>
 

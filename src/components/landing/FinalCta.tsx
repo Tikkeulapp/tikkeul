@@ -15,11 +15,11 @@ export function FinalCta() {
             티끌까지 챙겨드릴게요.
           </h2>
           <p className="mx-auto mt-4 max-w-[42ch] text-white/75">
-            {BRAND.tagline} — 일정을 적는 것부터 시작하세요. 나머지는 {BRAND.name}이 챙깁니다.
+            {BRAND.tagline} — 내 상황을 알려주는 것부터 시작하세요. 나머지는 {BRAND.name}이 챙깁니다.
           </p>
           <div className="mt-9">
             <a href="/app/start" className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[16px] font-medium text-ink transition hover:bg-mint">
-              내 혜택 캘린더 시작하기 →
+              내 혜택 찾기 시작하기 →
             </a>
           </div>
         </div>
