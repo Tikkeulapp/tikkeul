@@ -21,7 +21,7 @@ export function Nav() {
           </a>
         </nav>
         <a
-          href="#cta"
+          href="/app/start"
           className="rounded-full bg-leaf px-5 py-2 text-sm font-medium text-white transition hover:bg-[#333333]"
         >
           시작하기

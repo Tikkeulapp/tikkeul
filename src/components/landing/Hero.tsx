@@ -25,7 +25,7 @@ export function Hero() {
 
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <a
-            href="#cta"
+            href="/app/start"
             className="rounded-full bg-leaf px-6 py-3 text-[16px] font-medium text-white transition hover:bg-[#333333]"
           >
             내 혜택 캘린더 시작하기 →

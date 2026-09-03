@@ -18,10 +18,9 @@ export function FinalCta() {
             {BRAND.tagline} — 일정을 적는 것부터 시작하세요. 나머지는 {BRAND.name}이 챙깁니다.
           </p>
           <div className="mt-9">
-            <span className="inline-flex cursor-default items-center gap-2 rounded-full bg-white px-6 py-3 text-[16px] font-medium text-ink">
-              내 혜택 캘린더 시작하기
-              <em className="rounded-full bg-leaf px-2.5 py-0.5 text-[11px] not-italic text-white">준비 중</em>
-            </span>
+            <a href="/app/start" className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-[16px] font-medium text-ink transition hover:bg-mint">
+              내 혜택 캘린더 시작하기 →
+            </a>
           </div>
         </div>
       </section>
