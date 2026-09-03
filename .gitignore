@@ -42,3 +42,5 @@ next-env.d.ts
 
 # local toolchain (node runtime)
 .tools/
+
+.env.local
