@@ -5,11 +5,11 @@ export function FinalCta() {
   return (
     <>
       <section id="cta" className="mx-auto w-full max-w-6xl px-5 py-24">
-        <div className="rounded-[18px] bg-leaf-deep px-8 py-16 text-center text-white sm:px-16">
+        <div className="rounded-none bg-leaf-deep px-8 py-16 text-center text-white sm:px-16">
           <p className="text-[13px] font-semibold tracking-widest text-lime">
             READY WHEN YOU ARE
           </p>
-          <h2 className="mt-4 text-3xl font-semibold leading-tight sm:text-[40px]">
+          <h2 className="mt-4 text-3xl font-medium leading-tight sm:text-[36px]">
             취업까지 가는 길,
             <br />
             티끌까지 챙겨드릴게요.
@@ -18,7 +18,7 @@ export function FinalCta() {
             {BRAND.tagline} — 일정을 적는 것부터 시작하세요. 나머지는 {BRAND.name}이 챙깁니다.
           </p>
           <div className="mt-9">
-            <span className="inline-flex cursor-default items-center gap-2 rounded-full bg-white px-[22px] py-[11px] text-[17px] text-leaf">
+            <span className="inline-flex cursor-default items-center gap-2 rounded-none bg-white px-8 py-3.5 text-[14px] font-bold tracking-[0.1em] text-leaf">
               내 혜택 캘린더 시작하기
               <em className="rounded-full bg-leaf px-2.5 py-0.5 text-[11px] not-italic text-white">준비 중</em>
             </span>

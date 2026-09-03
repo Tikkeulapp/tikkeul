@@ -3,17 +3,17 @@
 /* ── 티끌 디자인 토큰: 파스텔 그린, 밝은 톤 ───────────────── */
 @theme {
   /* 색 */
-  --color-paper: #ffffff; /* 페이지 배경 */
-  --color-card: #ffffff; /* 카드 배경 */
-  --color-mint: #f5f5f7; /* 파스텔 민트 */
-  --color-mint-soft: #f5f5f7; /* 더 옅은 민트 */
-  --color-leaf: #0066cc; /* 프라이머리 그린 */
-  --color-leaf-deep: #1d1d1f; /* 딥 그린 (강조 텍스트) */
-  --color-lime: #2997ff; /* 라임 포인트 */
-  --color-butter: #f5f5f7; /* 보조 파스텔 (알림/하이라이트) */
-  --color-ink: #1d1d1f; /* 본문 텍스트 */
-  --color-mute: #7a7a7a; /* 보조 텍스트 */
-  --color-line: #e0e0e0; /* 경계선 */
+  --color-paper: #181818; /* 페이지 배경 */
+  --color-card: #212121; /* 카드 배경 */
+  --color-mint: #303030; /* 파스텔 민트 */
+  --color-mint-soft: #1e1e1e; /* 더 옅은 민트 */
+  --color-leaf: #da291c; /* 프라이머리 그린 */
+  --color-leaf-deep: #da291c; /* 딥 그린 (강조 텍스트) */
+  --color-lime: #f6e500; /* 라임 포인트 */
+  --color-butter: #303030; /* 보조 파스텔 (알림/하이라이트) */
+  --color-ink: #ffffff; /* 본문 텍스트 */
+  --color-mute: #969696; /* 보조 텍스트 */
+  --color-line: #303030; /* 경계선 */
 
   /* 폰트 */
   --font-sans:

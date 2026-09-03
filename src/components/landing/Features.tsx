@@ -64,7 +64,7 @@ export function Features() {
           <p className="text-[13px] font-semibold tracking-widest text-leaf">
             YOUR JOB-HUNT CO-PILOT
           </p>
-          <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-[40px] sm:leading-[1.1]">
+          <h2 className="mt-3 text-3xl font-medium leading-tight sm:text-[36px] sm:leading-[1.2]">
             검색 포털이 아니라,
             <br />
             먼저 움직이는 Agent
@@ -78,7 +78,7 @@ export function Features() {
               <button
                 key={f.key}
                 onClick={() => setActive(f.key)}
-                className={`flex items-center gap-4 rounded-2xl border p-5 text-left transition ${
+                className={`flex items-center gap-4 rounded-none border p-5 text-left transition ${
                   active === f.key
                     ? "border-leaf bg-card"
                     : "border-line bg-card/60 hover:bg-card"
@@ -100,13 +100,13 @@ export function Features() {
           </div>
 
           {/* 미리보기 */}
-          <div className="rounded-[18px] border border-line bg-card p-8">
+          <div className="rounded-none border border-line bg-card p-8">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-leaf-deep">{current.preview.title}</span>
               <small className="text-[12px] font-bold text-mute">미리보기</small>
             </div>
             <p className="mt-6">
-              <strong className="text-[44px] font-semibold tracking-tight text-leaf">
+              <strong className="text-[56px] font-bold tracking-[-0.02em] text-leaf">
                 {current.preview.stat}
               </strong>
               <span className="ml-1.5 font-bold text-mute">{current.preview.unit}</span>
@@ -115,7 +115,7 @@ export function Features() {
               className="mt-4 text-[15px] leading-relaxed text-ink/85 [&_b]:text-leaf-deep"
               dangerouslySetInnerHTML={{ __html: current.preview.copy }}
             />
-            <p className="mt-6 rounded-xl bg-mint px-4 py-3 text-[13.5px] font-bold text-leaf-deep">
+            <p className="mt-6 rounded-none bg-mint px-4 py-3 text-[13.5px] font-bold text-leaf-deep">
               💡 {current.preview.insight}
             </p>
           </div>

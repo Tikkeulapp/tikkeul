@@ -22,7 +22,7 @@ export function Nav() {
         </nav>
         <a
           href="#cta"
-          className="rounded-full bg-leaf px-5 py-2 text-sm text-white transition hover:bg-[#0071e3]"
+          className="rounded-none bg-leaf px-6 py-2.5 text-[13px] font-bold tracking-[0.08em] text-white transition hover:bg-[#9d2211]"
         >
           시작하기
         </a>

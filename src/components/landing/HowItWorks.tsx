@@ -5,9 +5,9 @@ const STEPS = [
     body: "노션처럼 캘린더에 적기만 하세요. “9/18 ○○기업 면접”, “10월 파이썬 교육” — 그거면 충분합니다.",
     visual: (
       <div className="flex h-full flex-col justify-center gap-2 text-[12.5px] font-bold">
-        <span className="w-fit rounded-lg bg-card px-3 py-1.5 shadow-sm">9/5 토익</span>
-        <span className="w-fit rounded-lg bg-card px-3 py-1.5 shadow-sm">9/13 SQLD</span>
-        <span className="w-fit rounded-lg bg-leaf px-3 py-1.5 text-white shadow-sm">
+        <span className="w-fit rounded-lg bg-card px-3 py-1.5">9/5 토익</span>
+        <span className="w-fit rounded-lg bg-card px-3 py-1.5">9/13 SQLD</span>
+        <span className="w-fit rounded-lg bg-leaf px-3 py-1.5 text-white">
           9/18 ○○기업 면접
         </span>
       </div>
@@ -40,7 +40,7 @@ const STEPS = [
           면접수당 +50,000원
         </span>
         <span className="w-fit rounded-full bg-butter px-3 py-1.5">면접확인서 받아두기</span>
-        <span className="w-fit rounded-full bg-card px-3 py-1.5 shadow-sm">마감 D-6 알림</span>
+        <span className="w-fit rounded-full bg-card px-3 py-1.5">마감 D-6 알림</span>
       </div>
     ),
   },
@@ -51,7 +51,7 @@ export function HowItWorks() {
     <section id="how" className="mx-auto w-full max-w-6xl px-5 py-24">
       <div className="mx-auto max-w-xl text-center">
         <p className="text-[13px] font-semibold tracking-widest text-leaf">HOW IT WORKS</p>
-        <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-[40px] sm:leading-[1.1]">
+        <h2 className="mt-3 text-3xl font-medium leading-tight sm:text-[36px] sm:leading-[1.2]">
           일정을 적으면,
           <br />
           돈이 따라옵니다
@@ -65,10 +65,10 @@ export function HowItWorks() {
         {STEPS.map((s) => (
           <article
             key={s.step}
-            className="rounded-[18px] border border-line bg-card p-7"
+            className="rounded-none border border-line bg-card p-7"
           >
             <span className="text-[13px] font-semibold text-leaf">{s.step}</span>
-            <div className="mt-4 h-36 rounded-2xl bg-mint-soft/70 p-4">{s.visual}</div>
+            <div className="mt-4 h-36 rounded-none bg-mint-soft/70 p-4">{s.visual}</div>
             <h3 className="mt-5 text-lg font-semibold">{s.title}</h3>
             <p className="mt-2 text-[14px] leading-relaxed text-mute">{s.body}</p>
           </article>
