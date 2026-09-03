@@ -39,7 +39,7 @@ export function Problem() {
         <p className="text-[13px] font-extrabold tracking-widest text-lime">
           THE REAL COST OF JOB HUNTING
         </p>
-        <h2 className="mt-3 text-3xl font-extrabold leading-snug sm:text-4xl">
+        <h2 className="mt-3 text-3xl font-medium leading-snug sm:text-[44px] sm:leading-[1.2]">
           취업 준비에는
           <br />
           생각보다 돈이 듭니다

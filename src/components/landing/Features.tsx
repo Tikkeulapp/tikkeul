@@ -64,7 +64,7 @@ export function Features() {
           <p className="text-[13px] font-extrabold tracking-widest text-leaf">
             YOUR JOB-HUNT CO-PILOT
           </p>
-          <h2 className="mt-3 text-3xl font-extrabold leading-snug sm:text-4xl">
+          <h2 className="mt-3 text-3xl font-medium leading-snug sm:text-[44px] sm:leading-[1.2]">
             검색 포털이 아니라,
             <br />
             먼저 움직이는 Agent
@@ -80,7 +80,7 @@ export function Features() {
                 onClick={() => setActive(f.key)}
                 className={`flex items-center gap-4 rounded-2xl border p-5 text-left transition ${
                   active === f.key
-                    ? "border-leaf bg-card shadow-lift"
+                    ? "border-leaf bg-card"
                     : "border-line bg-card/60 hover:bg-card"
                 }`}
               >
@@ -100,7 +100,7 @@ export function Features() {
           </div>
 
           {/* 미리보기 */}
-          <div className="rounded-[26px] border border-line bg-card p-8 shadow-soft">
+          <div className="rounded-[32px] border border-line bg-card p-8">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-leaf-deep">{current.preview.title}</span>
               <small className="text-[12px] font-bold text-mute">미리보기</small>

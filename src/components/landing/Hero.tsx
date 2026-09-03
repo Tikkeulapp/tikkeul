@@ -13,7 +13,7 @@ export function Hero() {
           <span className="h-1.5 w-1.5 rounded-full bg-leaf" />
           취업준비생 금융 AI Agent
         </div>
-        <h1 className="text-[42px] font-extrabold leading-[1.16] tracking-[-0.03em] sm:text-[54px]">
+        <h1 className="text-[44px] font-medium leading-[1.16] tracking-[-0.02em] sm:text-[64px]">
           영끌 아닌,
           <br />
           <em className="not-italic text-leaf">
@@ -26,11 +26,11 @@ export function Hero() {
         <div className="mt-8 flex flex-wrap items-center gap-4">
           <a
             href="#cta"
-            className="rounded-2xl bg-leaf px-6 py-4 font-bold text-white shadow-lift transition hover:-translate-y-0.5 hover:bg-leaf-deep"
+            className="rounded-full bg-leaf-deep px-8 py-3.5 text-[15px] font-bold text-white transition hover:bg-[#444950]"
           >
             내 혜택 캘린더 시작하기 →
           </a>
-          <a href="#how" className="font-bold text-leaf-deep underline underline-offset-4">
+          <a href="#how" className="rounded-full border-2 border-leaf-deep px-7 py-3 text-[15px] font-bold text-leaf-deep transition hover:bg-mint">
             어떻게 작동하나요?
           </a>
         </div>
@@ -44,7 +44,7 @@ export function Hero() {
 
       {/* ── 제품 목업: 일정을 적으면 돈이 붙는 캘린더 ── */}
       <div className="relative pb-16" aria-label="서비스 화면 미리보기">
-        <div className="rounded-[26px] border border-line bg-card p-6 shadow-soft">
+        <div className="rounded-[32px] border border-line bg-card p-6">
           {/* 창 상단 */}
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
