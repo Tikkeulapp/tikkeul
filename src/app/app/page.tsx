@@ -50,6 +50,22 @@ const RECS: Record<string, Rec[]> = {
   ],
 };
 
+const TODAY = new Date().toISOString().slice(0, 10);
+const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** 해당 월의 달력 칸 배열 — 앞뒤 빈칸은 null */
+function monthCells(y: number, m: number): (string | null)[] {
+  const offset = new Date(y, m, 1).getDay();
+  const days = new Date(y, m + 1, 0).getDate();
+  const cells: (string | null)[] = Array(offset).fill(null);
+  for (let d = 1; d <= days; d++) cells.push(`${y}-${pad2(m + 1)}-${pad2(d)}`);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+const prevMonth = ({ y, m }: { y: number; m: number }) => (m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 });
+const nextMonth = ({ y, m }: { y: number; m: number }) => (m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 });
+
 export default function AppPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [persona, setPersona] = useState<Persona | null>(null);
@@ -64,8 +80,9 @@ export default function AppPage() {
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
   const [savedIds, setSavedIds] = useState<string[]>([]);
 
-  // 일정 등록 폼
-  const [date, setDate] = useState("2026-09-18");
+  // 일정 등록 (달력)
+  const [ym, setYm] = useState({ y: 2026, m: 8 }); // 2026년 9월 (m: 0-11)
+  const [date, setDate] = useState("2026-09-18"); // 선택된 날짜
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [calNotice, setCalNotice] = useState<string | null>(null);
@@ -117,6 +134,12 @@ export default function AppPage() {
   const savedRecs = recs.filter((r) => savedIds.includes(r.id));
   const unsavedRecs = recs.filter((r) => !savedIds.includes(r.id));
   const monthlySaving = savedRecs.reduce((s, r) => s + r.amountMaxKrw, 0);
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const ev of events) map.set(ev.start_at, [...(map.get(ev.start_at) ?? []), ev]);
+    return map;
+  }, [events]);
 
   const search = (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,43 +282,98 @@ export default function AppPage() {
             </section>
           </aside>
 
-          {/* 중앙: 일정 등록 */}
+          {/* 중앙: 일정 등록 — 노션식 월 달력 */}
           <section className="rounded-[18px] border border-line bg-card p-5">
-            <div className="flex items-baseline justify-between">
+            <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">일정 등록</h2>
-              <span className="text-[12px] text-mute">{displayName}님의 머니캘린더</span>
+              <div className="flex items-center gap-2 text-[14px] font-bold">
+                <button onClick={() => setYm(prevMonth(ym))} className="grid h-8 w-8 place-items-center rounded-full border border-line hover:border-ink" aria-label="이전 달">‹</button>
+                <span className="min-w-[110px] text-center">{ym.y}년 {ym.m + 1}월</span>
+                <button onClick={() => setYm(nextMonth(ym))} className="grid h-8 w-8 place-items-center rounded-full border border-line hover:border-ink" aria-label="다음 달">›</button>
+              </div>
             </div>
-            <form onSubmit={addEvent} className="mt-3 flex flex-wrap items-center gap-2">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required
-                className="rounded-[8px] border border-line px-3 py-2.5 text-[14px]" aria-label="날짜" />
-              <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
-                placeholder="일정을 적어보세요 — 예: SKT 면접" required
-                className="min-w-0 flex-1 rounded-[8px] border border-line px-3 py-2.5 text-[14px]" aria-label="일정 내용" />
-              <button type="submit" disabled={saving || !title.trim()}
-                className="rounded-full bg-leaf px-5 py-2.5 text-[14px] font-medium text-white transition hover:bg-[#333333] disabled:opacity-50">
-                {saving ? "저장 중…" : "+ 등록"}
-              </button>
-            </form>
-            {calNotice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[12.5px] font-bold text-leaf-deep">🚧 {calNotice}</p>}
 
-            <div className="mt-4 flex flex-col gap-2">
-              {events.length === 0 && (
-                <p className="rounded-[12px] bg-mint-soft px-4 py-6 text-center text-[13.5px] text-mute">
-                  일정을 등록하면 여기 쌓입니다.<br />다음 단계: 일정에 AI가 혜택(절약액)을 붙여줍니다.
-                </p>
-              )}
-              {events.map((ev) => (
-                <div key={ev.event_id} className="flex items-center gap-3 rounded-[12px] border border-line px-4 py-3 text-[14px]">
-                  <span className="rounded-[6px] bg-mint px-2 py-0.5 text-[12px] font-bold text-leaf-deep">
-                    {ev.start_at.slice(5).replace("-", "/")}
-                  </span>
-                  <span className="font-semibold">{ev.title}</span>
-                  {ev.location && <span className="text-[12px] text-mute">{ev.location}</span>}
-                  <span className="ml-auto text-[11px] font-semibold text-mute">
-                    {ev.source === "seed" ? "기본 일정" : "내가 적음"}
-                  </span>
-                </div>
+            {/* 요일 헤더 */}
+            <div className="mt-4 grid grid-cols-7 text-center text-[11.5px] font-bold text-mute">
+              {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
+                <span key={d} className="py-1">{d}</span>
               ))}
+            </div>
+
+            {/* 날짜 그리드 — 칸을 클릭해 선택 */}
+            <div className="grid grid-cols-7 gap-1">
+              {monthCells(ym.y, ym.m).map((cell, i) =>
+                cell === null ? (
+                  <div key={`empty-${i}`} className="min-h-[76px] rounded-[10px]" />
+                ) : (
+                  <button
+                    key={cell}
+                    onClick={() => setDate(cell)}
+                    className={`min-h-[76px] rounded-[10px] border p-1.5 text-left align-top transition ${
+                      date === cell
+                        ? "border-leaf-deep bg-mint"
+                        : cell === TODAY
+                          ? "border-leaf-deep/40 bg-mint-soft"
+                          : "border-line hover:border-ink"
+                    }`}
+                  >
+                    <span className={`text-[12px] font-bold ${cell === TODAY ? "text-leaf-deep" : ""}`}>
+                      {Number(cell.slice(8))}
+                      {cell === TODAY && <em className="ml-1 text-[9px] not-italic text-mute">오늘</em>}
+                    </span>
+                    <div className="mt-0.5 flex flex-col gap-0.5">
+                      {(eventsByDate.get(cell) ?? []).slice(0, 2).map((ev) => (
+                        <span key={ev.event_id} className="truncate rounded-[4px] bg-leaf-deep px-1 py-0.5 text-[10px] font-semibold text-white">
+                          {ev.title}
+                        </span>
+                      ))}
+                      {(eventsByDate.get(cell)?.length ?? 0) > 2 && (
+                        <span className="text-[10px] font-bold text-mute">+{(eventsByDate.get(cell)?.length ?? 0) - 2}</span>
+                      )}
+                    </div>
+                  </button>
+                ),
+              )}
+            </div>
+
+            {/* 선택된 날짜 패널: 그 날 일정 + 추가 */}
+            <div className="mt-4 rounded-[14px] bg-mint-soft/70 p-4">
+              <p className="text-[13.5px] font-bold">
+                {Number(date.slice(5, 7))}월 {Number(date.slice(8))}일 ({WEEKDAY[new Date(date + "T00:00:00").getDay()]})
+              </p>
+              <div className="mt-2 flex flex-col gap-1.5">
+                {(eventsByDate.get(date) ?? []).map((ev) => (
+                  <div key={ev.event_id} className="flex items-center gap-2 rounded-[10px] bg-card px-3 py-2 text-[13.5px]">
+                    <span className="font-semibold">{ev.title}</span>
+                    {ev.location && <span className="text-[12px] text-mute">{ev.location}</span>}
+                    <span className="ml-auto text-[10.5px] font-semibold text-mute">
+                      {ev.source === "seed" ? "기본 일정" : "내가 적음"}
+                    </span>
+                  </div>
+                ))}
+                {(eventsByDate.get(date) ?? []).length === 0 && (
+                  <p className="text-[12.5px] text-mute">이 날짜에 일정이 없어요.</p>
+                )}
+              </div>
+              <form onSubmit={addEvent} className="mt-2.5 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="이 날짜에 일정 추가 — 예: SKT 면접"
+                  required
+                  className="min-w-0 flex-1 rounded-[8px] border border-line bg-card px-3 py-2.5 text-[14px]"
+                  aria-label="일정 내용"
+                />
+                <button
+                  type="submit"
+                  disabled={saving || !title.trim()}
+                  className="rounded-full bg-leaf px-5 py-2.5 text-[13.5px] font-medium text-white transition hover:bg-[#333333] disabled:opacity-50"
+                >
+                  {saving ? "저장 중…" : "+ 등록"}
+                </button>
+              </form>
+              {calNotice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[12.5px] font-bold text-leaf-deep">🚧 {calNotice}</p>}
             </div>
           </section>
 
