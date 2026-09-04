@@ -37,7 +37,7 @@ const RANK_SYSTEM = `당신은 한국 청년·취준생 정책 추천 어시스�
 사용자 정보, 일정, 정책 후보 목록이 주어집니다.
 이 일정을 계기로 사용자에게 실제로 유의미한 정책만 최대 3개 골라 JSON 하나로 출력하세요:
 {"recommendations": [{"policy_id": "...", "score": 0~100, "reason": "왜 이 사용자·일정에 맞는지 1문장 (존댓말)", "benefit_summary": "받는 혜택 요약 1구절"}]}
-규칙: 후보 목록에 없는 policy_id를 만들지 않는다. 지역·나이가 명백히 안 맞으면 제외한다. 이사·이주 일정이면 목적지 지역의 정책을 우선하고, 떠나는 지역 전용 정책은 제외한다. 맞는 게 없으면 빈 배열.`;
+규칙: 후보 목록에 없는 policy_id를 만들지 않는다. 지역·나이가 명백히 안 맞으면 제외한다. 이사·이주 일정이면 목적지 지역의 정책을 우선하고, 떠나는 지역 전용 정책은 제외한다. 정책의 지원내용이 이 일정의 활동(면접·시험·자소서·이사 등)과 직접 연결되지 않으면 절대 포함하지 않는다 — 억지로 채우지 말고 빈 배열이 낫다. reason에는 정책 내용 중 이 일정과 맞닿는 요소를 구체적으로 인용한다. score 60 미만은 포함하지 않는다.`;
 
 export async function POST(request: Request) {
   let body: { personaId?: string | null; profileId?: string | null; title?: string; date?: string };
@@ -86,7 +86,11 @@ export async function POST(request: Request) {
       `일정: "${title.trim()}"${date ? ` (날짜: ${date})` : ""}`,
       1200,
     );
-    const keywords = (extracted.keywords ?? []).filter(Boolean).slice(0, 6);
+    const GENERIC = new Set(["준비", "작성", "지원", "신청", "등록", "참여", "운영", "안내", "프로그램", "청년", "사업", "활동", "일정"]);
+    const keywords = (extracted.keywords ?? [])
+      .map((k) => String(k).trim())
+      .filter((k) => k.length >= 2 && !GENERIC.has(k))
+      .slice(0, 6);
     if (keywords.length === 0) keywords.push(title.trim());
     const regions = [extracted.region_sido, userSido].filter(Boolean) as string[];
 
@@ -103,7 +107,7 @@ export async function POST(request: Request) {
     // (a) 일정에 언급된 지역 우선 (예: "대전 이사" → 대전 정책)
     if (extracted.region_sido) {
       const { data, error } = await db.from("policies").select(cols)
-        .contains("region_sidos", [extracted.region_sido]).or(kwOr).limit(8);
+        .contains("region_sidos", [extracted.region_sido]).or(kwOr).limit(12);
       if (error) throw new Error(`정책 검색 실패: ${error.message}`);
       push(data as Cand[] | null);
     }
@@ -136,7 +140,7 @@ export async function POST(request: Request) {
 
     const byId = new Map(candidates.map((c) => [c.policy_id, c]));
     const recommendations = (ranked.recommendations ?? [])
-      .filter((r) => byId.has(r.policy_id))
+      .filter((r) => byId.has(r.policy_id) && r.score >= 60)
       .slice(0, 3)
       .map((r) => {
         const c = byId.get(r.policy_id)!;
