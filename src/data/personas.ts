@@ -16,6 +16,7 @@ export type Declared = {
     major: string;
     graduatedAt: string | null;
   };
+  employmentStatus: string; // 미취업 | 미취업_단기알바중 | 재직중
   targetJob: string;
   household: {
     livingWithParents: boolean;
@@ -85,6 +86,7 @@ const minji: Persona = {
     military: null,
     region: { sido: "서울특별시", sigungu: "중랑구", since: "2023-06-01" },
     education: { status: "졸업", major: "통계학", graduatedAt: "2026-02-20" },
+    employmentStatus: "미취업_단기알바중",
     targetJob: "데이터 분석",
     household: { livingWithParents: true, size: 3, housing: "본가", depositKrw: null },
     incomeBracket: "100~150%",
@@ -148,6 +150,7 @@ const junho: Persona = {
     military: { served: true, months: 18 },
     region: { sido: "경기도", sigungu: "수원시", since: "2021-03-01" },
     education: { status: "졸업", major: "기계공학", graduatedAt: "2024-08-20" },
+    employmentStatus: "미취업",
     targetJob: "품질·생산관리",
     household: { livingWithParents: false, size: 1, housing: "월세", depositKrw: 5000000 },
     incomeBracket: "~60%",
@@ -207,6 +210,7 @@ const seoyeon: Persona = {
     military: null,
     region: { sido: "서울특별시", sigungu: "관악구", since: "2022-04-01" },
     education: { status: "졸업", major: "시각디자인", graduatedAt: "2022-02-18" },
+    employmentStatus: "미취업 (퇴사 후 구직급여 수급 중)",
     targetJob: "UX 디자인",
     household: { livingWithParents: false, size: 1, housing: "월세", depositKrw: 10000000 },
     incomeBracket: "60~100%",

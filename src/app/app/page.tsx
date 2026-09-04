@@ -16,7 +16,7 @@ type CalendarEvent = {
   source: string;
 };
 
-type Session = { personaId: string | null; userId: string; name?: string };
+type Session = { personaId: string | null; profileId?: string; userId: string; name?: string };
 
 type Rec = {
   id: string;
@@ -24,29 +24,47 @@ type Rec = {
   benefit: string;
   amountMaxKrw: number; // 절약액 계산 불가 유형은 0
   region: string;
+  target: string; // 지원대상 요약
+  content: string; // 지원내용 요약
+  method: string; // 신청방법
+  url: string; // 공식 링크
+};
+
+type Verdict = {
+  score: number;
+  eligibility: "LIKELY" | "NEEDS_CHECK" | "UNLIKELY";
+  reasons: string[];
+  missing_information: string[];
+  evidence_todo: string[];
+};
+
+const ELIG_LABEL: Record<Verdict["eligibility"], { text: string; cls: string }> = {
+  LIKELY: { text: "신청 가능성 높음", cls: "bg-[#2fbf5f] text-white" },
+  NEEDS_CHECK: { text: "추가 확인 필요", cls: "bg-[#f6e05e] text-ink" },
+  UNLIKELY: { text: "요건 미충족 가능성", cls: "bg-line text-ink" },
 };
 
 /** 데모용 추천 정책 — AI 매칭 엔진이 붙기 전까지의 자리 (페르소나별 기대 매칭과 동일) */
 const RECS: Record<string, Rec[]> = {
   minji: [
-    { id: "jungnang-exam", title: "중랑구 미취업청년 자격증 응시료 지원", benefit: "응시료 최대 10만 원", amountMaxKrw: 100000, region: "서울 중랑구" },
-    { id: "seoul-allowance", title: "서울 청년수당", benefit: "월 50만 원 × 최대 6개월", amountMaxKrw: 500000, region: "서울" },
-    { id: "seoul-suit", title: "취업날개 면접정장 무료대여", benefit: "회당 정장 대여 무료", amountMaxKrw: 40000, region: "서울" },
+    { id: "jungnang-exam", title: "중랑구 미취업청년 자격증 응시료 지원", benefit: "응시료 최대 10만 원", amountMaxKrw: 100000, region: "서울 중랑구", target: "중랑구 거주 미취업 청년 (만 19~39세)", content: "어학·자격증 시험 응시료를 연 최대 10만 원까지 실비 지원. 예산 소진 시 조기 마감될 수 있음", method: "중랑구청 홈페이지 온라인 신청 + 응시확인 증빙 제출", url: "https://www.jungnang.go.kr" },
+    { id: "seoul-allowance", title: "서울 청년수당", benefit: "월 50만 원 × 최대 6개월", amountMaxKrw: 500000, region: "서울", target: "서울 거주 만 19~34세 졸업 후 미취업 청년, 중위소득 150% 이하", content: "구직활동 지원금 월 50만 원을 최대 6개월 지급 (클린카드)", method: "청년몽땅정보통에서 모집 기간 내 온라인 신청", url: "https://youth.seoul.go.kr" },
+    { id: "seoul-suit", title: "취업날개 면접정장 무료대여", benefit: "회당 정장 대여 무료", amountMaxKrw: 40000, region: "서울", target: "서울 거주 만 18~39세 구직 청년", content: "면접용 정장·구두·넥타이 등 무료 대여 (연 10회)", method: "온라인 예약 후 대여점 방문", url: "https://job.seoul.go.kr" },
   ],
   junho: [
-    { id: "gg-interview", title: "경기도 청년 면접수당", benefit: "면접 회당 5만 원", amountMaxKrw: 50000, region: "경기" },
-    { id: "kua-allowance", title: "국민취업지원제도 구직촉진수당", benefit: "월 50만 원+ × 6개월", amountMaxKrw: 500000, region: "전국" },
-    { id: "wide-jobhunt", title: "광역 구직활동비", benefit: "장거리 면접 교통·숙박", amountMaxKrw: 70000, region: "전국" },
+    { id: "gg-interview", title: "경기도 청년 면접수당", benefit: "면접 회당 5만 원", amountMaxKrw: 50000, region: "경기", target: "경기도 거주 만 18~39세 구직 청년", content: "면접 참여 시 회당 5만 원, 연 최대 50만 원 지역화폐 지급", method: "잡아바 온라인 신청 + 면접확인서 제출", url: "https://www.jobaba.net" },
+    { id: "kua-allowance", title: "국민취업지원제도 구직촉진수당", benefit: "월 50만 원+ × 6개월", amountMaxKrw: 500000, region: "전국", target: "15~69세 구직자 중 중위소득 60% 이하 + 가구 재산 요건 (청년은 특례 완화)", content: "구직촉진수당 월 50만 원(부양가족 가산 시 최대 90만) × 6개월 + 취업지원 서비스", method: "고용24 온라인 신청 또는 고용센터 방문", url: "https://www.work24.go.kr" },
+    { id: "wide-jobhunt", title: "광역 구직활동비", benefit: "장거리 면접 교통·숙박", amountMaxKrw: 70000, region: "전국", target: "거주지에서 25km 이상 떨어진 면접 참여 구직급여 수급자 등", content: "장거리 면접 시 교통비·숙박비 실비 지원", method: "고용센터 신청 + 면접확인서 제출", url: "https://www.work24.go.kr" },
   ],
   seoyeon: [
-    { id: "nbcard", title: "국민내일배움카드 + 훈련장려금", benefit: "훈련비 지원 + 월 장려금", amountMaxKrw: 116000, region: "전국" },
-    { id: "youth-rent", title: "청년월세 특별지원", benefit: "월세 월 20만 원 × 12개월", amountMaxKrw: 200000, region: "전국" },
-    { id: "kua-link", title: "국민취업지원제도 (수급 종료 후 연계)", benefit: "구직급여 종료 대비", amountMaxKrw: 500000, region: "전국" },
+    { id: "nbcard", title: "국민내일배움카드 + 훈련장려금", benefit: "훈련비 지원 + 월 장려금", amountMaxKrw: 116000, region: "전국", target: "구직자·재직자 대부분 발급 가능 (실업 상태는 구직등록 필요)", content: "5년간 300~500만 원 훈련비 + 출석 요건 충족 시 월 훈련장려금", method: "고용24(HRD-Net)에서 카드 발급 후 훈련과정 수강신청", url: "https://www.work24.go.kr" },
+    { id: "youth-rent", title: "청년월세 특별지원", benefit: "월세 월 20만 원 × 12개월", amountMaxKrw: 200000, region: "전국", target: "만 19~34세 무주택 1인 가구, 본인·원가구 소득 및 보증금·월세 상한 요건", content: "월 최대 20만 원 월세를 12개월 지원", method: "복지로 온라인 신청 또는 주민센터", url: "https://www.bokjiro.go.kr" },
+    { id: "kua-link", title: "국민취업지원제도 (수급 종료 후 연계)", benefit: "구직급여 종료 대비", amountMaxKrw: 500000, region: "전국", target: "구직급여 수급 종료 후 미취업 상태인 구직자 (수급 중에는 중복 불가)", content: "수급 종료 후 국취제 연계로 구직촉진수당·취업지원 서비스 연결", method: "구직급여 종료 시점에 맞춰 고용24에서 신청", url: "https://www.work24.go.kr" },
   ],
   _default: [
-    { id: "kua", title: "국민취업지원제도", benefit: "구직촉진수당 + 취업지원", amountMaxKrw: 500000, region: "전국" },
-    { id: "nbcard", title: "국민내일배움카드", benefit: "훈련비 최대 지원", amountMaxKrw: 300000, region: "전국" },
-    { id: "sunshine", title: "햇살론유스", benefit: "저금리 생활자금", amountMaxKrw: 0, region: "전국" },
+    { id: "kua", title: "국민취업지원제도", benefit: "구직촉진수당 + 취업지원", amountMaxKrw: 500000, region: "전국", target: "15~69세 구직자, 소득·재산 요건 (청년 특례 완화)", content: "구직촉진수당 월 50만 원 × 6개월 + 맞춤 취업지원", method: "고용24 온라인 신청 또는 고용센터 방문", url: "https://www.work24.go.kr" },
+    { id: "nbcard", title: "국민내일배움카드", benefit: "훈련비 최대 지원", amountMaxKrw: 300000, region: "전국", target: "구직자·재직자 대부분 발급 가능 (실업 상태는 구직등록 필요)", content: "5년간 300~500만 원 훈련비 지원", method: "고용24(HRD-Net)에서 카드 발급 후 수강신청", url: "https://www.work24.go.kr" },
+    { id: "sunshine", title: "햇살론유스", benefit: "저금리 생활자금", amountMaxKrw: 0, region: "전국", target: "만 19~34세, 연소득 3,500만 원 이하 (무소득 취준생 가능)", content: "생활·학업 자금 저금리 보증부 대출 (한도 1,200만 원)", method: "서민금융진흥원 앱 보증 신청 후 은행 대출", url: "https://www.kinfa.or.kr" },
   ],
 };
 
@@ -79,6 +97,12 @@ export default function AppPage() {
   // 사이드바: 아코디언 (하나만 열림)
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
   const [savedIds, setSavedIds] = useState<string[]>([]);
+
+  // 정책 상세 모달 + AI 판정
+  const [detail, setDetail] = useState<Rec | null>(null);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [judging, setJudging] = useState(false);
+  const [judgeError, setJudgeError] = useState<string | null>(null);
 
   // 일정 등록 (달력)
   const [ym, setYm] = useState({ y: 2026, m: 8 }); // 2026년 9월 (m: 0-11)
@@ -140,6 +164,42 @@ export default function AppPage() {
     for (const ev of events) map.set(ev.start_at, [...(map.get(ev.start_at) ?? []), ev]);
     return map;
   }, [events]);
+
+  const openDetail = (r: Rec) => {
+    setDetail(r);
+    setVerdict(null);
+    setJudgeError(null);
+  };
+
+  const judge = async () => {
+    if (!detail || !session || judging) return;
+    setJudging(true);
+    setJudgeError(null);
+    try {
+      const res = await fetch("/api/relevance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personaId: session.personaId,
+          profileId: session.profileId ?? null,
+          policy: {
+            title: detail.title,
+            benefit: detail.benefit,
+            target: detail.target,
+            content: detail.content,
+            region: detail.region,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "판정 실패");
+      setVerdict(json.verdict);
+    } catch (e) {
+      setJudgeError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setJudging(false);
+    }
+  };
 
   const search = (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,7 +302,10 @@ export default function AppPage() {
                       <p className="mt-0.5 text-[12px] text-mute">{r.benefit}</p>
                       <div className="mt-2 flex items-center justify-between">
                         <span className="rounded-full bg-mint px-2 py-0.5 text-[11px] font-bold text-leaf-deep">진행중</span>
-                        <button onClick={() => removeFromMy(r.id)} className="text-[11.5px] font-bold text-mute underline">빼기</button>
+                        <span className="flex gap-2">
+                          <button onClick={() => openDetail(r)} className="text-[11.5px] font-bold text-leaf-deep underline">자세히보기</button>
+                          <button onClick={() => removeFromMy(r.id)} className="text-[11.5px] font-bold text-mute underline">빼기</button>
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -269,12 +332,15 @@ export default function AppPage() {
                     <div key={r.id} className="rounded-[12px] border border-line p-3">
                       <p className="text-[13.5px] font-bold leading-snug">{r.title}</p>
                       <p className="mt-0.5 text-[12px] text-mute">{r.benefit} · {r.region}</p>
-                      <button
-                        onClick={() => addToMy(r.id)}
-                        className="mt-2 rounded-full bg-leaf px-3.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#333333]"
-                      >
-                        + 마이티끌에 담기
-                      </button>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          onClick={() => addToMy(r.id)}
+                          className="rounded-full bg-leaf px-3.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#333333]"
+                        >
+                          + 담기
+                        </button>
+                        <button onClick={() => openDetail(r)} className="text-[11.5px] font-bold text-leaf-deep underline">자세히보기</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -396,6 +462,92 @@ export default function AppPage() {
           </aside>
         </div>
       </div>
+
+      {/* ── 정책 상세 모달 ─────────────────────── */}
+      {detail && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setDetail(null)}>
+          <div
+            className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-[20px] bg-card p-6 shadow-lift"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-bold leading-snug">{detail.title}</h3>
+              <button onClick={() => setDetail(null)} className="text-xl leading-none text-mute" aria-label="닫기">×</button>
+            </div>
+            <p className="mt-1 text-[13px] font-bold text-leaf-deep">{detail.benefit} · {detail.region}</p>
+
+            <dl className="mt-4 flex flex-col gap-3 text-[13.5px]">
+              <div>
+                <dt className="font-bold text-mute">지원대상</dt>
+                <dd className="mt-0.5">{detail.target}</dd>
+              </div>
+              <div>
+                <dt className="font-bold text-mute">지원내용</dt>
+                <dd className="mt-0.5">{detail.content}</dd>
+              </div>
+              <div>
+                <dt className="font-bold text-mute">신청방법</dt>
+                <dd className="mt-0.5">{detail.method}</dd>
+              </div>
+            </dl>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                onClick={judge}
+                disabled={judging}
+                className="rounded-full bg-leaf px-5 py-2.5 text-[13.5px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-60"
+              >
+                {judging ? "AI가 판정 중…" : "🤖 나랑 맞는지 AI 판정"}
+              </button>
+              {!savedIds.includes(detail.id) && (
+                <button onClick={() => addToMy(detail.id)} className="rounded-full border border-line px-4 py-2.5 text-[13px] font-bold transition hover:border-ink">
+                  + 마이티끌에 담기
+                </button>
+              )}
+              <a href={detail.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-leaf-deep underline">
+                공식 페이지 ↗
+              </a>
+            </div>
+
+            {judgeError && <p className="mt-3 rounded-[10px] bg-mint px-3 py-2 text-[12.5px] font-bold text-[#d33]">⚠ {judgeError}</p>}
+
+            {verdict && (
+              <div className="mt-4 rounded-[14px] border border-line bg-mint-soft/70 p-4">
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-[12px] font-bold ${ELIG_LABEL[verdict.eligibility].cls}`}>
+                    {ELIG_LABEL[verdict.eligibility].text}
+                  </span>
+                  <span className="text-[13px] font-bold">관련도 {verdict.score}점</span>
+                </div>
+                {verdict.reasons.length > 0 && (
+                  <ul className="mt-2.5 flex flex-col gap-1 text-[13px]">
+                    {verdict.reasons.map((r) => <li key={r}>· {r}</li>)}
+                  </ul>
+                )}
+                {verdict.missing_information.length > 0 && (
+                  <div className="mt-2.5">
+                    <p className="text-[12px] font-bold text-mute">확인이 필요해요</p>
+                    <ul className="mt-1 flex flex-col gap-1 text-[13px]">
+                      {verdict.missing_information.map((m) => <li key={m}>❓ {m}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {verdict.evidence_todo.length > 0 && (
+                  <div className="mt-2.5">
+                    <p className="text-[12px] font-bold text-mute">미리 챙겨두세요</p>
+                    <ul className="mt-1 flex flex-col gap-1 text-[13px]">
+                      {verdict.evidence_todo.map((m) => <li key={m}>📎 {m}</li>)}
+                    </ul>
+                  </div>
+                )}
+                <p className="mt-3 text-[11px] text-mute">AI의 1차 판정입니다 — 최종 자격은 공식 기관에서 확인하세요.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
