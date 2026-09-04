@@ -37,7 +37,7 @@ const RANK_SYSTEM = `당신은 한국 청년·취준생 정책 추천 어시스�
 사용자 정보, 일정, 정책 후보 목록이 주어집니다.
 이 일정을 계기로 사용자에게 실제로 유의미한 정책만 최대 3개 골라 JSON 하나로 출력하세요:
 {"recommendations": [{"policy_id": "...", "score": 0~100, "reason": "왜 이 사용자·일정에 맞는지 1문장 (존댓말)", "benefit_summary": "받는 혜택 요약 1구절"}]}
-규칙: 후보 목록에 없는 policy_id를 만들지 않는다. 지역·나이가 명백히 안 맞으면 제외한다. 맞는 게 없으면 빈 배열.`;
+규칙: 후보 목록에 없는 policy_id를 만들지 않는다. 지역·나이가 명백히 안 맞으면 제외한다. 이사·이주 일정이면 목적지 지역의 정책을 우선하고, 떠나는 지역 전용 정책은 제외한다. 맞는 게 없으면 빈 배열.`;
 
 export async function POST(request: Request) {
   let body: { personaId?: string | null; title?: string; date?: string };
@@ -66,25 +66,36 @@ export async function POST(request: Request) {
     const extracted = await groqJson<Extracted>(
       EXTRACT_SYSTEM,
       `일정: "${title.trim()}"${date ? ` (날짜: ${date})` : ""}`,
-      300,
+      1200,
     );
     const keywords = (extracted.keywords ?? []).filter(Boolean).slice(0, 6);
     if (keywords.length === 0) keywords.push(title.trim());
     const regions = [extracted.region_sido, userSido].filter(Boolean) as string[];
 
-    // ── 2) SQL 후보 압축: (해당 지역 또는 전국) AND (키워드 일치) ──
+    // ── 2) SQL 후보 압축 — 일정 지역 정책을 먼저 확보하고, 전국·거주지 정책으로 채움 ──
     const db = supabaseAdmin();
-    let q = db
-      .from("policies")
-      .select("policy_id, title, provider, theme, region_sidos, is_national, age_min, age_max, apply_url, search_text")
-      .limit(15);
-    if (regions.length > 0) {
-      const regionOr = ["is_national.eq.true", ...regions.map((r) => `region_sidos.cs.{"${r}"}`)];
-      q = q.or(regionOr.join(","));
+    const kwOr = keywords.map((k) => `search_text.ilike.%${k.replace(/[%,()]/g, "")}%`).join(",");
+    const cols = "policy_id, title, provider, theme, region_sidos, is_national, age_min, age_max, apply_url, search_text";
+    type Cand = { policy_id: string; title: string; provider: string | null; theme: string | null; region_sidos: string[] | null; is_national: boolean; age_min: number | null; age_max: number | null; apply_url: string | null; search_text: string | null };
+    const seen = new Set<string>();
+    const candidates: Cand[] = [];
+    const push = (rows: Cand[] | null) => {
+      for (const r of rows ?? []) if (!seen.has(r.policy_id)) { seen.add(r.policy_id); candidates.push(r); }
+    };
+    // (a) 일정에 언급된 지역 우선 (예: "대전 이사" → 대전 정책)
+    if (extracted.region_sido) {
+      const { data, error } = await db.from("policies").select(cols)
+        .contains("region_sidos", [extracted.region_sido]).or(kwOr).limit(8);
+      if (error) throw new Error(`정책 검색 실패: ${error.message}`);
+      push(data as Cand[] | null);
     }
-    q = q.or(keywords.map((k) => `search_text.ilike.%${k.replace(/[%,()]/g, "")}%`).join(","));
-    const { data: candidates, error } = await q;
-    if (error) throw new Error(`정책 검색 실패: ${error.message}`);
+    // (b) 전국 + 거주지 정책
+    {
+      const regionOr = ["is_national.eq.true", ...(userSido ? [`region_sidos.cs.{"${userSido}"}`] : [])].join(",");
+      const { data, error } = await db.from("policies").select(cols).or(regionOr).or(kwOr).limit(extracted.region_sido ? 10 : 18);
+      if (error) throw new Error(`정책 검색 실패: ${error.message}`);
+      push(data as Cand[] | null);
+    }
 
     if (!candidates || candidates.length === 0) {
       return NextResponse.json({ extracted, recommendations: [], note: "조건에 맞는 정책 후보가 없습니다" });
@@ -102,7 +113,7 @@ export async function POST(request: Request) {
     const ranked = await groqJson<Ranked>(
       RANK_SYSTEM,
       `[사용자]\n${JSON.stringify(userSummary)}\n\n[일정]\n"${title.trim()}" (${date ?? "날짜 미상"}, 유형: ${extracted.event_type})\n\n[정책 후보]\n${JSON.stringify(compact, null, 1)}`,
-      800,
+      2000,
     );
 
     const byId = new Map(candidates.map((c) => [c.policy_id, c]));

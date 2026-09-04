@@ -5,7 +5,7 @@
 export async function groqJson<T>(
   system: string,
   user: string,
-  maxTokens = 900,
+  maxTokens = 1500,
 ): Promise<T> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY 환경변수가 필요합니다");
