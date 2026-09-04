@@ -110,6 +110,12 @@ export default function AppPage() {
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [calNotice, setCalNotice] = useState<string | null>(null);
+  // 일정 → AI 정책 매칭 결과
+  const [matching, setMatching] = useState(false);
+  const [matchFor, setMatchFor] = useState<string | null>(null);
+  const [matchRecs, setMatchRecs] = useState<
+    { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null }[] | null
+  >(null);
 
   const recs = useMemo(
     () => RECS[session?.personaId ?? "_default"] ?? RECS._default,
@@ -212,6 +218,7 @@ export default function AppPage() {
   const addEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!session || !title.trim() || saving) return;
+    const eventTitle = title.trim();
     setSaving(true);
     setCalNotice(null);
     try {
@@ -228,6 +235,28 @@ export default function AppPage() {
       setTimeout(() => setCalNotice(null), 4000);
     } finally {
       setSaving(false);
+    }
+    // 저장 여부와 무관하게 AI 매칭 실행 — 일정에 혜택 붙이기
+    void matchEvent(eventTitle);
+  };
+
+  const matchEvent = async (eventTitle: string) => {
+    setMatching(true);
+    setMatchFor(eventTitle);
+    setMatchRecs(null);
+    try {
+      const res = await fetch("/api/event-match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personaId: session?.personaId ?? null, title: eventTitle, date }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "매칭 실패");
+      setMatchRecs(json.recommendations ?? []);
+    } catch {
+      setMatchRecs([]);
+    } finally {
+      setMatching(false);
     }
   };
 
@@ -440,6 +469,29 @@ export default function AppPage() {
                 </button>
               </form>
               {calNotice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[12.5px] font-bold text-leaf-deep">🚧 {calNotice}</p>}
+
+              {/* 일정 → AI가 찾은 혜택 */}
+              {(matching || matchRecs) && matchFor && (
+                <div className="mt-3 rounded-[14px] border border-line bg-card p-3.5">
+                  <p className="text-[12.5px] font-bold text-leaf-deep">
+                    💡 “{matchFor}” 일정에 붙는 혜택 {matching && "— AI가 전국 정책에서 찾는 중…"}
+                  </p>
+                  {!matching && matchRecs && matchRecs.length === 0 && (
+                    <p className="mt-1.5 text-[12.5px] text-mute">이 일정과 연결되는 정책을 찾지 못했어요.</p>
+                  )}
+                  {!matching && matchRecs && matchRecs.map((r) => (
+                    <div key={r.policy_id} className="mt-2 rounded-[10px] bg-mint-soft/70 p-2.5">
+                      <p className="text-[13px] font-bold leading-snug">{r.title}</p>
+                      <p className="mt-0.5 text-[11.5px] text-mute">{r.provider} · {r.region} · 관련도 {r.score}점</p>
+                      <p className="mt-1 text-[12.5px]">{r.reason}</p>
+                      <p className="mt-0.5 text-[12px] font-bold text-leaf-deep">🎁 {r.benefit_summary}</p>
+                      {r.apply_url && (
+                        <a href={r.apply_url} target="_blank" rel="noreferrer" className="text-[11.5px] font-bold underline">신청 페이지 ↗</a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
