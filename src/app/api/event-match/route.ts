@@ -40,26 +40,44 @@ const RANK_SYSTEM = `당신은 한국 청년·취준생 정책 추천 어시스�
 규칙: 후보 목록에 없는 policy_id를 만들지 않는다. 지역·나이가 명백히 안 맞으면 제외한다. 이사·이주 일정이면 목적지 지역의 정책을 우선하고, 떠나는 지역 전용 정책은 제외한다. 맞는 게 없으면 빈 배열.`;
 
 export async function POST(request: Request) {
-  let body: { personaId?: string | null; title?: string; date?: string };
+  let body: { personaId?: string | null; profileId?: string | null; title?: string; date?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "잘못된 요청 본문" }, { status: 400 });
   }
-  const { personaId, title, date } = body;
+  const { personaId, profileId, title, date } = body;
   if (!title?.trim()) return NextResponse.json({ error: "title이 필요합니다" }, { status: 400 });
 
-  // 사용자 요약 (판정 근거용 — 페르소나 또는 기본값)
+  // 사용자 요약 (판정 근거용) — 페르소나(코드) 또는 직접입력 회원(DB)
   const p = personaId ? getPersona(personaId) : undefined;
-  const userSummary = p
-    ? {
-        나이: new Date().getFullYear() - Number(p.declared.birthDate.slice(0, 4)),
-        거주지: `${p.declared.region.sido} ${p.declared.region.sigungu}`,
-        취업상태: p.declared.employmentStatus,
-        가구중위소득구간: p.declared.incomeBracket,
-      }
-    : { 참고: "프로필 미상 — 일정 관련성 위주로 판단" };
-  const userSido = p?.declared.region.sido ?? null;
+  let userSummary: Record<string, unknown> = { 참고: "프로필 미상 — 일정 관련성 위주로 판단" };
+  let userSido: string | null = null;
+  if (p) {
+    userSummary = {
+      나이: new Date().getFullYear() - Number(p.declared.birthDate.slice(0, 4)),
+      거주지: `${p.declared.region.sido} ${p.declared.region.sigungu}`,
+      취업상태: p.declared.employmentStatus,
+      가구중위소득구간: p.declared.incomeBracket,
+    };
+    userSido = p.declared.region.sido;
+  } else if (profileId) {
+    const { data: sv } = await supabaseAdmin()
+      .from("profile_survey")
+      .select("birth_date, region_sido, region_sigungu, education_status, income_bracket, housing_type")
+      .eq("id", profileId)
+      .single();
+    if (sv) {
+      userSummary = {
+        나이: sv.birth_date ? new Date().getFullYear() - Number(String(sv.birth_date).slice(0, 4)) : null,
+        거주지: `${sv.region_sido ?? ""} ${sv.region_sigungu ?? ""}`.trim(),
+        학력: sv.education_status,
+        주거형태: sv.housing_type,
+        가구중위소득구간: sv.income_bracket,
+      };
+      userSido = sv.region_sido ?? null;
+    }
+  }
 
   try {
     // ── 1) 일정 의미 추출 ──

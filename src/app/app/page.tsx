@@ -248,7 +248,7 @@ export default function AppPage() {
       const res = await fetch("/api/event-match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personaId: session?.personaId ?? null, title: eventTitle, date }),
+        body: JSON.stringify({ personaId: session?.personaId ?? null, profileId: session?.profileId ?? null, title: eventTitle, date }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "매칭 실패");
