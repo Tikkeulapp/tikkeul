@@ -6,7 +6,8 @@ import { getPersona, type Persona } from "@/data/personas";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
-import { examFeeFor, estimateRegDeadline } from "@/data/exam_fees";
+import { examFeeFor } from "@/data/exam_fees";
+import { findExamSession } from "@/data/exam_schedules";
 
 type CalendarEvent = {
   event_id: string;
@@ -238,27 +239,38 @@ export default function AppPage() {
     .filter((r) => r.endDate && daysUntil(r.endDate) >= 0 && daysUntil(r.endDate) <= 3)
     .sort((a, b) => (a.endDate! < b.endDate! ? -1 : 1));
 
-  // 달력의 시험 일정 → 접수 마감(추정): 시험별 통상 접수 규칙으로 계산 (정확한 날짜는 공식 일정 확인)
+  // 달력의 시험 일정 → 공식 회차의 접수 마감 (exam_schedules.ts: 주관기관 공지에서 확인한 값)
   const examDeadlines = events
     .map((ev) => {
       const info = examFeeFor(ev.title);
       if (!info) return null;
-      const deadline = estimateRegDeadline(ev.start_at, info);
-      return { ev, info, deadline };
+      const m = findExamSession(info.name, ev.start_at);
+      const deadline = m?.session?.regEnd ?? null;
+      return { ev, info, match: m, deadline };
     })
-    .filter((x): x is { ev: CalendarEvent; info: NonNullable<ReturnType<typeof examFeeFor>>; deadline: string | null } => !!x);
+    .filter((x): x is { ev: CalendarEvent; info: NonNullable<ReturnType<typeof examFeeFor>>; match: ReturnType<typeof findExamSession>; deadline: string | null } => !!x);
   const examDeadlinesByDate = new Map<string, typeof examDeadlines>();
   for (const x of examDeadlines) if (x.deadline) examDeadlinesByDate.set(x.deadline, [...(examDeadlinesByDate.get(x.deadline) ?? []), x]);
   const urgentExams = examDeadlines
     .filter((x) => x.deadline && daysUntil(x.deadline) >= 0 && daysUntil(x.deadline) <= 7)
     .sort((a, b) => (a.deadline! < b.deadline! ? -1 : 1));
   const alarmCount = urgent.length + urgentExams.length;
+  /** 시험 일정 한 줄 요약: 공식 회차 접수 마감(정확한 날짜) / 같은 날 회차가 없으면 가까운 회차 안내 / 상시·미확보는 공식 일정 확인 */
   const examLine = (title: string, examDate: string) => {
     const info = examFeeFor(title);
     if (!info) return null;
-    const dl = estimateRegDeadline(examDate, info);
-    const status = dl === null ? "상시 접수" : daysUntil(dl) < 0 ? `접수 마감 지남(추정 ${fmtMD(dl)})` : `접수 마감(추정) ${fmtMD(dl)} · D-${daysUntil(dl)}`;
-    return { info, dl, status };
+    const m = findExamSession(info.name, examDate);
+    const dl = m?.session?.regEnd ?? null;
+    let status: string;
+    if (!m || m.kind === "none" || !m.session) status = `${info.regNote} — 공식 일정 확인`;
+    else {
+      const prefix = m.kind === "exact" ? `${m.session.round ? m.session.round + " " : ""}` : `이 날엔 회차 없음 → 가까운 회차 ${fmtMD(m.session.examDate)}${m.session.round ? `(${m.session.round})` : ""} `;
+      const late = m.session.lateRegEnd && daysUntil(m.session.regEnd) < 0 && daysUntil(m.session.lateRegEnd) >= 0 ? ` · 추가접수 ${fmtMD(m.session.lateRegEnd)}까지` : "";
+      status = daysUntil(m.session.regEnd) < 0
+        ? `${prefix}정기접수 마감 지남(${fmtMD(m.session.regEnd)})${late}`
+        : `${prefix}접수 마감 ${fmtMD(m.session.regEnd)} · D-${daysUntil(m.session.regEnd)}`;
+    }
+    return { info, dl, status, source: m?.schedule.sourceLabel ?? null, sourceUrl: m?.schedule.source ?? info.scheduleUrl };
   };
 
   /** 일정 매칭 카드에서 마이티끌로 담기 — 연결 일정·시험비(참고)·혜택 요약을 함께 기억 */
@@ -518,12 +530,12 @@ export default function AppPage() {
                       {savedMeta[r.id]?.linkedEvent && (
                         <p className="mt-1 text-[13px] text-leaf-deep">
                           📅 {savedMeta[r.id]!.linkedEvent!.title} · {fmtMD(savedMeta[r.id]!.linkedEvent!.date)}
-                          {savedMeta[r.id]?.examFeeKrw ? ` · ${savedMeta[r.id]!.examName} 응시료 ${savedMeta[r.id]!.examFeeKrw!.toLocaleString("ko-KR")}원(참고)` : ""}
+                          {savedMeta[r.id]?.examFeeKrw ? ` · ${savedMeta[r.id]!.examName} 응시료 ${savedMeta[r.id]!.examFeeKrw!.toLocaleString("ko-KR")}원` : ""}
                         </p>
                       )}
                       {savedMeta[r.id]?.linkedEvent && (() => { const x = examLine(savedMeta[r.id]!.linkedEvent!.title, savedMeta[r.id]!.linkedEvent!.date); return x ? (
                         <p className={`mt-0.5 text-[13px] ${x.dl && daysUntil(x.dl) >= 0 && daysUntil(x.dl) <= 7 ? "font-bold text-[#b45309]" : "text-mute"}`}>
-                          📝 시험 {x.status} · <a href={x.info.scheduleUrl} target="_blank" rel="noreferrer" className="underline">공식 일정 ↗</a>
+                          📝 {x.info.name} {x.status} · <a href={x.sourceUrl} target="_blank" rel="noreferrer" className="underline">공식 일정 ↗</a>
                         </p>
                       ) : null; })()}
                       {(r.endDate || r.alwaysOpen) && (
@@ -598,9 +610,12 @@ export default function AppPage() {
                     <li key={"ex-" + x.ev.event_id} className="flex flex-wrap items-center gap-2">
                       <span className="rounded bg-[#f6c453] px-1.5 py-0.5 text-[12px] font-bold">시험 접수</span>
                       <span className="font-semibold">{x.ev.title}</span>
-                      <span className="text-[#b45309]">접수 마감(추정) {fmtMD(x.deadline!)} · D-{daysUntil(x.deadline!)}</span>
-                      <span className="text-[13px] text-mute">시험 {fmtMD(x.ev.start_at)} · {x.info.regNote}</span>
-                      <a href={x.info.scheduleUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">공식 일정 확인 ↗</a>
+                      <span className="text-[#b45309]">정기접수 마감 {fmtMD(x.deadline!)} · D-{daysUntil(x.deadline!)}</span>
+                      <span className="text-[13px] text-mute">
+                        {x.match?.kind === "exact" ? `시험 ${fmtMD(x.ev.start_at)}` : `일정 ${fmtMD(x.ev.start_at)} · 가까운 공식 회차 ${fmtMD(x.match!.session!.examDate)}`}
+                        {x.match?.session?.round ? ` · ${x.match.session.round}` : ""}
+                      </span>
+                      <a href={x.match?.schedule.source ?? x.info.scheduleUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">공식 일정 ↗</a>
                     </li>
                   ))}
                   {urgent.map((r) => (
@@ -612,7 +627,7 @@ export default function AppPage() {
                     </li>
                   ))}
                 </ul>
-                <p className="mt-1.5 text-[12.5px] text-mute">시험 접수 마감은 시험별 통상 접수 규칙으로 추정한 날짜입니다. 정확한 일정은 공식 페이지에서 확인하세요.</p>
+                <p className="mt-1.5 text-[12.5px] text-mute">시험 접수 마감은 각 주관기관이 공지한 2026년 공식 회차 일정 기준입니다(확인일 2026-09-05). 변경될 수 있으니 신청 전 공식 페이지를 확인하세요.</p>
               </div>
             )}
 
@@ -666,7 +681,7 @@ export default function AppPage() {
                         <span key={"dl-" + r.id} className="truncate rounded-[4px] bg-[#f6c453] px-1 py-0.5 text-[11.5px] font-semibold text-ink" title={`${r.title} 신청 마감`}>⏰ {r.title}</span>
                       ))}
                       {(examDeadlinesByDate.get(cell) ?? []).slice(0, 1).map((x) => (
-                        <span key={"ex-" + x.ev.event_id} className="truncate rounded-[4px] border border-[#f6c453] bg-[#fff7e0] px-1 py-0.5 text-[11.5px] font-semibold text-[#b45309]" title={`${x.ev.title} 접수 마감(추정) — ${x.info.regNote}`}>📝 {x.info.name} 접수마감</span>
+                        <span key={"ex-" + x.ev.event_id} className="truncate rounded-[4px] border border-[#f6c453] bg-[#fff7e0] px-1 py-0.5 text-[11.5px] font-semibold text-[#b45309]" title={`${x.ev.title} 정기접수 마감${x.match?.session?.round ? ` (${x.match.session.round})` : ""}`}>📝 {x.info.name} 접수마감</span>
                       ))}
                     </div>
                   </button>
@@ -686,8 +701,8 @@ export default function AppPage() {
                     {ev.location && <span className="text-[13.5px] text-mute">{ev.location}</span>}
                     {(() => { const x = examLine(ev.title, ev.start_at); return x ? (
                       <span className={`basis-full text-[13px] ${x.dl && daysUntil(x.dl) >= 0 && daysUntil(x.dl) <= 7 ? "font-bold text-[#b45309]" : "text-mute"}`}>
-                        📝 {x.info.name} · {x.status} · 응시료 {x.info.feeKrw.toLocaleString("ko-KR")}원(참고) ·{" "}
-                        <a href={x.info.scheduleUrl} target="_blank" rel="noreferrer" className="underline">공식 일정 ↗</a>
+                        📝 {x.info.name} · {x.status} · 응시료 {x.info.feeKrw.toLocaleString("ko-KR")}원 ·{" "}
+                        <a href={x.sourceUrl} target="_blank" rel="noreferrer" className="underline">공식 일정 ↗</a>
                       </span>
                     ) : null; })()}
                     <span className="ml-auto text-[12px] font-semibold text-mute">
