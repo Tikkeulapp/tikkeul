@@ -63,14 +63,33 @@ export function buildFindPolicyTool() {
   );
 }
 
+// 질의 전체 문구를 통짜로 ilike하면 "면접 준비하는데 도움되는 지원금" 같은 자연어 문장이
+// search_text에 그대로 있을 리 없어 거의 항상 0건이 나온다(실제로 확인된 문제 — 모델도
+// 재시도 없이 바로 "못 찾음"으로 답해버림). 단어 단위로 쪼개 OR 매칭한다
+// (src/app/api/event-match/route.ts의 키워드 추출과 같은 원칙).
+const GENERIC_WORDS = new Set([
+  "준비", "작성", "지원", "신청", "등록", "참여", "운영", "안내", "프로그램",
+  "청년", "사업", "활동", "일정", "도움", "있어", "관련", "혜택", "제도", "있나요",
+]);
+
+function extractKeywords(query: string): string[] {
+  const words = query
+    .replace(/[%,()?!~]/g, " ")
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 2 && !GENERIC_WORDS.has(w));
+  return words.length > 0 ? words.slice(0, 6) : [query.replace(/[%,()]/g, "").trim()];
+}
+
 export function buildSearchPoliciesTool(regionSido: string | null) {
   return tool(
     async ({ query, topK }: { query: string; topK?: number }) => {
-      const kw = query.replace(/[%,()]/g, "").trim();
+      const keywords = extractKeywords(query);
+      const kwOr = keywords.map((k) => `search_text.ilike.%${k}%`).join(",");
       let q = supabaseAdmin()
         .from("policies")
         .select("policy_id, title, provider, region_sidos, is_national, apply_url, search_text")
-        .ilike("search_text", `%${kw}%`);
+        .or(kwOr);
       if (regionSido) q = q.or(`is_national.eq.true,region_sidos.cs.{"${regionSido}"}`);
       const { data } = await q.limit(topK ?? 5);
       return JSON.stringify(data ?? []);
@@ -79,9 +98,9 @@ export function buildSearchPoliciesTool(regionSido: string | null) {
       name: "search_policies",
       description:
         "자유 텍스트 질의로 정책 후보를 키워드 검색합니다 (pgvector 도입 전까지의 임시 구현 — ilike 기반, " +
-        "검색추천_3단설계.md의 v1과 동일한 방식).",
+        "검색추천_3단설계.md의 v1과 동일한 방식). 문장을 그대로 넘겨도 내부에서 단어 단위로 쪼개 검색합니다.",
       schema: z.object({
-        query: z.string().describe("검색 질의"),
+        query: z.string().describe("검색 질의 (문장 그대로 넘겨도 됨)"),
         topK: z.number().optional().describe("최대 개수 (기본 5)"),
       }),
     },
