@@ -24,6 +24,11 @@ export type EffectiveProfile = {
   age: number | null;
   applied: ProfileChange[];
   pending: ProfileChange[];
+  /** profile_survey 원본 행(profile_changes 반영 후) — 규칙엔진용. 페르소나/직접입력 둘 다
+   * scripts/seed.mts, /api/signup으로 DB에 있으므로 항상 조회를 시도한다. */
+  profileRow: Record<string, unknown> | null;
+  /** finance 원본 행 — 규칙엔진용 */
+  financeRow: Record<string, unknown> | null;
 };
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
@@ -40,6 +45,8 @@ export async function resolveProfile(opts: {
   let sido: string | null = null;
   let sigungu: string | null = null;
   let age: number | null = null;
+  let profileRow: Record<string, unknown> | null = null;
+  let financeRow: Record<string, unknown> | null = null;
 
   const p = opts.personaId ? getPersona(opts.personaId) : undefined;
   if (p) {
@@ -56,16 +63,21 @@ export async function resolveProfile(opts: {
       월평균근로소득: d.incomes.find((i) => i.kind === "WORK")?.avgMonthlyKrw ?? null,
       수급중수당: d.benefits.map((b) => b.name),
     };
+    const [{ data: pr }, { data: fr }] = await Promise.all([
+      db.from("profile_survey").select("*").eq("id", opts.personaId as string).maybeSingle(),
+      db.from("finance").select("*").eq("user_id", opts.personaId as string).maybeSingle(),
+    ]);
+    profileRow = pr ?? null;
+    financeRow = fr ?? null;
   } else if (opts.profileId) {
-    const { data: sv } = await db
-      .from("profile_survey")
-      .select("birth_date, region_sido, region_sigungu, education_status, income_bracket, housing_type, target_job")
-      .eq("id", opts.profileId)
-      .single();
+    const [{ data: sv }, { data: fr }] = await Promise.all([
+      db.from("profile_survey").select("*").eq("id", opts.profileId).maybeSingle(),
+      db.from("finance").select("*").eq("user_id", opts.profileId).maybeSingle(),
+    ]);
     if (sv) {
-      sido = normalizeSido(sv.region_sido);
-      sigungu = sv.region_sigungu ?? null;
-      age = ageFrom(sv.birth_date);
+      sido = normalizeSido(sv.region_sido as string | null);
+      sigungu = (sv.region_sigungu as string | null) ?? null;
+      age = ageFrom(sv.birth_date as string | null);
       summary = {
         나이: age,
         거주지: `${sido ?? ""} ${sigungu ?? ""}`.trim(),
@@ -74,10 +86,13 @@ export async function resolveProfile(opts: {
         목표직무: sv.target_job,
         가구중위소득구간: sv.income_bracket,
       };
+      profileRow = sv;
+      financeRow = fr ?? null;
     }
   }
 
-  // ── profile_changes 반영 ──
+  // ── profile_changes 반영 — summary뿐 아니라 규칙엔진이 볼 profileRow에도 반영해야
+  // 두 경로가 서로 다른 값을 보지 않는다. ──
   const applied: ProfileChange[] = [];
   const pending: ProfileChange[] = [];
   if (opts.userId) {
@@ -95,8 +110,16 @@ export async function resolveProfile(opts: {
           sido = normalizeSido(c.new_value) ?? c.new_value;
           sigungu = null;
           summary["거주지"] = `${c.new_value} (${c.effective_from} 이사)`;
-        } else if (c.field === "education_status") summary["학력"] = c.new_value;
-        else if (c.field === "employment_status") summary["취업상태"] = c.new_value;
+          if (profileRow) {
+            profileRow = { ...profileRow, region_sido: c.new_value, region_sigungu: null };
+          }
+        } else if (c.field === "education_status") {
+          summary["학력"] = c.new_value;
+          if (profileRow) profileRow = { ...profileRow, education_status: c.new_value };
+        } else if (c.field === "employment_status") {
+          summary["취업상태"] = c.new_value;
+          if (profileRow) profileRow = { ...profileRow, employment_status: c.new_value };
+        }
       } else {
         pending.push(c);
       }
@@ -106,5 +129,5 @@ export async function resolveProfile(opts: {
     }
   }
 
-  return { summary, sido, sigungu, age, applied, pending };
+  return { summary, sido, sigungu, age, applied, pending, profileRow, financeRow };
 }

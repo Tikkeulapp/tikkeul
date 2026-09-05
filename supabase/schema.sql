@@ -29,6 +29,10 @@ create table if not exists profile_survey (
   certificates       text[],                    -- 보유자격증
   created_at         timestamptz default now()
 );
+-- employment_status는 페르소나(personas.ts)·profile_changes.field 화이트리스트·규칙엔진 조건 등
+-- 코드 곳곳에서 이미 다뤄지는데 컬럼 자체가 없었다 (seed.mts/signup 둘 다 저장할 곳이 없어 누락돼 있었음).
+-- 이미 존재하는 라이브 테이블이라 add column if not exists로 패치.
+alter table profile_survey add column if not exists employment_status text; -- 취업상태 (자유텍스트, 예: 재직중|미취업|미취업_단기알바중)
 
 -- ── MYDATA_ACCOUNT: 계좌 (RAW) ──
 create table if not exists mydata_account (
@@ -147,3 +151,91 @@ create table if not exists policy_discovery_queue (
   reviewed_at   timestamptz
 );
 create unique index if not exists idx_discovery_url on policy_discovery_queue(url) where url is not null;
+
+-- ── POLICIES / USER_CALENDAR: 지금까지 Supabase 대시보드에서만 만들어져 있던 테이블을
+--    코드(scripts/load_*.mts, src/app/api/*)에서 실제 쓰는 컬럼 기준으로 역추적해 처음 문서화.
+--    이미 존재하므로 create table if not exists는 무해 (운영 데이터에 영향 없음).
+create table if not exists policies (
+  policy_id         text primary key,          -- "ontong:12345" | "gov24:67890" | "curated:..."
+  source            text not null,             -- ontong | gov24 | curated
+  source_id         text,
+  title             text not null,
+  provider          text,
+  theme             text,
+  region_sidos      text[],                    -- 빈 배열 = is_national
+  is_national       boolean not null default false,
+  zip_codes         text,
+  age_min           int,
+  age_max           int,
+  income_condition  text,
+  start_date        date,
+  end_date          date,
+  always_open       boolean not null default false,
+  apply_url         text,
+  search_text       text,                      -- 키워드 검색용 (ilike)
+  raw_sha256        text                       -- 원본 변경 감지용 해시
+);
+create index if not exists idx_policies_region on policies using gin (region_sidos);
+
+create table if not exists user_calendar (
+  event_id      uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references users(user_id) on delete cascade,
+  title         text not null,
+  start_at      date not null,
+  location      text,
+  event_type    text,                          -- INTERVIEW|EXAM|EDUCATION|MOVE|HOUSING|APPLICATION|GRADUATE|RESIGN|EMPLOYED|ETC
+  source        text not null default 'user',  -- seed | user
+  created_at    timestamptz default now()
+);
+create index if not exists idx_calendar_user on user_calendar(user_id, start_at);
+
+-- ── POLICY_ELIGIBILITY: 구조화 자격조건 (finance/ 설계 이식) ──
+-- policies와 분리된 테이블인 이유: policies는 scripts/load_*.mts가 주기적으로 upsert하는 대상이라,
+-- 여기에 손으로 다듬은 자격조건을 같이 두면 다음 수집 때 덮어써진다.
+create table if not exists policy_eligibility (
+  policy_id           text primary key references policies(policy_id) on delete cascade,
+  conditions          jsonb not null default '[]',  -- [{field, source_table, operator, value}]
+  eligibility_text    text,                          -- LLM 설명 생성용 원문 근거
+  benefit_type        text check (benefit_type in ('cash', 'voucher', 'interest_subsidy', 'savings_match', 'in_kind')),
+  benefit_amount_krw  int,
+  benefit_period      text,
+  updated_at          timestamptz default now()
+);
+
+-- ── USER_POLICY_MATCHES: 매칭·자격판정 결과 영속화 (지금까지 없었음 — localStorage만 있었음) ──
+create table if not exists user_policy_matches (
+  match_id              uuid primary key default gen_random_uuid(),
+  user_id               uuid not null references users(user_id) on delete cascade,
+  policy_id             text not null references policies(policy_id),
+  match_mode            text not null check (match_mode in ('search', 'lookup_and_check', 'compare')),
+  eligibility_status    text not null check (eligibility_status in ('confirmed', 'excluded', 'insufficient_info')),
+  match_score           numeric,
+  reason                text,
+  status                text not null default 'recommended' check (status in ('recommended', 'applied', 'dismissed', 'expired')),
+  missing_information   jsonb not null default '[]',
+  checked_at            timestamptz not null default now()
+);
+create index if not exists idx_matches_user on user_policy_matches(user_id, checked_at desc);
+
+-- ── REMINDERS: 마감·매칭 알림 (Notification Scheduler) ──
+create table if not exists reminders (
+  reminder_id   uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references users(user_id) on delete cascade,
+  policy_id     text references policies(policy_id),
+  event_id      uuid references user_calendar(event_id),
+  remind_at     timestamptz not null,
+  message       text not null,
+  status        text not null default 'pending' check (status in ('pending', 'sent', 'failed')),
+  created_at    timestamptz default now()
+);
+create index if not exists idx_reminders_pending on reminders(status, remind_at);
+
+-- ── CHAT_MESSAGES: 검색바 AI 채팅 대화 기록 ──
+create table if not exists chat_messages (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references users(user_id) on delete cascade,
+  role        text not null check (role in ('user', 'assistant')),
+  content     text not null,
+  created_at  timestamptz default now()
+);
+create index if not exists idx_chat_messages_user on chat_messages(user_id, created_at);
