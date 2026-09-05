@@ -12,7 +12,8 @@ export type ProgramCtx = {
   age: number | null;
   annualSalaryKrw: number;
   companyType: CompanyType;
-  goal: GoalType;
+  /** 선택한 목적들 (복수) */
+  goals: GoalType[];
   housing: "본가" | "월세" | "전세" | null;
   /** 무주택 여부 — 본가 거주는 세대주 여부에 따라 달라져 null */
   homeless: boolean | null;
@@ -191,7 +192,7 @@ export const PROGRAMS: Program[] = [
     asOf: "2025",
     tags: ["HOUSE"],
     judge: (c) => {
-      if (c.goal !== "HOUSE") return { status: "UNLIKELY", reason: "내집마련 목표 시 해당" };
+      if (!c.goals.includes("HOUSE")) return { status: "UNLIKELY", reason: "내집마련 목표 시 해당" };
       if (c.annualSalaryKrw > 70_000_000) return { status: "UNLIKELY", reason: "연소득 요건(생애최초 7,000만 원) 초과" };
       return { status: "NEEDS_CHECK", reason: "소득 요건 충족. 목표 지역 주택가격(5~6억 원 이하) 요건 확인" };
     },
@@ -208,7 +209,7 @@ export const PROGRAMS: Program[] = [
     asOf: "2025",
     tags: ["HOUSE"],
     judge: (c) => {
-      if (c.goal !== "HOUSE") return { status: "UNLIKELY", reason: "내집마련 목표 시 해당" };
+      if (!c.goals.includes("HOUSE")) return { status: "UNLIKELY", reason: "내집마련 목표 시 해당" };
       return c.annualSalaryKrw <= 70_000_000
         ? { status: "NEEDS_CHECK", reason: "소득 요건 충족. 주택가격 6억 원 이하 요건 확인 (서울 중위가격은 초과)" }
         : { status: "NEEDS_CHECK", reason: "연소득 7,000만 원 초과 — 결혼 시 신혼 완화(8,500만 원) 적용 여부 확인" };
@@ -226,7 +227,7 @@ export const PROGRAMS: Program[] = [
     asOf: "2025",
     tags: ["MARRIAGE", "HOUSE"],
     judge: (c) =>
-      c.goal === "MARRIAGE"
+      c.goals.includes("MARRIAGE")
         ? { status: "NEEDS_CHECK", reason: "결혼 후(예비부부 포함) 열리는 혜택 — 청약통장 가입 기간을 지금부터 쌓아두면 유리" }
         : { status: "UNLIKELY", reason: "결혼 목표 시 해당" },
   },

@@ -23,11 +23,15 @@ import {
 export const COMPANY_TYPES = ["대기업", "중견기업", "중소기업", "스타트업", "공기업", "공무원", "기타"] as const;
 export type CompanyType = (typeof COMPANY_TYPES)[number];
 export type GoalType = "LUMP_SUM" | "HOUSE" | "MARRIAGE";
+export const GOAL_TYPES: GoalType[] = ["LUMP_SUM", "HOUSE", "MARRIAGE"];
+
+export type GoalSpec = { type: GoalType; targetKrw?: number; houseRegion?: HouseRegion };
 
 export type SimInput = {
   companyType: CompanyType;
   annualSalaryKrw: number;
-  goal: { type: GoalType; targetKrw?: number; houseRegion?: HouseRegion };
+  /** 여러 목적을 동시에 선택할 수 있다 — 합산 목표와 순차 도달 시점을 함께 계산 */
+  goals: GoalSpec[];
   /** 입사 예정 월 YYYY-MM (없으면 다음 달) */
   startMonth?: string;
 };
@@ -62,13 +66,32 @@ export type NetPay = {
   note: string;
 };
 
+export type GoalItem = {
+  type: GoalType;
+  label: string;
+  emoji: string;
+  targetKrw: number;
+  detail: Record<string, number | string>;
+  assumptions: string[];
+};
+
+export type Milestone = {
+  type: GoalType;
+  label: string;
+  /** 이 목표까지의 누적 목표액 (작은 목표부터 순서대로 달성 가정) */
+  cumulativeTargetKrw: number;
+  monthsToGoal: number | null;
+  goalMonth: string | null; // YYYY-MM
+};
+
 export type Scenario = {
   key: "보수" | "기본" | "공격";
   label: string;
   savingsMonthlyKrw: number;
   spendingCutKrw: number;
-  monthsToGoal: number | null;
-  goalMonth: string | null; // YYYY-MM
+  milestones: Milestone[];
+  monthsToAll: number | null;
+  goalMonthAll: string | null;
 };
 
 export type SimResult = {
@@ -84,14 +107,10 @@ export type SimResult = {
   surplusMonthlyKrw: number;
   allocation: { label: string; krw: number; pct: number }[]; // 기본 시나리오 기준
   scenarios: Scenario[];
-  goal: {
-    type: GoalType;
-    label: string;
-    targetKrw: number;
-    startingAssetsKrw: number;
-    detail: Record<string, number | string>;
-    assumptions: string[];
-  };
+  goals: GoalItem[];
+  totalTargetKrw: number;
+  startingAssetsKrw: number;
+  assumptions: string[];
   debt: {
     totalKrw: number;
     monthlyKrw: number;
@@ -164,12 +183,11 @@ export function estimateNetPay(annualKrw: number, opts: { companyType: CompanyTy
     netMonthlyKrw: r(netMonthly),
     note: civil
       ? "공무원연금 기여금 9%·고용보험 미가입 기준. 간이 계산 근사치"
-      : reliefApplied(relief)
+      : relief > 0
         ? `중소기업 취업 청년 소득세 감면(90%, 연 ${T.smeYouthRelief.capKrw / 10000}만 원 한도) 반영. 업종 요건은 확인 필요`
         : "4대보험·근로소득세 간이 계산 근사치 (부양가족·카드공제 등 미반영)",
   };
 }
-const reliefApplied = (x: number) => x > 0;
 
 /* ── 카드 승인내역 집계 ────────────────────────────────── */
 export function aggregateCards(cards: CardApproval[]) {
@@ -199,6 +217,44 @@ const addMonths = (ym: string, n: number) => {
   return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, "0")}`;
 };
 const nextMonth = () => addMonths(new Date().toISOString().slice(0, 7), 1);
+const manStr = (krw: number) => `${Math.round(krw / 10000).toLocaleString()}만 원`;
+
+/* ── 목표 항목 구성 ────────────────────────────────────── */
+function buildGoal(spec: GoalSpec, references: SimResult["references"]): GoalItem {
+  if (spec.type === "HOUSE") {
+    const region = spec.houseRegion ?? "수도권";
+    const price = HOUSE_MEDIAN_PRICE_KRW[region];
+    const equity = Math.round(price * (1 - HOUSE_LTV));
+    const extra = Math.round(price * HOUSE_EXTRA_COST_RATE);
+    references.push({ label: `${region} 아파트 중위 매매가격 참고값`, asOf: REFERENCE_AS_OF });
+    return {
+      type: "HOUSE",
+      label: `내집마련 (${region})`,
+      emoji: "🏠",
+      targetKrw: equity + extra,
+      detail: { "참고 주택가격": price, "필요 자기자본": equity, "부대비용(취득세 등)": extra, "대출 필요액": price - equity },
+      assumptions: [
+        `LTV ${Math.round(HOUSE_LTV * 100)}% 가정 — 생애최초·비규제지역은 최대 80%까지 가능`,
+        `부대비용 ${Math.round(HOUSE_EXTRA_COST_RATE * 100)}% (취득세 1.1% + 중개·법무 등)`,
+        HOUSE_PRICE_SOURCE,
+      ],
+    };
+  }
+  if (spec.type === "MARRIAGE") {
+    const target = Math.round(MARRIAGE_COST_KRW * MARRIAGE_SELF_SHARE);
+    references.push({ label: "평균 결혼비용 참고값", asOf: REFERENCE_AS_OF });
+    return {
+      type: "MARRIAGE",
+      label: "결혼 자금",
+      emoji: "💍",
+      targetKrw: target,
+      detail: { "주택 제외 평균 결혼비용": MARRIAGE_COST_KRW, "본인 부담(50%)": target },
+      assumptions: ["양가·배우자와 균등 분담 가정, 신혼집 보증금 제외", MARRIAGE_COST_SOURCE],
+    };
+  }
+  const target = spec.targetKrw && spec.targetKrw > 0 ? Math.round(spec.targetKrw) : DEFAULT_LUMP_SUM_KRW;
+  return { type: "LUMP_SUM", label: "목돈 모으기", emoji: "💰", targetKrw: target, detail: {}, assumptions: [] };
+}
 
 /* ── 메인 ──────────────────────────────────────────────── */
 export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: number | null }): SimResult {
@@ -215,48 +271,32 @@ export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: numbe
     pct: sp.cardMonthlyKrw ? Math.round((c.monthlyKrw / sp.cardMonthlyKrw) * 100) : 0,
   }));
 
-  // ── 목표 ──
-  const startingAssets = sp.liquidAssetsKrw + sp.savingsKrw;
-  let targetKrw = DEFAULT_LUMP_SUM_KRW;
-  let label = "목돈 모으기";
-  const detail: Record<string, number | string> = {};
-  const assumptions: string[] = [];
+  // ── 목표 (여러 개) ──
   const references: SimResult["references"] = [{ label: `세금·4대보험 파라미터 — ${TAX_PARAMS.asOf}`, asOf: TAX_PARAMS.asOf }];
-  if (input.goal.type === "HOUSE") {
-    const region = input.goal.houseRegion ?? "수도권";
-    const price = HOUSE_MEDIAN_PRICE_KRW[region];
-    const equity = Math.round(price * (1 - HOUSE_LTV));
-    const extra = Math.round(price * HOUSE_EXTRA_COST_RATE);
-    targetKrw = equity + extra;
-    label = `내집마련 (${region})`;
-    detail["참고 주택가격"] = price;
-    detail["필요 자기자본"] = equity;
-    detail["부대비용(취득세 등)"] = extra;
-    detail["대출 필요액"] = price - equity;
-    assumptions.push(`LTV ${Math.round(HOUSE_LTV * 100)}% 가정 — 생애최초·비규제지역은 최대 80%까지 가능`);
-    assumptions.push(`부대비용 ${Math.round(HOUSE_EXTRA_COST_RATE * 100)}% (취득세 1.1% + 중개·법무 등)`);
-    assumptions.push(HOUSE_PRICE_SOURCE);
-    references.push({ label: `${region} 아파트 중위 매매가격 참고값`, asOf: REFERENCE_AS_OF });
-  } else if (input.goal.type === "MARRIAGE") {
-    targetKrw = Math.round(MARRIAGE_COST_KRW * MARRIAGE_SELF_SHARE);
-    label = "결혼 자금";
-    detail["주택 제외 평균 결혼비용"] = MARRIAGE_COST_KRW;
-    detail["본인 부담(50%)"] = targetKrw;
-    assumptions.push("양가·배우자와 균등 분담 가정, 신혼집 보증금 제외");
-    assumptions.push(MARRIAGE_COST_SOURCE);
-    references.push({ label: "평균 결혼비용 참고값", asOf: REFERENCE_AS_OF });
-  } else {
-    targetKrw = input.goal.targetKrw && input.goal.targetKrw > 0 ? input.goal.targetKrw : DEFAULT_LUMP_SUM_KRW;
-    label = "목돈 모으기";
-  }
-  assumptions.push(`저축 수익률 연 ${(SAVINGS_ANNUAL_RATE * 100).toFixed(1)}% (세후 근사), 현재 예·적금 ${Math.round(startingAssets / 10000).toLocaleString()}만 원에서 시작`);
+  const specs = input.goals.length ? input.goals : [{ type: "LUMP_SUM" as GoalType }];
+  const goals = specs.map((g) => buildGoal(g, references));
+  const totalTargetKrw = goals.reduce((s, g) => s + g.targetKrw, 0);
+  const startingAssets = sp.liquidAssetsKrw + sp.savingsKrw;
+  // 작은 목표부터 순서대로 달성한다고 가정 → 누적 목표액
+  const ordered = [...goals].sort((a, b) => a.targetKrw - b.targetKrw);
+  const assumptions = [
+    `저축 수익률 연 ${(SAVINGS_ANNUAL_RATE * 100).toFixed(1)}% (세후 근사), 현재 예·적금 ${manStr(startingAssets)}에서 시작`,
+    ...(goals.length > 1 ? [`목표가 여러 개면 금액이 작은 목표부터 순서대로 달성한다고 가정 (${ordered.map((g) => g.label).join(" → ")})`] : []),
+    ...goals.flatMap((g) => g.assumptions),
+  ];
 
   // ── 시나리오 ──
   const mk = (key: Scenario["key"], label: string, rate: number, cutRate: number): Scenario => {
     const cut = Math.round(variableKrw * cutRate);
     const save = Math.max(0, Math.round(surplus * rate) + cut);
-    const n = monthsToReach(startingAssets, save, targetKrw);
-    return { key, label, savingsMonthlyKrw: save, spendingCutKrw: cut, monthsToGoal: n, goalMonth: n === null ? null : addMonths(startMonth, n) };
+    let cum = 0;
+    const milestones: Milestone[] = ordered.map((g) => {
+      cum += g.targetKrw;
+      const n = monthsToReach(startingAssets, save, cum);
+      return { type: g.type, label: g.label, cumulativeTargetKrw: cum, monthsToGoal: n, goalMonth: n === null ? null : addMonths(startMonth, n) };
+    });
+    const last = milestones[milestones.length - 1];
+    return { key, label, savingsMonthlyKrw: save, spendingCutKrw: cut, milestones, monthsToAll: last?.monthsToGoal ?? null, goalMonthAll: last?.goalMonth ?? null };
   };
   const scenarios = [mk("보수", "여유자금의 50% 저축", 0.5, 0), mk("기본", "여유자금의 70% 저축", 0.7, 0), mk("공격", "90% 저축 + 소비 15% 절감", 0.9, 0.15)];
 
@@ -298,7 +338,7 @@ export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: numbe
   if (surplus <= 0) warnings.push("현재 지출 구조로는 세후 실수령보다 지출이 많습니다. 소비 절감 없이는 저축이 어렵습니다.");
   if (sp.rentMonthlyKrw && sp.rentMonthlyKrw / net.netMonthlyKrw > 0.3) warnings.push(`월세가 실수령의 ${Math.round((sp.rentMonthlyKrw / net.netMonthlyKrw) * 100)}%입니다. 통상 권고선(30%)을 넘습니다.`);
   if (sp.source === "직접 입력") warnings.push("카드 소비는 직접 입력값입니다. 실서비스에서는 마이데이터 카드 승인내역으로 자동 집계됩니다.");
-  if (scenarios[1].monthsToGoal !== null && scenarios[1].monthsToGoal > 240) warnings.push("기본 시나리오로 20년 이상 걸립니다. 목표 지역·금액을 조정하거나 정책 대출·청약을 함께 검토하세요.");
+  if (scenarios[1].monthsToAll !== null && scenarios[1].monthsToAll > 240) warnings.push("기본 시나리오로 모든 목표까지 20년 이상 걸립니다. 목표 지역·금액을 조정하거나 정책 대출·청약을 함께 검토하세요.");
 
   return {
     startMonth,
@@ -307,7 +347,10 @@ export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: numbe
     surplusMonthlyKrw: surplus,
     allocation,
     scenarios,
-    goal: { type: input.goal.type, label, targetKrw, startingAssetsKrw: startingAssets, detail, assumptions },
+    goals,
+    totalTargetKrw,
+    startingAssetsKrw: startingAssets,
+    assumptions,
     debt,
     warnings,
     references,

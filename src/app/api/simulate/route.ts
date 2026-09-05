@@ -1,6 +1,6 @@
 /**
  * POST /api/simulate — 취업 후 시뮬레이션
- * 입력: { personaId | profileId, userId, input: { companyType, annualSalaryKrw, goal, startMonth, monthlyCardSpendKrw? } }
+ * 입력: { personaId | profileId, userId, input: { companyType, annualSalaryKrw, goals[], startMonth, monthlyCardSpendKrw? } }
  * 흐름: 프로필·마이데이터(카드·대출·계좌) 해석 → simulate() 결정론 계산 → 제도 규칙 판정 → LLM은 해설만
  */
 import { NextResponse } from "next/server";
@@ -9,7 +9,17 @@ import { derive } from "@/lib/derive";
 import { supabaseAdmin } from "@/lib/supabase";
 import { resolveProfile } from "@/lib/profile";
 import { groqJson } from "@/lib/groq";
-import { aggregateCards, simulate, COMPANY_TYPES, type SimInput, type SpendingProfile, type CompanyType } from "@/lib/simulate";
+import {
+  aggregateCards,
+  simulate,
+  COMPANY_TYPES,
+  GOAL_TYPES,
+  type GoalSpec,
+  type GoalType,
+  type SimInput,
+  type SpendingProfile,
+  type CompanyType,
+} from "@/lib/simulate";
 import { judgePrograms, type ProgramCtx } from "@/data/postjob_programs";
 import { HOUSE_REGIONS, type HouseRegion } from "@/data/postjob_reference";
 
@@ -19,7 +29,7 @@ type Body = {
   personaId?: string | null;
   profileId?: string | null;
   userId?: string | null;
-  input?: Partial<SimInput> & { monthlyCardSpendKrw?: number };
+  input?: Partial<Omit<SimInput, "goals">> & { goals?: Partial<GoalSpec>[]; monthlyCardSpendKrw?: number };
 };
 
 type AiComment = { summary: string; priorities: string[]; cautions: string[] };
@@ -29,7 +39,7 @@ const AI_SYSTEM = `너는 취업을 앞둔 청년의 재무 코치다. 제공된
 1) 숫자(금액·금리·기간·비율)는 제공된 값만 인용한다. 새 숫자를 만들거나 계산하지 않는다.
 2) 제도·정책은 제공된 목록 안에서만 언급한다. 목록에 없는 제도를 추천하지 않는다.
 3) 단정 대신 "~로 보입니다" 톤. 최종 확인은 공식 기관에서 한다는 전제.
-4) 소비 카테고리를 언급할 때는 제공된 카테고리명만 쓴다.
+4) 소비 카테고리를 언급할 때는 제공된 카테고리명만 쓴다. 목표가 여러 개면 순서대로 언급한다.
 5) 반드시 JSON만 출력: {"summary": "3~4문장", "priorities": ["우선순위 1", "우선순위 2", "우선순위 3"], "cautions": ["주의 1", "주의 2"]}`;
 
 const NON_VARIABLE_RE = /월세|통신비|보험료|구독|적금/;
@@ -46,17 +56,26 @@ export async function POST(request: Request) {
   if (!companyType || !COMPANY_TYPES.includes(companyType)) return NextResponse.json({ error: "기업구분이 필요합니다" }, { status: 400 });
   const annual = Number(raw.annualSalaryKrw);
   if (!isFinite(annual) || annual < 10_000_000 || annual > 1_000_000_000) return NextResponse.json({ error: "연봉은 1,000만~10억 원 사이로 입력하세요" }, { status: 400 });
-  const goalType = raw.goal?.type;
-  if (goalType !== "LUMP_SUM" && goalType !== "HOUSE" && goalType !== "MARRIAGE") return NextResponse.json({ error: "목적이 필요합니다" }, { status: 400 });
-  const houseRegion = raw.goal?.houseRegion;
-  if (goalType === "HOUSE" && (!houseRegion || !HOUSE_REGIONS.includes(houseRegion as HouseRegion))) return NextResponse.json({ error: "내집마련 지역을 선택하세요" }, { status: 400 });
 
-  const input: SimInput = {
-    companyType,
-    annualSalaryKrw: Math.round(annual),
-    goal: { type: goalType, targetKrw: raw.goal?.targetKrw ? Number(raw.goal.targetKrw) : undefined, houseRegion: houseRegion as HouseRegion | undefined },
-    startMonth: raw.startMonth,
-  };
+  // ── 목적 (복수) 검증 ──
+  const rawGoals = Array.isArray(raw.goals) ? raw.goals : [];
+  if (!rawGoals.length) return NextResponse.json({ error: "목적을 하나 이상 선택하세요" }, { status: 400 });
+  const goals: GoalSpec[] = [];
+  for (const g of rawGoals) {
+    const type = g?.type as GoalType | undefined;
+    if (!type || !GOAL_TYPES.includes(type)) return NextResponse.json({ error: "알 수 없는 목적입니다" }, { status: 400 });
+    if (goals.some((x) => x.type === type)) continue; // 중복 제거
+    if (type === "HOUSE") {
+      const region = g.houseRegion as HouseRegion | undefined;
+      if (!region || !HOUSE_REGIONS.includes(region)) return NextResponse.json({ error: "내집마련 지역을 선택하세요" }, { status: 400 });
+      goals.push({ type, houseRegion: region });
+    } else if (type === "LUMP_SUM") {
+      const t = Number(g.targetKrw);
+      goals.push({ type, targetKrw: isFinite(t) && t > 0 ? t : undefined });
+    } else goals.push({ type });
+  }
+
+  const input: SimInput = { companyType, annualSalaryKrw: Math.round(annual), goals, startMonth: raw.startMonth };
 
   // ── 프로필 + 지출 구조 ──
   const prof = await resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId });
@@ -127,7 +146,7 @@ export async function POST(request: Request) {
     age: prof.age,
     annualSalaryKrw: input.annualSalaryKrw,
     companyType,
-    goal: goalType,
+    goals: goals.map((g) => g.type),
     housing,
     homeless: housing === "본가" ? null : housing ? true : null,
     loans: sp.loans.map((l) => ({ type: l.type, interestRate: l.interestRate })),
@@ -146,13 +165,26 @@ export async function POST(request: Request) {
     const ym = (v: string | null) => (v ? `${v.slice(0, 4)}년 ${Number(v.slice(5, 7))}월` : "도달 불가");
     const adviceLabel = { PAY_FIRST: "상환 우선", SAVE_FIRST: "저축 병행", NONE: "대출 없음" }[result.debt.advice];
     const payload = {
-      입력: { 기업구분: companyType, 연봉: man(input.annualSalaryKrw), 목표: result.goal.label, 목표금액: man(result.goal.targetKrw), 입사예정: ym(result.startMonth), 나이: prof.age, 주거형태: housing },
+      입력: {
+        기업구분: companyType,
+        연봉: man(input.annualSalaryKrw),
+        목표: result.goals.map((g) => `${g.label} ${man(g.targetKrw)}`),
+        총목표금액: man(result.totalTargetKrw),
+        입사예정: ym(result.startMonth),
+        나이: prof.age,
+        주거형태: housing,
+      },
       세후월실수령: man(result.net.netMonthlyKrw),
       소득세감면적용: result.net.reliefApplied,
       월지출: { 월세: man(sp.rentMonthlyKrw), 고정지출_월세포함: man(result.spending.fixedKrw), 대출상환: man(result.spending.loanKrw), 변동소비: man(result.spending.variableKrw), 합계: man(result.spending.totalKrw) },
       소비상위카테고리: result.spending.topCategories.map((c) => `${c.category} ${man(c.monthlyKrw)}(${c.pct}%)`),
       월여유자금: man(result.surplusMonthlyKrw),
-      시나리오: result.scenarios.map((s) => ({ 이름: s.key, 월저축: man(s.savingsMonthlyKrw), 도달시점: ym(s.goalMonth), 소요개월: s.monthsToGoal })),
+      시나리오: result.scenarios.map((s) => ({
+        이름: s.key,
+        월저축: man(s.savingsMonthlyKrw),
+        목표별도달: s.milestones.map((m) => `${m.label} → ${ym(m.goalMonth)}`),
+        전체도달: ym(s.goalMonthAll),
+      })),
       대출: { 판정: adviceLabel, 잔액: man(result.debt.totalKrw), 월상환: man(result.debt.monthlyKrw), 이유: result.debt.reason },
       경고: result.warnings,
       열리는제도: [...programs.likely, ...programs.needsCheck].map((x) => ({ 이름: x.name, 판정: x.status, 이유: x.reason })),
