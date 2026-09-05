@@ -606,8 +606,17 @@ export default function AppPage() {
                     </span>
                     <div className="mt-0.5 flex flex-col gap-0.5">
                       {(eventsByDate.get(cell) ?? []).slice(0, 2).map((ev) => (
-                        <span key={ev.event_id} className="truncate rounded-[4px] bg-leaf-deep px-1 py-0.5 text-[11.5px] font-semibold text-white">
-                          {ev.title}
+                        <span key={ev.event_id} className="group/pill flex items-center gap-1 rounded-[4px] bg-leaf-deep px-1 py-0.5 text-[11.5px] font-semibold text-white">
+                          <span className="min-w-0 flex-1 truncate">{ev.title}</span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${ev.title} 삭제`}
+                            title="일정 삭제"
+                            onClick={(e) => { e.stopPropagation(); void deleteEvent(ev); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); void deleteEvent(ev); } }}
+                            className="shrink-0 rounded px-0.5 text-white/60 opacity-0 transition group-hover/pill:opacity-100 hover:bg-white/20 hover:text-white"
+                          >✕</span>
                         </span>
                       ))}
                       {(eventsByDate.get(cell)?.length ?? 0) > 2 && (

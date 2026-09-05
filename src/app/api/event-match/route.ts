@@ -95,25 +95,55 @@ export async function POST(request: Request) {
       .slice(0, 6);
     if (keywords.length === 0) keywords.push(title.trim());
 
-    // ── 2) SQL 후보 압축 — 일정 지역 우선, 전국·거주지로 채움 ──
-    const kwOr = keywords.map((k) => `search_text.ilike.%${k.replace(/[%,()]/g, "")}%`).join(",");
-    const seen = new Set<string>();
-    const candidates: Cand[] = [];
-    const push = (rows: Cand[] | null) => {
-      for (const r of rows ?? []) if (!seen.has(r.policy_id)) { seen.add(r.policy_id); candidates.push(r); }
+    // ── 2) SQL 후보 압축 — 유형별 동의어를 보강해 넓게 뽑고, 코드가 관련도 점수로 압축한다 ──
+    //    (예: "토익" 한 단어면 LLM 키워드가 '점수·시험준비'처럼 흩어져 응시료 지원 정책이 후보에서 밀리는 문제)
+    const TYPE_BOOST: Record<string, string[]> = {
+      EXAM: ["응시료", "자격증", "어학", "시험"],
+      INTERVIEW: ["면접", "정장", "면접수당", "교통비"],
+      EDUCATION: ["교육", "훈련", "수강", "내일배움"],
+      MOVE: ["이사", "월세", "전세", "보증금", "주거"],
+      HOUSING: ["월세", "전세", "보증금", "주거"],
+      APPLICATION: ["취업", "구직", "채용"],
+      GRADUATE: ["졸업", "미취업", "구직"],
+      RESIGN: ["실업급여", "구직급여", "재취업"],
+      EMPLOYED: ["재직", "근로자", "자산형성"],
     };
-    if (extracted.region_sido) {
-      const { data, error } = await db.from("policies").select(COLS)
-        .contains("region_sidos", [extracted.region_sido]).or(kwOr).limit(12);
-      if (error) throw new Error(`정책 검색 실패: ${error.message}`);
-      push(data as Cand[] | null);
+    const boost = TYPE_BOOST[String(extracted.event_type ?? "")] ?? [];
+    const allKw = [...new Set([...keywords, ...boost])].slice(0, 10);
+    const kwOr = allKw.map((k) => `search_text.ilike.%${k.replace(/[%,()]/g, "")}%`).join(",");
+    const seen = new Set<string>();
+    const raw: Cand[] = [];
+    const push = (rows: Cand[] | null) => {
+      for (const r of rows ?? []) if (!seen.has(r.policy_id)) { seen.add(r.policy_id); raw.push(r); }
+    };
+    // 풀: (일정 지역) + 거주지(시도) + 전국 — 키워드별로 따로 조회해 특정 키워드(예: 응시료)가 다른 키워드에 밀리지 않게 한다
+    type Res = { data: Cand[] | null; error: { message: string } | null };
+    const focus = [...new Set([...keywords.slice(0, 3), ...boost.slice(0, 3)])].map((k) => k.replace(/[%,()]/g, ""));
+    const pools: Promise<Res>[] = [];
+    if (extracted.region_sido) pools.push(db.from("policies").select(COLS).contains("region_sidos", [extracted.region_sido]).or(kwOr).limit(60) as unknown as Promise<Res>);
+    for (const k of focus) {
+      if (userSido && userSido !== extracted.region_sido)
+        pools.push(db.from("policies").select(COLS).contains("region_sidos", [userSido]).eq("is_national", false).ilike("search_text", `%${k}%`).limit(30) as unknown as Promise<Res>);
+      pools.push(db.from("policies").select(COLS).eq("is_national", true).ilike("search_text", `%${k}%`).limit(30) as unknown as Promise<Res>);
     }
-    {
-      const regionOr = ["is_national.eq.true", ...(userSido ? [`region_sidos.cs.{"${userSido}"}`] : [])].join(",");
-      const { data, error } = await db.from("policies").select(COLS).or(regionOr).or(kwOr).limit(extracted.region_sido ? 10 : 18);
-      if (error) throw new Error(`정책 검색 실패: ${error.message}`);
-      push(data as Cand[] | null);
+    for (const res of await Promise.all(pools)) {
+      if (res.error) throw new Error(`정책 검색 실패: ${res.error.message}`);
+      push(res.data);
     }
+    // 코드 점수화: 제목에 키워드가 있으면 ×3, 원문 키워드 수, 사용자 시군구 소관이면 +3, 일정 지역 정책 +2
+    const userGu = profile.sigungu ? profile.sigungu.replace(/(특례시|시|군|구)$/, "") : null;
+    const scoreOf = (c: Cand) => {
+      const text = c.search_text ?? "";
+      let sc = allKw.filter((k) => c.title.includes(k)).length * 3 + allKw.filter((k) => text.includes(k)).length;
+      if (keywords.some((k) => c.title.includes(k) || text.includes(k))) sc += 2; // LLM이 뽑은 원 키워드 가중
+      if (userGu && (c.provider ?? "").includes(userGu)) sc += 3;
+      if (extracted.region_sido && (c.region_sidos ?? []).includes(extracted.region_sido)) sc += 2;
+      // 다른 시·군·구 전용(소관기관이 특정 시군구인데 사용자 시군구가 아님)은 감점
+      const m = (c.provider ?? "").match(/(?:특별시|광역시|특별자치시|도|특별자치도)\s*([가-힣]+?)(?:특례시|시|군|구)(?=\s|$)/);
+      if (m && userGu && !m[1].startsWith(userGu)) sc -= 4;
+      return sc;
+    };
+    const candidates: Cand[] = raw.map((c) => ({ c, sc: scoreOf(c) })).filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 25).map((x) => x.c);
 
     const compact = (list: Cand[]) => list.map((c) => ({
       policy_id: c.policy_id,
