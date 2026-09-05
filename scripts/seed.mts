@@ -2,7 +2,7 @@
  * 페르소나 3명을 Supabase에 시드한다.
  * 실행: npx tsx scripts/seed.mts   (.env.local에 SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 필요)
  *
- * 채우는 테이블: profile_survey, mydata_account, mydata_transaction, finance
+ * 채우는 테이블: profile_survey, mydata_account, mydata_transaction, mydata_card_approval, mydata_loan, finance
  * FINANCE 값은 손으로 넣지 않고 derive()로 RAW에서 계산해 넣는다.
  */
 import { readFileSync, existsSync } from "node:fs";
@@ -90,6 +90,45 @@ async function main() {
     res = await db.from("mydata_transaction").insert(txs);
     if (res.error) throw new Error(`mydata_transaction(${p.id}): ${res.error.message}`);
 
+    // ── mydata_card_approval (카드 승인내역 — 수집 가정; 재실행 대비 삭제 후 삽입) ──
+    res = await db.from("mydata_card_approval").delete().eq("user_id", p.id);
+    if (res.error) throw new Error(`card delete(${p.id}): ${res.error.message}`);
+    const cards = p.mydata.cardApprovals.map((c) => ({
+      user_id: p.id,
+      card_org: "카드사(mock)",
+      approved_at: `${c.date}T12:00:00+09:00`,
+      merchant_name: c.merchant,
+      mcc_code: c.category, // 서비스 분류를 업종코드 자리에 기록 (실서비스: MCC → 분류 매핑)
+      amount_krw: c.amountKrw,
+      installment_months: 0,
+      cancelled: false,
+    }));
+    if (cards.length) {
+      res = await db.from("mydata_card_approval").insert(cards);
+      if (res.error) throw new Error(`mydata_card_approval(${p.id}): ${res.error.message}`);
+    }
+
+    // ── mydata_loan ──
+    res = await db.from("mydata_loan").delete().eq("user_id", p.id);
+    if (res.error) throw new Error(`loan delete(${p.id}): ${res.error.message}`);
+    const loans = p.mydata.loans.map((l) => ({
+      loan_id: l.loanId,
+      user_id: p.id,
+      org_name: l.org,
+      loan_type: l.type,
+      balance_krw: l.balanceKrw,
+      interest_rate: l.interestRate,
+      repayment_status: l.monthlyPaymentKrw > 0 ? "상환중" : "거치",
+      next_payment_at: null,
+      next_payment_krw: l.monthlyPaymentKrw,
+    }));
+    if (loans.length) {
+      res = await db.from("mydata_loan").upsert(loans);
+      if (res.error) throw new Error(`mydata_loan(${p.id}): ${res.error.message}`);
+    }
+    const loansByType: Record<string, number> = {};
+    for (const l of p.mydata.loans) loansByType[l.type] = (loansByType[l.type] ?? 0) + l.balanceKrw;
+
     // ── finance (derive로 계산해 저장) ──
     const dv = derive(p.mydata);
     const work = dv.incomes.find((i) => i.kind === "WORK");
@@ -118,7 +157,7 @@ async function main() {
       homeless_owner: d.household.housing !== "본가" ? true : null, // 본가 거주는 확인 필요
       rent_deposit_krw: d.household.depositKrw,
       monthly_rent_krw: dv.rentMonthlyKrw,
-      loans_by_type: {}, // MYDATA_LOAN mock 미구현
+      loans_by_type: loansByType,
       delinquent: null,
       welfare_status: null,
       employment_insurance_months: null, // 설문 확장 시 (서연: 24개월 예정)
@@ -128,12 +167,12 @@ async function main() {
     if (res.error) throw new Error(`finance(${p.id}): ${res.error.message}`);
 
     console.log(
-      `✓ ${p.name}(${p.id}) — survey 1행, account ${accounts.length}행, tx ${txs.length}행, finance 1행`,
+      `✓ ${p.name}(${p.id}) — survey 1행, account ${accounts.length}행, tx ${txs.length}행, card ${cards.length}행, loan ${loans.length}행, finance 1행`,
     );
   }
 
   // 검증: 행 수 확인
-  for (const table of ["profile_survey", "mydata_account", "mydata_transaction", "finance"]) {
+  for (const table of ["profile_survey", "mydata_account", "mydata_transaction", "mydata_card_approval", "mydata_loan", "finance"]) {
     const { count, error } = await db.from(table).select("*", { count: "exact", head: true });
     console.log(`  ${table}: ${error ? "오류 " + error.message : count + "행"}`);
   }

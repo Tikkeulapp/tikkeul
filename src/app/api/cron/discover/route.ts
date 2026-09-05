@@ -18,7 +18,7 @@ const SIDO: Record<string, string> = {
   "46": "전라남도", "47": "경상북도", "48": "경상남도", "50": "제주특별자치도", "12": "전남광주통합특별시",
 };
 const SIDO_NAMES = [...new Set(Object.values(SIDO))];
-const JOBSEEKER_RE = /구직|취업|미취업|취준|면접|자격증|어학|직업훈련|인턴|일경험|채용|청년.{0,6}(수당|지원|활동)/;
+const JOBSEEKER_RE = /구직|취업|미취업|취준|면접|자격증|어학|직업훈련|인턴|일경험|채용|청년.{0,6}(수당|지원|활동)|재직|근로자|직장인|자산형성|저축|통장|청약|전세|월세|주거비|신혼|결혼|근속|내일채움|공제|도약계좌|연금|이차보전/;
 const str = (v: unknown) => (v == null ? "" : String(v).trim());
 
 type Row = Record<string, unknown>;

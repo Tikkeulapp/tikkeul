@@ -39,6 +39,27 @@ export type Transaction = {
   direction: "IN" | "OUT";
 };
 
+/** 카드 승인내역 카테고리 (마이데이터 카드 업권 — 가맹점 업종코드를 서비스 분류로 매핑) */
+export type CardCategory =
+  | "식비" | "카페·간식" | "교통" | "생활·마트" | "쇼핑" | "구독·디지털" | "문화·여가" | "의료·건강" | "취업준비" | "기타";
+
+export type CardApproval = {
+  date: string; // YYYY-MM-DD
+  merchant: string;
+  category: CardCategory;
+  amountKrw: number;
+};
+
+/** 대출 (마이데이터 은행·여전 업권) — 취업 후 상환 개시를 가정한 월 상환액 포함 */
+export type Loan = {
+  loanId: string;
+  org: string;
+  type: "학자금" | "신용" | "전세" | "기타";
+  balanceKrw: number;
+  interestRate: number; // % (연)
+  monthlyPaymentKrw: number;
+};
+
 export type MyDataSnapshot = {
   asOf: string;
   accounts: {
@@ -48,6 +69,9 @@ export type MyDataSnapshot = {
     balanceKrw: number;
   }[];
   transactions: Transaction[];
+  /** 카드 승인내역 (수집 가정) — 소비습관 분석·취업 후 시뮬레이션에 사용 */
+  cardApprovals: CardApproval[];
+  loans: Loan[];
 };
 
 export type SeedEvent = {
@@ -124,6 +148,31 @@ const minji: Persona = {
       { date: "2026-08-14", description: "배달앱 결제", amountKrw: 27400, direction: "OUT" },
       { date: "2026-08-22", description: "편의점", amountKrw: 12800, direction: "OUT" },
     ],
+    // 카드 승인내역 (체크카드) — 본가 거주, 월 15~17만 소비. 구독·카페 비중 높음
+    cardApprovals: [
+      { date: "2026-07-03", merchant: "스타벅스", category: "카페·간식", amountKrw: 5900 },
+      { date: "2026-07-06", merchant: "올리브영", category: "쇼핑", amountKrw: 32000 },
+      { date: "2026-07-09", merchant: "넷플릭스", category: "구독·디지털", amountKrw: 13500 },
+      { date: "2026-07-12", merchant: "김밥천국", category: "식비", amountKrw: 8500 },
+      { date: "2026-07-14", merchant: "CGV", category: "문화·여가", amountKrw: 15000 },
+      { date: "2026-07-17", merchant: "다이소", category: "생활·마트", amountKrw: 12000 },
+      { date: "2026-07-19", merchant: "투썸플레이스", category: "카페·간식", amountKrw: 6800 },
+      { date: "2026-07-22", merchant: "무신사", category: "쇼핑", amountKrw: 49000 },
+      { date: "2026-07-25", merchant: "맘스터치", category: "식비", amountKrw: 9800 },
+      { date: "2026-07-28", merchant: "유튜브 프리미엄", category: "구독·디지털", amountKrw: 14900 },
+      { date: "2026-07-30", merchant: "GS25", category: "생활·마트", amountKrw: 7200 },
+      { date: "2026-08-02", merchant: "스타벅스", category: "카페·간식", amountKrw: 6100 },
+      { date: "2026-08-04", merchant: "서브웨이", category: "식비", amountKrw: 9900 },
+      { date: "2026-08-09", merchant: "넷플릭스", category: "구독·디지털", amountKrw: 13500 },
+      { date: "2026-08-10", merchant: "ChatGPT Plus", category: "구독·디지털", amountKrw: 29000 },
+      { date: "2026-08-15", merchant: "CU", category: "생활·마트", amountKrw: 5400 },
+      { date: "2026-08-17", merchant: "메가커피", category: "카페·간식", amountKrw: 3800 },
+      { date: "2026-08-21", merchant: "교보문고 (SQLD 문제집)", category: "취업준비", amountKrw: 24000 },
+      { date: "2026-08-23", merchant: "올리브영", category: "쇼핑", amountKrw: 18500 },
+      { date: "2026-08-26", merchant: "유튜브 프리미엄", category: "구독·디지털", amountKrw: 14900 },
+      { date: "2026-08-29", merchant: "배스킨라빈스", category: "카페·간식", amountKrw: 8900 },
+    ],
+    loans: [],
   },
   seedEvents: [
     { date: "2026-09-05", title: "토익 시험", location: "서울" },
@@ -185,6 +234,27 @@ const junho: Persona = {
       { date: "2026-08-16", description: "편의점", amountKrw: 9800, direction: "OUT" },
       { date: "2026-08-24", description: "배달앱 결제", amountKrw: 18900, direction: "OUT" },
     ],
+    // 카드 승인내역 — 자취, 마트·생활 위주 절약형 소비 (월 10~12만)
+    cardApprovals: [
+      { date: "2026-07-02", merchant: "이마트24", category: "생활·마트", amountKrw: 6500 },
+      { date: "2026-07-05", merchant: "쿠팡", category: "쇼핑", amountKrw: 27800 },
+      { date: "2026-07-08", merchant: "버거킹", category: "식비", amountKrw: 9500 },
+      { date: "2026-07-11", merchant: "넷플릭스", category: "구독·디지털", amountKrw: 13500 },
+      { date: "2026-07-15", merchant: "홈플러스", category: "생활·마트", amountKrw: 38400 },
+      { date: "2026-07-19", merchant: "컴포즈커피", category: "카페·간식", amountKrw: 3500 },
+      { date: "2026-07-23", merchant: "크린토피아 (면접 정장 세탁)", category: "취업준비", amountKrw: 12000 },
+      { date: "2026-07-27", merchant: "온누리약국", category: "의료·건강", amountKrw: 8900 },
+      { date: "2026-08-01", merchant: "쿠팡", category: "쇼핑", amountKrw: 19900 },
+      { date: "2026-08-06", merchant: "김가네", category: "식비", amountKrw: 9000 },
+      { date: "2026-08-10", merchant: "넷플릭스", category: "구독·디지털", amountKrw: 13500 },
+      { date: "2026-08-13", merchant: "홈플러스", category: "생활·마트", amountKrw: 41200 },
+      { date: "2026-08-17", merchant: "컴포즈커피", category: "카페·간식", amountKrw: 3500 },
+      { date: "2026-08-20", merchant: "롯데리아", category: "식비", amountKrw: 8700 },
+      { date: "2026-08-25", merchant: "다이소", category: "생활·마트", amountKrw: 9000 },
+      { date: "2026-08-29", merchant: "이마트24", category: "생활·마트", amountKrw: 5800 },
+    ],
+    // 학자금대출 — 거치 중, 취업 후 상환 개시 가정 (원리금 월 6.2만)
+    loans: [{ loanId: "JUNHO_KOSAF", org: "한국장학재단", type: "학자금", balanceKrw: 6800000, interestRate: 1.7, monthlyPaymentKrw: 62000 }],
   },
   seedEvents: [
     { date: "2026-09-09", title: "면접 스터디", location: "수원" },
@@ -250,6 +320,31 @@ const seoyeon: Persona = {
       { date: "2026-08-13", description: "배달앱 결제", amountKrw: 31200, direction: "OUT" },
       { date: "2026-08-21", description: "약국", amountKrw: 14500, direction: "OUT" },
     ],
+    // 카드 승인내역 (신용카드) — 직장 생활 소비 패턴 유지 중 (월 40~45만). 운동·쇼핑·구독 비중 높음
+    cardApprovals: [
+      { date: "2026-07-01", merchant: "쿠팡", category: "쇼핑", amountKrw: 45600 },
+      { date: "2026-07-04", merchant: "스타벅스", category: "카페·간식", amountKrw: 6300 },
+      { date: "2026-07-07", merchant: "샐러디", category: "식비", amountKrw: 11500 },
+      { date: "2026-07-10", merchant: "넷플릭스", category: "구독·디지털", amountKrw: 17000 },
+      { date: "2026-07-12", merchant: "Adobe Creative Cloud", category: "취업준비", amountKrw: 30800 },
+      { date: "2026-07-15", merchant: "올리브영", category: "쇼핑", amountKrw: 41000 },
+      { date: "2026-07-18", merchant: "필라테스 월회원권", category: "의료·건강", amountKrw: 180000 },
+      { date: "2026-07-21", merchant: "스타벅스", category: "카페·간식", amountKrw: 6300 },
+      { date: "2026-07-24", merchant: "이마트", category: "생활·마트", amountKrw: 62300 },
+      { date: "2026-07-27", merchant: "CGV", category: "문화·여가", amountKrw: 16000 },
+      { date: "2026-08-01", merchant: "쿠팡", category: "쇼핑", amountKrw: 38900 },
+      { date: "2026-08-03", merchant: "스타벅스", category: "카페·간식", amountKrw: 6300 },
+      { date: "2026-08-06", merchant: "샐러디", category: "식비", amountKrw: 12000 },
+      { date: "2026-08-10", merchant: "넷플릭스", category: "구독·디지털", amountKrw: 17000 },
+      { date: "2026-08-12", merchant: "Adobe Creative Cloud", category: "취업준비", amountKrw: 30800 },
+      { date: "2026-08-16", merchant: "필라테스 월회원권", category: "의료·건강", amountKrw: 180000 },
+      { date: "2026-08-19", merchant: "무신사", category: "쇼핑", amountKrw: 68000 },
+      { date: "2026-08-23", merchant: "이마트", category: "생활·마트", amountKrw: 58700 },
+      { date: "2026-08-27", merchant: "스타벅스", category: "카페·간식", amountKrw: 6300 },
+      { date: "2026-08-30", merchant: "배스킨라빈스", category: "카페·간식", amountKrw: 12000 },
+    ],
+    // 마이너스통장 — 퇴사 후 생활비 보전용. 고금리 → 상환 우선 판정 케이스
+    loans: [{ loanId: "SEOYEON_MINUS", org: "S은행", type: "신용", balanceKrw: 3000000, interestRate: 6.8, monthlyPaymentKrw: 100000 }],
   },
   seedEvents: [
     { date: "2026-09-08", title: "고용센터 실업인정일", location: "서울 관악" },

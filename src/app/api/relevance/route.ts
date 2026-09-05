@@ -71,7 +71,14 @@ export async function POST(request: Request) {
       db.from("finance").select("*").eq("user_id", profileId).single(),
     ]);
     if (!survey) return NextResponse.json({ error: "프로필을 찾을 수 없습니다" }, { status: 404 });
-    userProfile = { 출처: "설문 + 직접 입력 금융정보", 설문: survey, 금융: fin };
+    // 식별정보(id·이름·생성시각)는 LLM에 보내지 않는다 — 판정에 필요한 속성만 전달.
+    // profileRow/financeRow(규칙엔진용)는 원본 그대로 둔다 — 규칙엔진은 id/name을 쓰지 않고,
+    // LLM에는 애초에 profileRow 자체가 아니라 이 값에서 뽑은 checks 배열만 전달되기 때문.
+    const { id: _id, name: _name, created_at: _c, ...surveyAttrs } = survey as Record<string, unknown>;
+    void _id; void _name; void _c;
+    const { user_id: _u, ...finAttrs } = (fin ?? {}) as Record<string, unknown>;
+    void _u;
+    userProfile = { 출처: "설문 + 직접 입력 금융정보", 설문: surveyAttrs, 금융: finAttrs };
     profileRow = survey;
     financeRow = fin ?? null;
   } else {

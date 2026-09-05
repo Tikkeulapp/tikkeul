@@ -362,71 +362,71 @@ export default function AppPage() {
 
   return (
     <main className="min-h-screen bg-paper">
-      <header className="mx-auto flex h-[64px] w-full max-w-6xl items-center gap-2.5 px-5 font-semibold">
+      <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
-        <span className="ml-auto text-[13px] text-mute">
-          {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[11px] font-bold text-white">🏠 {profileNote}</span>}
+        <span className="ml-auto text-[14.5px] text-mute">
+          {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
           {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
           <Link href="/app/start" className="underline">프로필 변경</Link>
         </span>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl px-5 pb-16">
+      <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
         <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-leaf-deep p-2 pl-4">
-          <span className="text-[15px]">🔍</span>
+          <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="모르는 거 물어보기 — 예: 국민취업지원제도가 뭐야?"
-            className="min-w-0 flex-1 bg-transparent py-2 text-[14.5px] text-white placeholder-white/60 outline-none"
+            className="min-w-0 flex-1 bg-transparent py-2 text-[16px] text-white placeholder-white/60 outline-none"
             aria-label="AI에게 질문"
           />
           <button
             type="submit"
             disabled={chatLoading}
-            className="rounded-[10px] bg-white px-4 py-2 text-[13.5px] font-bold text-ink transition hover:bg-mint disabled:opacity-60"
+            className="rounded-[10px] bg-white px-4 py-2 text-[15px] font-bold text-ink transition hover:bg-mint disabled:opacity-60"
           >
             {chatLoading ? "생각 중…" : "물어보기"}
           </button>
         </form>
-        {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[13px] font-bold text-leaf-deep">💬 {notice}</p>}
+        {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
         {chatReply && (
-          <div className="mt-2 whitespace-pre-wrap rounded-[10px] border border-line bg-white px-3 py-2.5 text-[13.5px] leading-relaxed text-ink">
+          <div className="mt-2 whitespace-pre-wrap rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
             🤖 {chatReply}
           </div>
         )}
 
         {/* ── 본문 3단: 사이드바 / 일정 등록 / 위젯 ────── */}
-        <div className="mt-4 grid gap-4 lg:grid-cols-[280px_1fr_170px]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr_220px]">
           {/* 좌측: 마이티끌 / 추천 아코디언 */}
           <aside className="flex flex-col gap-2">
             {/* 마이티끌 */}
             <section className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
                 onClick={() => setOpenTab("my")}
-                className={`flex w-full items-center justify-between px-4 py-3 text-left text-[14.5px] font-bold ${openTab === "my" ? "bg-leaf-deep text-white" : ""}`}
+                className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "my" ? "bg-leaf-deep text-white" : ""}`}
               >
                 마이티끌
-                <span className="text-[12px]">{savedRecs.length}건 {openTab === "my" ? "▾" : "▸"}</span>
+                <span className="text-[13.5px]">{savedRecs.length}건 {openTab === "my" ? "▾" : "▸"}</span>
               </button>
               {openTab === "my" && (
                 <div className="flex flex-col gap-2 p-3">
                   {savedRecs.length === 0 && (
-                    <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[12.5px] text-mute">
+                    <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[14px] text-mute">
                       아직 담은 정책이 없어요. [추천]에서 담아보세요.
                     </p>
                   )}
                   {savedRecs.map((r) => (
                     <div key={r.id} className="rounded-[12px] border border-line bg-mint-soft/60 p-3">
-                      <p className="text-[13.5px] font-bold leading-snug">{r.title}</p>
-                      <p className="mt-0.5 text-[12px] text-mute">{r.benefit}</p>
+                      <p className="text-[15px] font-bold leading-snug">{r.title}</p>
+                      <p className="mt-0.5 text-[13.5px] text-mute">{r.benefit}</p>
                       <div className="mt-2 flex items-center justify-between">
-                        <span className="rounded-full bg-mint px-2 py-0.5 text-[11px] font-bold text-leaf-deep">진행중</span>
+                        <span className="rounded-full bg-mint px-2 py-0.5 text-[12.5px] font-bold text-leaf-deep">진행중</span>
                         <span className="flex gap-2">
-                          <button onClick={() => openDetail(r)} className="text-[11.5px] font-bold text-leaf-deep underline">자세히보기</button>
-                          <button onClick={() => removeFromMy(r.id)} className="text-[11.5px] font-bold text-mute underline">빼기</button>
+                          <button onClick={() => openDetail(r)} className="text-[13px] font-bold text-leaf-deep underline">자세히보기</button>
+                          <button onClick={() => removeFromMy(r.id)} className="text-[13px] font-bold text-mute underline">빼기</button>
                         </span>
                       </div>
                     </div>
@@ -439,29 +439,29 @@ export default function AppPage() {
             <section className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
                 onClick={() => setOpenTab("rec")}
-                className={`flex w-full items-center justify-between px-4 py-3 text-left text-[14.5px] font-bold ${openTab === "rec" ? "bg-leaf-deep text-white" : ""}`}
+                className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "rec" ? "bg-leaf-deep text-white" : ""}`}
               >
                 추천
-                <span className="text-[12px]">{unsavedRecs.length}건 {openTab === "rec" ? "▾" : "▸"}</span>
+                <span className="text-[13.5px]">{unsavedRecs.length}건 {openTab === "rec" ? "▾" : "▸"}</span>
               </button>
               {openTab === "rec" && (
                 <div className="flex flex-col gap-2 p-3">
-                  <p className="text-[11.5px] font-semibold text-mute">데모 추천 — AI 자동 매칭은 다음 단계</p>
+                  <p className="text-[13px] font-semibold text-mute">데모 추천 — AI 자동 매칭은 다음 단계</p>
                   {unsavedRecs.length === 0 && (
-                    <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[12.5px] text-mute">전부 담았어요 👍</p>
+                    <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[14px] text-mute">전부 담았어요 👍</p>
                   )}
                   {unsavedRecs.map((r) => (
                     <div key={r.id} className="rounded-[12px] border border-line p-3">
-                      <p className="text-[13.5px] font-bold leading-snug">{r.title}</p>
-                      <p className="mt-0.5 text-[12px] text-mute">{r.benefit} · {r.region}</p>
+                      <p className="text-[15px] font-bold leading-snug">{r.title}</p>
+                      <p className="mt-0.5 text-[13.5px] text-mute">{r.benefit} · {r.region}</p>
                       <div className="mt-2 flex items-center gap-2">
                         <button
                           onClick={() => addToMy(r.id)}
-                          className="rounded-full bg-leaf px-3.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#333333]"
+                          className="rounded-full bg-leaf px-3.5 py-1.5 text-[13.5px] font-bold text-white transition hover:bg-[#333333]"
                         >
                           + 담기
                         </button>
-                        <button onClick={() => openDetail(r)} className="text-[11.5px] font-bold text-leaf-deep underline">자세히보기</button>
+                        <button onClick={() => openDetail(r)} className="text-[13px] font-bold text-leaf-deep underline">자세히보기</button>
                       </div>
                     </div>
                   ))}
@@ -474,7 +474,7 @@ export default function AppPage() {
           <section className="rounded-[18px] border border-line bg-card p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">일정 등록</h2>
-              <div className="flex items-center gap-2 text-[14px] font-bold">
+              <div className="flex items-center gap-2 text-[15.5px] font-bold">
                 <button onClick={() => setYm(prevMonth(ym))} className="grid h-8 w-8 place-items-center rounded-full border border-line hover:border-ink" aria-label="이전 달">‹</button>
                 <span className="min-w-[110px] text-center">{ym.y}년 {ym.m + 1}월</span>
                 <button onClick={() => setYm(nextMonth(ym))} className="grid h-8 w-8 place-items-center rounded-full border border-line hover:border-ink" aria-label="다음 달">›</button>
@@ -482,7 +482,7 @@ export default function AppPage() {
             </div>
 
             {/* 요일 헤더 */}
-            <div className="mt-4 grid grid-cols-7 text-center text-[11.5px] font-bold text-mute">
+            <div className="mt-4 grid grid-cols-7 text-center text-[13px] font-bold text-mute">
               {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
                 <span key={d} className="py-1">{d}</span>
               ))}
@@ -505,18 +505,18 @@ export default function AppPage() {
                           : "border-line hover:border-ink"
                     }`}
                   >
-                    <span className={`text-[12px] font-bold ${cell === TODAY ? "text-leaf-deep" : ""}`}>
+                    <span className={`text-[13.5px] font-bold ${cell === TODAY ? "text-leaf-deep" : ""}`}>
                       {Number(cell.slice(8))}
-                      {cell === TODAY && <em className="ml-1 text-[9px] not-italic text-mute">오늘</em>}
+                      {cell === TODAY && <em className="ml-1 text-[10.5px] not-italic text-mute">오늘</em>}
                     </span>
                     <div className="mt-0.5 flex flex-col gap-0.5">
                       {(eventsByDate.get(cell) ?? []).slice(0, 2).map((ev) => (
-                        <span key={ev.event_id} className="truncate rounded-[4px] bg-leaf-deep px-1 py-0.5 text-[10px] font-semibold text-white">
+                        <span key={ev.event_id} className="truncate rounded-[4px] bg-leaf-deep px-1 py-0.5 text-[11.5px] font-semibold text-white">
                           {ev.title}
                         </span>
                       ))}
                       {(eventsByDate.get(cell)?.length ?? 0) > 2 && (
-                        <span className="text-[10px] font-bold text-mute">+{(eventsByDate.get(cell)?.length ?? 0) - 2}</span>
+                        <span className="text-[11.5px] font-bold text-mute">+{(eventsByDate.get(cell)?.length ?? 0) - 2}</span>
                       )}
                     </div>
                   </button>
@@ -526,21 +526,21 @@ export default function AppPage() {
 
             {/* 선택된 날짜 패널: 그 날 일정 + 추가 */}
             <div className="mt-4 rounded-[14px] bg-mint-soft/70 p-4">
-              <p className="text-[13.5px] font-bold">
+              <p className="text-[15px] font-bold">
                 {Number(date.slice(5, 7))}월 {Number(date.slice(8))}일 ({WEEKDAY[new Date(date + "T00:00:00").getDay()]})
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {(eventsByDate.get(date) ?? []).map((ev) => (
-                  <div key={ev.event_id} className="flex items-center gap-2 rounded-[10px] bg-card px-3 py-2 text-[13.5px]">
+                  <div key={ev.event_id} className="flex items-center gap-2 rounded-[10px] bg-card px-3 py-2 text-[15px]">
                     <span className="font-semibold">{ev.title}</span>
-                    {ev.location && <span className="text-[12px] text-mute">{ev.location}</span>}
-                    <span className="ml-auto text-[10.5px] font-semibold text-mute">
+                    {ev.location && <span className="text-[13.5px] text-mute">{ev.location}</span>}
+                    <span className="ml-auto text-[12px] font-semibold text-mute">
                       {ev.source === "seed" ? "기본 일정" : "내가 적음"}
                     </span>
                   </div>
                 ))}
                 {(eventsByDate.get(date) ?? []).length === 0 && (
-                  <p className="text-[12.5px] text-mute">이 날짜에 일정이 없어요.</p>
+                  <p className="text-[14px] text-mute">이 날짜에 일정이 없어요.</p>
                 )}
               </div>
               <form onSubmit={addEvent} className="mt-2.5 flex items-center gap-2">
@@ -550,36 +550,36 @@ export default function AppPage() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="이 날짜에 일정 추가 — 예: SKT 면접"
                   required
-                  className="min-w-0 flex-1 rounded-[8px] border border-line bg-card px-3 py-2.5 text-[14px]"
+                  className="min-w-0 flex-1 rounded-[8px] border border-line bg-card px-3 py-2.5 text-[15.5px]"
                   aria-label="일정 내용"
                 />
                 <button
                   type="submit"
                   disabled={saving || !title.trim()}
-                  className="rounded-full bg-leaf px-5 py-2.5 text-[13.5px] font-medium text-white transition hover:bg-[#333333] disabled:opacity-50"
+                  className="rounded-full bg-leaf px-5 py-2.5 text-[15px] font-medium text-white transition hover:bg-[#333333] disabled:opacity-50"
                 >
                   {saving ? "저장 중…" : "+ 등록"}
                 </button>
               </form>
-              {calNotice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[12.5px] font-bold text-leaf-deep">🚧 {calNotice}</p>}
+              {calNotice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14px] font-bold text-leaf-deep">🚧 {calNotice}</p>}
 
               {/* 일정 → AI가 찾은 혜택 */}
               {(matching || matchRecs) && matchFor && (
                 <div className="mt-3 rounded-[14px] border border-line bg-card p-3.5">
-                  <p className="text-[12.5px] font-bold text-leaf-deep">
+                  <p className="text-[14px] font-bold text-leaf-deep">
                     💡 “{matchFor}” 일정에 붙는 혜택 {matching && "— AI가 전국 정책에서 찾는 중…"}
                   </p>
                   {!matching && matchRecs && matchRecs.length === 0 && (
-                    <p className="mt-1.5 text-[12.5px] text-mute">이 일정과 연결되는 정책을 찾지 못했어요.</p>
+                    <p className="mt-1.5 text-[14px] text-mute">이 일정과 연결되는 정책을 찾지 못했어요.</p>
                   )}
                   {!matching && matchRecs && matchRecs.map((r) => (
                     <div key={r.policy_id} className="mt-2 rounded-[10px] bg-mint-soft/70 p-2.5">
-                      <p className="text-[13px] font-bold leading-snug">{r.title}</p>
-                      <p className="mt-0.5 text-[11.5px] text-mute">{r.provider} · {r.region} · 관련도 {r.score}점</p>
-                      <p className="mt-1 text-[12.5px]">{r.reason}</p>
-                      <p className="mt-0.5 text-[12px] font-bold text-leaf-deep">🎁 {r.benefit_summary}</p>
+                      <p className="text-[14.5px] font-bold leading-snug">{r.title}</p>
+                      <p className="mt-0.5 text-[13px] text-mute">{r.provider} · {r.region} · 관련도 {r.score}점</p>
+                      <p className="mt-1 text-[14px]">{r.reason}</p>
+                      <p className="mt-0.5 text-[13.5px] font-bold text-leaf-deep">🎁 {r.benefit_summary}</p>
                       {r.apply_url && (
-                        <a href={r.apply_url} target="_blank" rel="noreferrer" className="text-[11.5px] font-bold underline">신청 페이지 ↗</a>
+                        <a href={r.apply_url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>
                       )}
                     </div>
                   ))}
@@ -589,22 +589,22 @@ export default function AppPage() {
               {/* 거주지 변경 감지 → 프로필 변경 제안 + 델타 리포트 */}
               {!matching && regionChange && (
                 <div className="mt-3 rounded-[14px] border-2 border-leaf-deep bg-card p-4">
-                  <p className="text-[13.5px] font-bold">
+                  <p className="text-[15px] font-bold">
                     🏠 거주지 변경 감지 — {regionChange.from ?? "미상"} → <span className="text-leaf-deep">{regionChange.to}</span>
                   </p>
-                  <p className="mt-1 text-[12.5px] text-mute">
+                  <p className="mt-1 text-[14px] text-mute">
                     이사하면 받을 수 있는 정책이 통째로 바뀌어요. 프로필 거주지를 바꿀까요? 이후 추천·매칭이 {regionChange.to} 기준으로 전환됩니다.
                   </p>
                   {appliedChange ? (
-                    <p className="mt-2 rounded-[10px] bg-[#2fbf5f] px-3 py-2 text-[12.5px] font-bold text-white">✓ 적용됨 — {appliedChange} 거주로 반영</p>
+                    <p className="mt-2 rounded-[10px] bg-[#2fbf5f] px-3 py-2 text-[14px] font-bold text-white">✓ 적용됨 — {appliedChange} 거주로 반영</p>
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button onClick={() => applyRegionChange(regionChange.effectiveFrom)} disabled={applyingChange}
-                        className="rounded-full bg-leaf px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-60">
+                        className="rounded-full bg-leaf px-4 py-2 text-[14px] font-bold text-white disabled:opacity-60">
                         {regionChange.effectiveFrom.slice(5).replace("-", "/")}부터 적용
                       </button>
                       <button onClick={() => applyRegionChange(new Date().toISOString().slice(0, 10))} disabled={applyingChange}
-                        className="rounded-full border border-line px-4 py-2 text-[12.5px] font-bold disabled:opacity-60">
+                        className="rounded-full border border-line px-4 py-2 text-[14px] font-bold disabled:opacity-60">
                         지금부터 적용
                       </button>
                     </div>
@@ -612,26 +612,26 @@ export default function AppPage() {
 
                   {regionChange.opening.length > 0 && (
                     <div className="mt-3">
-                      <p className="text-[12.5px] font-bold text-[#1f8f45]">🟢 {regionChange.to}로 가면 새로 열리는 혜택 ({regionChange.opening.length}건 · 지역 정책 {regionChange.openingTotal}건 중)</p>
+                      <p className="text-[14px] font-bold text-[#1f8f45]">🟢 {regionChange.to}로 가면 새로 열리는 혜택 ({regionChange.opening.length}건 · 지역 정책 {regionChange.openingTotal}건 중)</p>
                       {regionChange.opening.map((o) => (
                         <div key={o.policy_id} className="mt-1.5 rounded-[10px] bg-mint-soft/70 p-2.5">
-                          <p className="text-[13px] font-bold leading-snug">{o.title} <span className="text-[11px] font-semibold text-mute">· {o.provider} · {o.score}점</span></p>
-                          <p className="mt-0.5 text-[12px]">{o.reason}</p>
-                          {o.apply_url && <a href={o.apply_url} target="_blank" rel="noreferrer" className="text-[11.5px] font-bold underline">신청 페이지 ↗</a>}
+                          <p className="text-[14.5px] font-bold leading-snug">{o.title} <span className="text-[12.5px] font-semibold text-mute">· {o.provider} · {o.score}점</span></p>
+                          <p className="mt-0.5 text-[13.5px]">{o.reason}</p>
+                          {o.apply_url && <a href={o.apply_url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>}
                         </div>
                       ))}
                     </div>
                   )}
                   {regionChange.closing.length > 0 && (
                     <div className="mt-3">
-                      <p className="text-[12.5px] font-bold text-[#b23b3b]">🔴 {regionChange.from}을(를) 떠나면 사라지는 혜택 ({regionChange.closing.length}건)</p>
+                      <p className="text-[14px] font-bold text-[#b23b3b]">🔴 {regionChange.from}을(를) 떠나면 사라지는 혜택 ({regionChange.closing.length}건)</p>
                       {regionChange.closing.map((c) => (
                         <div key={c.policy_id} className="mt-1.5 rounded-[10px] bg-[#fbeaea] p-2.5">
-                          <p className="text-[13px] font-bold leading-snug">{c.title} <span className="text-[11px] font-semibold text-mute">· {c.provider}</span></p>
-                          <p className="mt-0.5 text-[12px]">{c.reason}</p>
+                          <p className="text-[14.5px] font-bold leading-snug">{c.title} <span className="text-[12.5px] font-semibold text-mute">· {c.provider}</span></p>
+                          <p className="mt-0.5 text-[13.5px]">{c.reason}</p>
                         </div>
                       ))}
-                      <p className="mt-1.5 text-[11.5px] text-mute">💡 이사 전에 신청 가능한 것은 지금 챙겨두세요.</p>
+                      <p className="mt-1.5 text-[13px] text-mute">💡 이사 전에 신청 가능한 것은 지금 챙겨두세요.</p>
                     </div>
                   )}
                 </div>
@@ -641,20 +641,28 @@ export default function AppPage() {
 
           {/* 우측: 요약 위젯 (원 2개) */}
           <aside className="flex flex-row gap-4 lg:flex-col">
-            <div className="grid aspect-square w-full max-w-[170px] place-items-center rounded-full bg-[#2fbf5f] p-4 text-center text-white shadow-lift">
+            <div className="grid aspect-square w-full max-w-[220px] place-items-center rounded-full bg-[#2fbf5f] p-4 text-center text-white shadow-lift">
               <div>
-                <p className="text-[11.5px] font-bold leading-tight opacity-90">이번 달<br />아낄 티끌</p>
-                <p className="mt-1 text-[17px] font-bold leading-tight">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
-                <p className="mt-0.5 text-[10px] opacity-75">담은 정책 예상액</p>
+                <p className="text-[13px] font-bold leading-tight opacity-90">이번 달<br />아낄 티끌</p>
+                <p className="mt-1 text-[19px] font-bold leading-tight">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
+                <p className="mt-0.5 text-[11.5px] opacity-75">담은 정책 예상액</p>
               </div>
             </div>
-            <div className="grid aspect-square w-full max-w-[170px] place-items-center rounded-full bg-[#7ddf9a] p-4 text-center text-leaf-deep shadow-lift">
+            <div className="grid aspect-square w-full max-w-[220px] place-items-center rounded-full bg-[#7ddf9a] p-4 text-center text-leaf-deep shadow-lift">
               <div>
-                <p className="text-[11.5px] font-bold leading-tight">이번 달<br />담은 혜택</p>
-                <p className="mt-1 text-[22px] font-bold leading-none">{savedRecs.length}건</p>
-                <p className="mt-0.5 text-[10px] opacity-75">마이티끌 기준</p>
+                <p className="text-[13px] font-bold leading-tight">이번 달<br />담은 혜택</p>
+                <p className="mt-1 text-[24px] font-bold leading-none">{savedRecs.length}건</p>
+                <p className="mt-0.5 text-[11.5px] opacity-75">마이티끌 기준</p>
               </div>
             </div>
+            <Link
+              href="/app/simulate"
+              className="block w-full max-w-[220px] rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
+            >
+              <p className="text-[12.5px] font-bold text-mute">취업 후엔?</p>
+              <p className="mt-0.5 text-[15px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>
+              <p className="mt-1 text-[12px] text-mute">연봉·목표 → 자산 배분·열리는 제도</p>
+            </Link>
           </aside>
         </div>
       </div>
@@ -672,9 +680,9 @@ export default function AppPage() {
               <h3 className="text-lg font-bold leading-snug">{detail.title}</h3>
               <button onClick={() => setDetail(null)} className="text-xl leading-none text-mute" aria-label="닫기">×</button>
             </div>
-            <p className="mt-1 text-[13px] font-bold text-leaf-deep">{detail.benefit} · {detail.region}</p>
+            <p className="mt-1 text-[14.5px] font-bold text-leaf-deep">{detail.benefit} · {detail.region}</p>
 
-            <dl className="mt-4 flex flex-col gap-3 text-[13.5px]">
+            <dl className="mt-4 flex flex-col gap-3 text-[15px]">
               <div>
                 <dt className="font-bold text-mute">지원대상</dt>
                 <dd className="mt-0.5">{detail.target}</dd>
@@ -693,52 +701,52 @@ export default function AppPage() {
               <button
                 onClick={judge}
                 disabled={judging}
-                className="rounded-full bg-leaf px-5 py-2.5 text-[13.5px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-60"
+                className="rounded-full bg-leaf px-5 py-2.5 text-[15px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-60"
               >
                 {judging ? "AI가 판정 중…" : "🤖 나랑 맞는지 AI 판정"}
               </button>
               {!savedIds.includes(detail.id) && (
-                <button onClick={() => addToMy(detail.id)} className="rounded-full border border-line px-4 py-2.5 text-[13px] font-bold transition hover:border-ink">
+                <button onClick={() => addToMy(detail.id)} className="rounded-full border border-line px-4 py-2.5 text-[14.5px] font-bold transition hover:border-ink">
                   + 마이티끌에 담기
                 </button>
               )}
-              <a href={detail.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-leaf-deep underline">
+              <a href={detail.url} target="_blank" rel="noreferrer" className="text-[14.5px] font-bold text-leaf-deep underline">
                 공식 페이지 ↗
               </a>
             </div>
 
-            {judgeError && <p className="mt-3 rounded-[10px] bg-mint px-3 py-2 text-[12.5px] font-bold text-[#d33]">⚠ {judgeError}</p>}
+            {judgeError && <p className="mt-3 rounded-[10px] bg-mint px-3 py-2 text-[14px] font-bold text-[#d33]">⚠ {judgeError}</p>}
 
             {verdict && (
               <div className="mt-4 rounded-[14px] border border-line bg-mint-soft/70 p-4">
                 <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-3 py-1 text-[12px] font-bold ${ELIG_LABEL[verdict.eligibility].cls}`}>
+                  <span className={`rounded-full px-3 py-1 text-[13.5px] font-bold ${ELIG_LABEL[verdict.eligibility].cls}`}>
                     {ELIG_LABEL[verdict.eligibility].text}
                   </span>
-                  <span className="text-[13px] font-bold">관련도 {verdict.score}점</span>
+                  <span className="text-[14.5px] font-bold">관련도 {verdict.score}점</span>
                 </div>
                 {verdict.reasons.length > 0 && (
-                  <ul className="mt-2.5 flex flex-col gap-1 text-[13px]">
+                  <ul className="mt-2.5 flex flex-col gap-1 text-[14.5px]">
                     {verdict.reasons.map((r) => <li key={r}>· {r}</li>)}
                   </ul>
                 )}
                 {verdict.missing_information.length > 0 && (
                   <div className="mt-2.5">
-                    <p className="text-[12px] font-bold text-mute">확인이 필요해요</p>
-                    <ul className="mt-1 flex flex-col gap-1 text-[13px]">
+                    <p className="text-[13.5px] font-bold text-mute">확인이 필요해요</p>
+                    <ul className="mt-1 flex flex-col gap-1 text-[14.5px]">
                       {verdict.missing_information.map((m) => <li key={m}>❓ {m}</li>)}
                     </ul>
                   </div>
                 )}
                 {verdict.evidence_todo.length > 0 && (
                   <div className="mt-2.5">
-                    <p className="text-[12px] font-bold text-mute">미리 챙겨두세요</p>
-                    <ul className="mt-1 flex flex-col gap-1 text-[13px]">
+                    <p className="text-[13.5px] font-bold text-mute">미리 챙겨두세요</p>
+                    <ul className="mt-1 flex flex-col gap-1 text-[14.5px]">
                       {verdict.evidence_todo.map((m) => <li key={m}>📎 {m}</li>)}
                     </ul>
                   </div>
                 )}
-                <p className="mt-3 text-[11px] text-mute">AI의 1차 판정입니다 — 최종 자격은 공식 기관에서 확인하세요.</p>
+                <p className="mt-3 text-[12.5px] text-mute">AI의 1차 판정입니다 — 최종 자격은 공식 기관에서 확인하세요.</p>
               </div>
             )}
           </div>
