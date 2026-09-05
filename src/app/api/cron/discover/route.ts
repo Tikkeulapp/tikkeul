@@ -73,21 +73,31 @@ export async function GET(request: Request) {
 
   const db = supabaseAdmin();
   const report: Record<string, unknown> = { ran_at: new Date().toISOString() };
-  const { data: existing } = await db.from("policies").select("policy_id").limit(20000);
-  const known = new Set((existing ?? []).map((r) => r.policy_id));
+  /** 후보 ID 중 DB에 이미 있는 것만 골라 Set으로 (PostgREST 1,000행 상한 회피) */
+  const findKnown = async (ids: string[]) => {
+    const known = new Set<string>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await db.from("policies").select("policy_id").in("policy_id", ids.slice(i, i + 200));
+      for (const r of data ?? []) known.add(r.policy_id);
+    }
+    return known;
+  };
 
   // ── A-1. 온통청년 최신 250건 ──
   try {
     const key = process.env.ONTONG_YOUTH_API_KEY;
     if (!key) throw new Error("ONTONG_YOUTH_API_KEY 없음");
-    const fresh: ReturnType<typeof normalizeOntong>[] = [];
+    const rows: ReturnType<typeof normalizeOntong>[] = [];
     for (let page = 1; page <= 5; page++) {
       const p = await fetchJson(`https://www.youthcenter.go.kr/go/ythip/getPlcy?apiKeyNm=${key}&pageNum=${page}&pageSize=50&rtnType=json`);
       for (const it of p?.result?.youthPolicyList ?? []) {
         const row = normalizeOntong(it as Row);
-        if (row.title && !known.has(row.policy_id)) fresh.push(row);
+        if (row.title) rows.push(row);
       }
     }
+    const known = await findKnown(rows.map((r) => r.policy_id));
+    const fresh = rows.filter((r) => !known.has(r.policy_id));
+    report.ontong_checked = rows.length;
     if (fresh.length) {
       await db.from("policies").upsert(fresh);
       await db.from("policy_discovery_queue").upsert(
@@ -102,16 +112,21 @@ export async function GET(request: Request) {
   try {
     const key = process.env.DATA_GO_KR_API_KEY;
     if (!key) throw new Error("DATA_GO_KR_API_KEY 없음");
-    const fresh: ReturnType<typeof normalizeGov24>[] = [];
+    const rows: ReturnType<typeof normalizeGov24>[] = [];
+    // 공공데이터포털 키는 인코딩 상태로 저장돼 있을 수 있어 디코딩 후 재인코딩
+    const svcKey = encodeURIComponent(decodeURIComponent(key));
     for (let page = 1; page <= 3; page++) {
-      const p = await fetchJson(`https://api.odcloud.kr/api/gov24/v3/serviceList?page=${page}&perPage=100&returnType=JSON&serviceKey=${encodeURIComponent(key)}`);
+      const p = await fetchJson(`https://api.odcloud.kr/api/gov24/v3/serviceList?page=${page}&perPage=100&returnType=JSON&serviceKey=${svcKey}`);
       for (const it of p?.data ?? []) {
         const text = `${str(it["서비스명"])} ${str(it["지원대상"])} ${str(it["서비스목적요약"])} ${str(it["지원내용"])}`;
         if (!JOBSEEKER_RE.test(text)) continue;
         const row = normalizeGov24(it as Row);
-        if (row.title && !known.has(row.policy_id)) fresh.push(row);
+        if (row.title) rows.push(row);
       }
     }
+    const known = await findKnown(rows.map((r) => r.policy_id));
+    const fresh = rows.filter((r) => !known.has(r.policy_id));
+    report.gov24_checked = rows.length;
     if (fresh.length) {
       await db.from("policies").upsert(fresh);
       await db.from("policy_discovery_queue").upsert(
