@@ -1,6 +1,7 @@
 import { getPersona } from "@/data/personas";
 import { derive } from "@/lib/derive";
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeSido } from "@/lib/region";
 
 /**
  * 사용자 프로필 해석 — 페르소나(코드) 또는 직접입력 회원(DB) + profile_changes(이사·졸업 등) 반영.
@@ -43,7 +44,7 @@ export async function resolveProfile(opts: {
   const p = opts.personaId ? getPersona(opts.personaId) : undefined;
   if (p) {
     const d = derive(p.mydata);
-    sido = p.declared.region.sido;
+    sido = normalizeSido(p.declared.region.sido);
     sigungu = p.declared.region.sigungu;
     age = ageFrom(p.declared.birthDate);
     summary = {
@@ -62,7 +63,7 @@ export async function resolveProfile(opts: {
       .eq("id", opts.profileId)
       .single();
     if (sv) {
-      sido = sv.region_sido ?? null;
+      sido = normalizeSido(sv.region_sido);
       sigungu = sv.region_sigungu ?? null;
       age = ageFrom(sv.birth_date);
       summary = {
@@ -91,7 +92,7 @@ export async function resolveProfile(opts: {
       if (c.effective_from <= today) {
         applied.push(c);
         if (c.field === "region_sido") {
-          sido = c.new_value;
+          sido = normalizeSido(c.new_value) ?? c.new_value;
           sigungu = null;
           summary["거주지"] = `${c.new_value} (${c.effective_from} 이사)`;
         } else if (c.field === "education_status") summary["학력"] = c.new_value;

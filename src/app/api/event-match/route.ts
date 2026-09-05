@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { groqJson } from "@/lib/groq";
 import { resolveProfile } from "@/lib/profile";
+import { normalizeSido } from "@/lib/region";
 
 /**
  * POST /api/event-match — 일정 텍스트 → 관련 정책 추천 (서비스의 심장)
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       `일정: "${title.trim()}"${date ? ` (날짜: ${date})` : ""}`,
       1200,
     );
+    extracted.region_sido = normalizeSido(extracted.region_sido); // 옛 명칭·약칭 → 표준 시도명
     const GENERIC = new Set(["준비", "작성", "지원", "신청", "등록", "참여", "운영", "안내", "프로그램", "청년", "사업", "활동", "일정"]);
     const keywords = (extracted.keywords ?? [])
       .map((k) => String(k).trim())
