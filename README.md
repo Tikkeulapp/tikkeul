@@ -32,7 +32,8 @@ npm run build && npm run start # http://localhost:3000
 ## 함께 개발하는 방식 — 브랜치 · 프리뷰 · 머지
 
 - **`main` = 배포판** (https://tikle.vercel.app). `main`에 푸시되면 Vercel이 자동 배포합니다. 빌드가 깨지는 커밋을 `main`에 직접 올리지 않습니다.
-- **작업은 브랜치에서**: `feat/<기능>` (예: `feat/chatbot`, `feat/simulation-db`), 문서는 `docs/<주제>`.
+- **작업은 브랜치에서**: `feature/<기능>` (예: `feature/agent-architecture`, `feature/simulation-v2`), 문서는 `docs/<주제>`. 기능 코드(`src/`)는 main에 직접 커밋하지 않고 PR로 머지.
+- **Hobby 플랜 주의**: 프로젝트 소유자(Vaycold) 계정이 아닌 커밋은 Vercel이 배포를 차단합니다. 팀원 브랜치의 프리뷰는 `scripts/mirror-preview.sh feature/<브랜치> preview/<이름>`으로 소유자 계정 커밋을 얹어 만듭니다 (URL: `tikle-git-preview-<이름>-cau-et.vercel.app`). 팀원은 `preview/*`에 직접 푸시하지 않습니다. 소유자 본인 브랜치는 푸시만 하면 자동으로 프리뷰가 생깁니다.
 - **브랜치를 푸시하면 Vercel이 프리뷰 URL을 자동 생성**합니다. 확인 방법 두 가지:
   1. GitHub에서 PR을 열면 Vercel 봇이 댓글로 프리뷰 링크를 달아줍니다 (권장).
   2. Vercel 대시보드 → 프로젝트 → Deployments 탭에서 브랜치 이름으로 찾기. 브랜치 고정 URL은 `tikle-git-<브랜치명>-<팀>.vercel.app` 형태입니다.
