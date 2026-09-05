@@ -161,11 +161,19 @@ export async function POST(request: Request) {
     // ── 3) LLM 선별 (일정에 직접 붙는 혜택) ──
     let recommendations: object[] = [];
     if (candidates.length > 0) {
-      const ranked = await groqJson<Ranked>(
+      let ranked = await groqJson<Ranked>(
         RANK_SYSTEM,
         `[사용자]\n${JSON.stringify(profile.summary)}\n\n[일정]\n"${title.trim()}" (${date ?? "날짜 미상"}, 유형: ${extracted.event_type})\n\n[정책 후보]\n${JSON.stringify(compact(candidates), null, 1)}`,
         2000,
       );
+      // 모델이 간헐적으로 빈 배열을 내면 한 번 더 시도 (비결정성 완화 — 후보가 3건 이상일 때만)
+      if (!(ranked.recommendations ?? []).length && candidates.length >= 3) {
+      ranked = await groqJson<Ranked>(
+        RANK_SYSTEM,
+        `[사용자]\n${JSON.stringify(profile.summary)}\n\n[일정]\n"${title.trim()}" (${date ?? "날짜 미상"}, 유형: ${extracted.event_type})\n\n[정책 후보]\n${JSON.stringify(compact(candidates), null, 1)}`,
+        2000,
+      );
+      }
       const byId = new Map(candidates.map((c) => [c.policy_id, c]));
       recommendations = (ranked.recommendations ?? [])
         .filter((r) => byId.has(r.policy_id) && r.score >= 60)

@@ -6,7 +6,7 @@ import { getPersona, type Persona } from "@/data/personas";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
-import { examFeeFor } from "@/data/exam_fees";
+import { examFeeFor, estimateRegDeadline } from "@/data/exam_fees";
 
 type CalendarEvent = {
   event_id: string;
@@ -238,6 +238,29 @@ export default function AppPage() {
     .filter((r) => r.endDate && daysUntil(r.endDate) >= 0 && daysUntil(r.endDate) <= 3)
     .sort((a, b) => (a.endDate! < b.endDate! ? -1 : 1));
 
+  // 달력의 시험 일정 → 접수 마감(추정): 시험별 통상 접수 규칙으로 계산 (정확한 날짜는 공식 일정 확인)
+  const examDeadlines = events
+    .map((ev) => {
+      const info = examFeeFor(ev.title);
+      if (!info) return null;
+      const deadline = estimateRegDeadline(ev.start_at, info);
+      return { ev, info, deadline };
+    })
+    .filter((x): x is { ev: CalendarEvent; info: NonNullable<ReturnType<typeof examFeeFor>>; deadline: string | null } => !!x);
+  const examDeadlinesByDate = new Map<string, typeof examDeadlines>();
+  for (const x of examDeadlines) if (x.deadline) examDeadlinesByDate.set(x.deadline, [...(examDeadlinesByDate.get(x.deadline) ?? []), x]);
+  const urgentExams = examDeadlines
+    .filter((x) => x.deadline && daysUntil(x.deadline) >= 0 && daysUntil(x.deadline) <= 7)
+    .sort((a, b) => (a.deadline! < b.deadline! ? -1 : 1));
+  const alarmCount = urgent.length + urgentExams.length;
+  const examLine = (title: string, examDate: string) => {
+    const info = examFeeFor(title);
+    if (!info) return null;
+    const dl = estimateRegDeadline(examDate, info);
+    const status = dl === null ? "상시 접수" : daysUntil(dl) < 0 ? `접수 마감 지남(추정 ${fmtMD(dl)})` : `접수 마감(추정) ${fmtMD(dl)} · D-${daysUntil(dl)}`;
+    return { info, dl, status };
+  };
+
   /** 일정 매칭 카드에서 마이티끌로 담기 — 연결 일정·시험비(참고)·혜택 요약을 함께 기억 */
   const saveFromMatch = (r: NonNullable<typeof matchRecs>[number]) => {
     if (!session) return;
@@ -435,6 +458,7 @@ export default function AppPage() {
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
         <span className="ml-auto text-[14.5px] text-mute">
+          {alarmCount > 0 && <span className="mr-2 rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink" title="마감 임박 알림">🔔 {alarmCount}</span>}
           {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
           {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
           <Link href="/app/start" className="underline">프로필 변경</Link>
@@ -497,6 +521,11 @@ export default function AppPage() {
                           {savedMeta[r.id]?.examFeeKrw ? ` · ${savedMeta[r.id]!.examName} 응시료 ${savedMeta[r.id]!.examFeeKrw!.toLocaleString("ko-KR")}원(참고)` : ""}
                         </p>
                       )}
+                      {savedMeta[r.id]?.linkedEvent && (() => { const x = examLine(savedMeta[r.id]!.linkedEvent!.title, savedMeta[r.id]!.linkedEvent!.date); return x ? (
+                        <p className={`mt-0.5 text-[13px] ${x.dl && daysUntil(x.dl) >= 0 && daysUntil(x.dl) <= 7 ? "font-bold text-[#b45309]" : "text-mute"}`}>
+                          📝 시험 {x.status} · <a href={x.info.scheduleUrl} target="_blank" rel="noreferrer" className="underline">공식 일정 ↗</a>
+                        </p>
+                      ) : null; })()}
                       {(r.endDate || r.alwaysOpen) && (
                         <p className={`mt-0.5 text-[13px] ${r.endDate && daysUntil(r.endDate) <= 3 && daysUntil(r.endDate) >= 0 ? "font-bold text-[#b45309]" : "text-mute"}`}>
                           {r.endDate ? `⏰ 마감 ${fmtMD(r.endDate)}${daysUntil(r.endDate) >= 0 ? ` · D-${daysUntil(r.endDate)}` : " · 마감됨"}` : "상시 신청"}
@@ -561,18 +590,29 @@ export default function AppPage() {
               </div>
             </div>
 
-            {urgent.length > 0 && (
+            {alarmCount > 0 && (
               <div className="mt-3 rounded-[12px] border border-[#f6c453] bg-[#fff7e0] px-4 py-3">
-                <p className="text-[14.5px] font-bold text-[#b45309]">⏰ 마감 임박 — 3일 안에 신청이 닫히는 담은 정책 {urgent.length}건</p>
-                <ul className="mt-1 flex flex-col gap-0.5 text-[14px]">
+                <p className="text-[14.5px] font-bold text-[#b45309]">🔔 마감 임박 알림 {alarmCount}건</p>
+                <ul className="mt-1 flex flex-col gap-1 text-[14px]">
+                  {urgentExams.map((x) => (
+                    <li key={"ex-" + x.ev.event_id} className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-[#f6c453] px-1.5 py-0.5 text-[12px] font-bold">시험 접수</span>
+                      <span className="font-semibold">{x.ev.title}</span>
+                      <span className="text-[#b45309]">접수 마감(추정) {fmtMD(x.deadline!)} · D-{daysUntil(x.deadline!)}</span>
+                      <span className="text-[13px] text-mute">시험 {fmtMD(x.ev.start_at)} · {x.info.regNote}</span>
+                      <a href={x.info.scheduleUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">공식 일정 확인 ↗</a>
+                    </li>
+                  ))}
                   {urgent.map((r) => (
                     <li key={r.id} className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-[#f6c453] px-1.5 py-0.5 text-[12px] font-bold">정책 신청</span>
                       <span className="font-semibold">{r.title}</span>
-                      <span className="text-[#b45309]">D-{daysUntil(r.endDate!)} ({fmtMD(r.endDate!)})</span>
+                      <span className="text-[#b45309]">마감 {fmtMD(r.endDate!)} · D-{daysUntil(r.endDate!)}</span>
                       {r.url && <a href={r.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>}
                     </li>
                   ))}
                 </ul>
+                <p className="mt-1.5 text-[12.5px] text-mute">시험 접수 마감은 시험별 통상 접수 규칙으로 추정한 날짜입니다. 정확한 일정은 공식 페이지에서 확인하세요.</p>
               </div>
             )}
 
@@ -625,6 +665,9 @@ export default function AppPage() {
                       {(deadlinesByDate.get(cell) ?? []).slice(0, 1).map((r) => (
                         <span key={"dl-" + r.id} className="truncate rounded-[4px] bg-[#f6c453] px-1 py-0.5 text-[11.5px] font-semibold text-ink" title={`${r.title} 신청 마감`}>⏰ {r.title}</span>
                       ))}
+                      {(examDeadlinesByDate.get(cell) ?? []).slice(0, 1).map((x) => (
+                        <span key={"ex-" + x.ev.event_id} className="truncate rounded-[4px] border border-[#f6c453] bg-[#fff7e0] px-1 py-0.5 text-[11.5px] font-semibold text-[#b45309]" title={`${x.ev.title} 접수 마감(추정) — ${x.info.regNote}`}>📝 {x.info.name} 접수마감</span>
+                      ))}
                     </div>
                   </button>
                 ),
@@ -638,9 +681,15 @@ export default function AppPage() {
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {(eventsByDate.get(date) ?? []).map((ev) => (
-                  <div key={ev.event_id} className="flex items-center gap-2 rounded-[10px] bg-card px-3 py-2 text-[15px]">
+                  <div key={ev.event_id} className="flex flex-wrap items-center gap-2 rounded-[10px] bg-card px-3 py-2 text-[15px]">
                     <span className="font-semibold">{ev.title}</span>
                     {ev.location && <span className="text-[13.5px] text-mute">{ev.location}</span>}
+                    {(() => { const x = examLine(ev.title, ev.start_at); return x ? (
+                      <span className={`basis-full text-[13px] ${x.dl && daysUntil(x.dl) >= 0 && daysUntil(x.dl) <= 7 ? "font-bold text-[#b45309]" : "text-mute"}`}>
+                        📝 {x.info.name} · {x.status} · 응시료 {x.info.feeKrw.toLocaleString("ko-KR")}원(참고) ·{" "}
+                        <a href={x.info.scheduleUrl} target="_blank" rel="noreferrer" className="underline">공식 일정 ↗</a>
+                      </span>
+                    ) : null; })()}
                     <span className="ml-auto text-[12px] font-semibold text-mute">
                       {ev.source === "seed" ? "기본 일정" : "내가 적음"}
                     </span>
