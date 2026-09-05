@@ -58,10 +58,20 @@ function normalizeGov24(it: Row) {
   };
 }
 
-async function fetchJson(url: string) {
-  const res = await fetch(url, { headers: { "User-Agent": "tikkeul-discover/0.1" } });
-  if (!res.ok) throw new Error(`${url.split("?")[0]} → HTTP ${res.status}`);
-  return res.json();
+/** 외부 API 호출 — 온통청년 등은 간헐적 500을 내므로 3회 재시도(백오프) */
+async function fetchJson(url: string, attempts = 3) {
+  let lastErr: Error | null = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": "tikkeul-discover/0.1" } });
+      if (!res.ok) throw new Error(`${url.split("?")[0]} → HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, 1200 * (i + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 export async function GET(request: Request) {
