@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# 팀원 브랜치를 본인 계정 머지 커밋으로 미러링해 Vercel 프리뷰를 만든다 (Hobby 플랜: 팀원 커밋은 배포 차단).
+# 사용: scripts/mirror-preview.sh feature/agent-architecture preview/agent
+#  → https://tikle-git-<preview-branch>-cau-et.vercel.app
+set -euo pipefail
+SRC="${1:?팀원 브랜치명 (예: feature/agent-architecture)}"
+DST="${2:?프리뷰 브랜치명 (예: preview/agent)}"
+cur=$(git branch --show-current)
+git fetch -q origin
+git checkout -q -B "$DST" "origin/$SRC"
+if ! git merge --no-ff -q origin/main -m "merge: main → $SRC 프리뷰 미러"; then
+  echo "❌ 충돌 발생 — 아래 파일을 해결한 뒤 'git commit && git push -f -u origin $DST'"; git diff --name-only --diff-filter=U; exit 1
+fi
+git push -q -f -u origin "$DST"
+echo "✅ pushed $DST ($(git rev-parse --short HEAD)) → https://tikle-git-$(echo "$DST" | tr '/' '-')-cau-et.vercel.app"
+git checkout -q "$cur"
