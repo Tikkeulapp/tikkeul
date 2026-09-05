@@ -319,7 +319,7 @@ export default function AppPage() {
 
   return (
     <main className="min-h-screen bg-paper">
-      <header className="mx-auto flex h-[64px] w-full max-w-6xl items-center gap-2.5 px-5 font-semibold">
+      <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
         <span className="ml-auto text-[14.5px] text-mute">
@@ -329,7 +329,7 @@ export default function AppPage() {
         </span>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl px-5 pb-16">
+      <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
         <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-leaf-deep p-2 pl-4">
           <span className="text-[16.5px]">🔍</span>
@@ -347,7 +347,7 @@ export default function AppPage() {
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
 
         {/* ── 본문 3단: 사이드바 / 일정 등록 / 위젯 ────── */}
-        <div className="mt-4 grid gap-4 lg:grid-cols-[300px_1fr_185px]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr_220px]">
           {/* 좌측: 마이티끌 / 추천 아코디언 */}
           <aside className="flex flex-col gap-2">
             {/* 마이티끌 */}
@@ -589,14 +589,14 @@ export default function AppPage() {
 
           {/* 우측: 요약 위젯 (원 2개) */}
           <aside className="flex flex-row gap-4 lg:flex-col">
-            <div className="grid aspect-square w-full max-w-[185px] place-items-center rounded-full bg-[#2fbf5f] p-4 text-center text-white shadow-lift">
+            <div className="grid aspect-square w-full max-w-[220px] place-items-center rounded-full bg-[#2fbf5f] p-4 text-center text-white shadow-lift">
               <div>
                 <p className="text-[13px] font-bold leading-tight opacity-90">이번 달<br />아낄 티끌</p>
                 <p className="mt-1 text-[19px] font-bold leading-tight">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
                 <p className="mt-0.5 text-[11.5px] opacity-75">담은 정책 예상액</p>
               </div>
             </div>
-            <div className="grid aspect-square w-full max-w-[185px] place-items-center rounded-full bg-[#7ddf9a] p-4 text-center text-leaf-deep shadow-lift">
+            <div className="grid aspect-square w-full max-w-[220px] place-items-center rounded-full bg-[#7ddf9a] p-4 text-center text-leaf-deep shadow-lift">
               <div>
                 <p className="text-[13px] font-bold leading-tight">이번 달<br />담은 혜택</p>
                 <p className="mt-1 text-[24px] font-bold leading-none">{savedRecs.length}건</p>
@@ -605,7 +605,7 @@ export default function AppPage() {
             </div>
             <Link
               href="/app/simulate"
-              className="block w-full max-w-[185px] rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
+              className="block w-full max-w-[220px] rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
             >
               <p className="text-[12.5px] font-bold text-mute">취업 후엔?</p>
               <p className="mt-0.5 text-[15px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>

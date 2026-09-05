@@ -22,7 +22,7 @@ export default function SimulatePage() {
   if (session === undefined) return null;
   if (!session) {
     return (
-      <main className="grid min-h-screen place-items-center bg-paper px-5">
+      <main className="grid min-h-screen place-items-center bg-paper px-6">
         <div className="text-center">
           <p className="text-xl font-bold">프로필이 없어요</p>
           <p className="mt-2 text-mute">페르소나를 고르거나 내 정보를 입력하면 시뮬레이션을 시작할 수 있어요.</p>
@@ -37,23 +37,23 @@ export default function SimulatePage() {
 
   return (
     <main className="min-h-screen bg-paper">
-      <header className="mx-auto flex h-[64px] w-full max-w-6xl items-center gap-2.5 px-5 font-semibold">
+      <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-6 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
-        <span className="ml-auto text-[14.5px] text-mute">
+        <span className="ml-auto text-[16px] text-mute">
           {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
           <Link href="/app/start" className="underline">프로필 변경</Link>
         </span>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl px-5 pb-16">
-        <Link href="/app" className="inline-block text-[14px] text-mute underline">← 캘린더로 돌아가기</Link>
+      <div className="mx-auto w-full max-w-[1600px] px-6 pb-16">
+        <Link href="/app" className="inline-block text-[15px] text-mute underline">← 캘린더로 돌아가기</Link>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[13px] font-bold text-mute">취업 후엔 어떻게 될까</p>
-            <h1 className="text-[28px] font-extrabold tracking-tight">🎯 취업 후 시뮬레이션</h1>
+            <p className="text-[14px] font-bold text-mute">취업 후엔 어떻게 될까</p>
+            <h1 className="text-[34px] font-extrabold tracking-tight">🎯 취업 후 시뮬레이션</h1>
           </div>
-          <p className="max-w-xl text-[14px] text-mute">
+          <p className="max-w-2xl text-[16px] text-mute">
             숫자는 코드가 계산하고 AI는 해설만 합니다. 세금은 간이 계산, 주택가격·결혼비용은 출처를 표시한 참고값입니다.
           </p>
         </div>

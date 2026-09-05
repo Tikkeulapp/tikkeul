@@ -105,10 +105,10 @@ export function SimulateView({ session }: { session: SimSession }) {
   };
 
   return (
-    <div className="mt-5 grid gap-6 lg:grid-cols-[360px_1fr]">
+    <div className="mt-6 grid gap-7 lg:grid-cols-[400px_1fr] xl:grid-cols-[440px_1fr]">
       {/* ── 왼쪽: 조건 입력 ─────────────────────────────── */}
       <aside className="lg:sticky lg:top-4 lg:self-start">
-        <div className="rounded-3xl border border-line bg-card p-5 text-[14px] shadow-lift">
+        <div className="rounded-3xl border border-line bg-card p-6 text-[16px] shadow-lift">
           <p className="text-mute">
             {isPersona ? "마이데이터에서 읽은 카드 소비·대출·월세 구조에" : "입력하신 금융정보에"} 예상 연봉을 얹어, 목표까지 얼마나 걸리는지와 취업하면 열리는 제도를 계산합니다.
           </p>
@@ -118,7 +118,7 @@ export function SimulateView({ session }: { session: SimSession }) {
             <div className="flex flex-wrap gap-1.5">
               {COMPANY_TYPES.map((c) => (
                 <button key={c} type="button" onClick={() => setCompanyType(c)}
-                  className={`rounded-full border px-3 py-1.5 text-[13.5px] transition ${companyType === c ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
+                  className={`rounded-full border px-3 py-1.5 text-[15.5px] transition ${companyType === c ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                   {c}
                 </button>
               ))}
@@ -129,12 +129,12 @@ export function SimulateView({ session }: { session: SimSession }) {
             <label className="block">
               <span className="font-bold">세전 연봉 <span className="font-normal text-mute">(만 원)</span></span>
               <input type="number" min={1000} max={100000} step={100} value={salaryMan} onChange={(e) => setSalaryMan(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[15px] outline-none focus:border-ink" />
+                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[17px] outline-none focus:border-ink" />
             </label>
             <label className="block">
               <span className="font-bold">입사 예정 월</span>
               <input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[15px] outline-none focus:border-ink" />
+                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[17px] outline-none focus:border-ink" />
             </label>
           </div>
 
@@ -147,12 +147,12 @@ export function SimulateView({ session }: { session: SimSession }) {
                   <div key={g} role="checkbox" aria-checked={on} tabIndex={0} onClick={() => toggleGoal(g)} onKeyDown={(e) => e.key === "Enter" && toggleGoal(g)}
                     className={`cursor-pointer rounded-2xl border p-3 transition ${on ? "border-ink bg-mint-soft" : "border-line hover:border-ink"}`}>
                     <div className="flex items-center gap-2">
-                      <span className={`grid h-5 w-5 place-items-center rounded-md border text-[12px] ${on ? "border-ink bg-ink text-white" : "border-line"}`}>{on ? "✓" : ""}</span>
+                      <span className={`grid h-5 w-5 place-items-center rounded-md border text-[14px] ${on ? "border-ink bg-ink text-white" : "border-line"}`}>{on ? "✓" : ""}</span>
                       <span className="font-bold">{GOAL_META[g].emoji} {GOAL_META[g].label}</span>
-                      <span className="ml-auto text-[12.5px] text-mute">{GOAL_META[g].hint}</span>
+                      <span className="ml-auto text-[14.5px] text-mute">{GOAL_META[g].hint}</span>
                     </div>
                     {on && g === "LUMP_SUM" && (
-                      <label className="mt-2 flex items-center gap-2 text-[13.5px]" onClick={(e) => e.stopPropagation()}>
+                      <label className="mt-2 flex items-center gap-2 text-[15.5px]" onClick={(e) => e.stopPropagation()}>
                         목표 금액
                         <input type="number" min={100} step={100} value={targetMan} onChange={(e) => setTargetMan(e.target.value)}
                           className="w-28 rounded-lg border border-line px-2 py-1.5 outline-none focus:border-ink" />
@@ -163,7 +163,7 @@ export function SimulateView({ session }: { session: SimSession }) {
                       <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                         {HOUSE_REGIONS.map((r) => (
                           <button key={r} type="button" onClick={() => setRegion(r)}
-                            className={`rounded-full border px-2.5 py-1 text-[13px] ${region === r ? "border-ink bg-ink text-white" : "border-line"}`}>{r}</button>
+                            className={`rounded-full border px-2.5 py-1 text-[15px] ${region === r ? "border-ink bg-ink text-white" : "border-line"}`}>{r}</button>
                         ))}
                       </div>
                     )}
@@ -177,15 +177,15 @@ export function SimulateView({ session }: { session: SimSession }) {
             <label className="mt-5 block">
               <span className="font-bold">월 평균 카드 소비 <span className="font-normal text-mute">(만 원)</span></span>
               <input type="number" min={0} step={5} value={cardMan} onChange={(e) => setCardMan(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[15px] outline-none focus:border-ink" />
-              <span className="mt-1 block text-[12.5px] text-mute">실서비스에서는 마이데이터 카드 승인내역으로 자동 집계됩니다.</span>
+                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[17px] outline-none focus:border-ink" />
+              <span className="mt-1 block text-[14.5px] text-mute">실서비스에서는 마이데이터 카드 승인내역으로 자동 집계됩니다.</span>
             </label>
           )}
 
-          {error && <p className="mt-4 rounded-xl bg-butter px-3 py-2 text-[13.5px]">{error}</p>}
+          {error && <p className="mt-4 rounded-xl bg-butter px-3 py-2 text-[15.5px]">{error}</p>}
 
           <button onClick={run} disabled={stage === "loading"}
-            className="mt-5 w-full rounded-full bg-leaf px-5 py-3 text-[15px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-60">
+            className="mt-5 w-full rounded-full bg-leaf px-5 py-3 text-[17px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-60">
             {stage === "loading" ? "계산 중… (AI 해설 포함 5~10초)" : stage === "result" ? "조건 바꿔 다시 계산 →" : "시뮬레이션 실행 →"}
           </button>
         </div>
@@ -195,7 +195,7 @@ export function SimulateView({ session }: { session: SimSession }) {
       <section>
         {stage === "idle" && <Placeholder isPersona={isPersona} />}
         {stage === "loading" && !data && (
-          <div className="rounded-3xl border border-line bg-card p-8 text-[15px] text-mute shadow-lift">
+          <div className="rounded-3xl border border-line bg-card p-8 text-[17px] text-mute shadow-lift">
             <p className="font-bold text-ink">계산하고 있어요</p>
             <p className="mt-2">세후 실수령 → 지출 구조 → 목표 도달 시점 → 열리는 제도 순서로 계산한 뒤, AI가 결과를 읽고 해설을 붙입니다.</p>
           </div>
@@ -212,8 +212,8 @@ export function SimulateView({ session }: { session: SimSession }) {
 
 function Placeholder({ isPersona }: { isPersona: boolean }) {
   return (
-    <div className="rounded-3xl border border-dashed border-line bg-card p-8 text-[15px] shadow-lift">
-      <p className="text-[18px] font-extrabold">왼쪽에서 조건을 넣고 실행하면 이런 결과가 나옵니다</p>
+    <div className="rounded-3xl border border-dashed border-line bg-card p-8 text-[17px] shadow-lift">
+      <p className="text-[20px] font-extrabold">왼쪽에서 조건을 넣고 실행하면 이런 결과가 나옵니다</p>
       <ol className="mt-4 grid gap-3 sm:grid-cols-2">
         {[
           ["💵", "세후 월 실수령", "4대보험·소득세를 뺀 실제 통장 입금액. 중소기업 청년 감면·공무원연금 반영"],
@@ -223,7 +223,7 @@ function Placeholder({ isPersona }: { isPersona: boolean }) {
         ].map(([e, t, d]) => (
           <li key={t} className="rounded-2xl bg-mint-soft p-4">
             <p className="font-bold">{e} {t}</p>
-            <p className="mt-1 text-[13.5px] text-mute">{d}</p>
+            <p className="mt-1 text-[15.5px] text-mute">{d}</p>
           </li>
         ))}
       </ol>
@@ -245,63 +245,63 @@ function Result({ data }: { data: ApiResponse }) {
   ];
 
   return (
-    <div className="space-y-5 text-[14.5px]">
+    <div className="space-y-5 text-[16.5px]">
       {/* 실수령 */}
       <section className="rounded-3xl bg-leaf-deep p-6 text-white shadow-lift">
-        <p className="text-[13px] opacity-80">{ymLabel(r.startMonth)} 입사 기준 · 세후 월 실수령 (근사)</p>
-        <p className="mt-1 text-[36px] font-extrabold tracking-tight text-[#7ddf9a]">{won(n.netMonthlyKrw)}</p>
-        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px] opacity-85">
+        <p className="text-[15px] opacity-80">{ymLabel(r.startMonth)} 입사 기준 · 세후 월 실수령 (근사)</p>
+        <p className="mt-1 text-[44px] font-extrabold tracking-tight text-[#7ddf9a]">{won(n.netMonthlyKrw)}</p>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[15px] opacity-85">
           <span>세전 {won(n.grossMonthlyKrw)}</span>
           <span>연금 −{won(n.pensionKrw)}</span>
           <span>건강·요양 −{won(n.healthKrw + n.ltcKrw)}</span>
           {n.employmentKrw > 0 && <span>고용 −{won(n.employmentKrw)}</span>}
           <span>소득세+지방세 −{won(n.incomeTaxMonthlyKrw + n.localTaxMonthlyKrw)}</span>
         </div>
-        <p className={`mt-3 inline-block rounded-full px-3 py-1 text-[12.5px] ${n.reliefApplied ? "bg-[#2fbf5f] text-white" : "bg-white/15"}`}>{n.note}</p>
+        <p className={`mt-3 inline-block rounded-full px-3 py-1 text-[14.5px] ${n.reliefApplied ? "bg-[#2fbf5f] text-white" : "bg-white/15"}`}>{n.note}</p>
       </section>
 
       {/* 도넛 2개 */}
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded-3xl border border-line bg-card p-5 shadow-lift">
-          <h3 className="text-[16px] font-extrabold">한 달 흐름 <span className="text-[13px] font-normal text-mute">기본 시나리오</span></h3>
+          <h3 className="text-[18px] font-extrabold">한 달 흐름 <span className="text-[15px] font-normal text-mute">기본 시나리오</span></h3>
           <div className="mt-3 flex flex-col items-center gap-4">
-            <Donut segments={allocSegments} size={210} centerTitle="실수령" centerValue={man(n.netMonthlyKrw)} />
-            <ul className="w-full space-y-1.5 text-[13.5px]">
+            <Donut segments={allocSegments} size={250} centerTitle="실수령" centerValue={man(n.netMonthlyKrw)} />
+            <ul className="w-full space-y-1.5 text-[15.5px]">
               {r.allocation.map((a) => (
                 <li key={a.label} className="flex items-center gap-2">
                   <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: allocColor(a.label) }} />
                   <span className="min-w-0 flex-1 truncate text-mute">{a.label}</span>
-                  <span className="shrink-0 text-[12.5px] text-mute">{a.pct}%</span>
+                  <span className="shrink-0 text-[14.5px] text-mute">{a.pct}%</span>
                   <span className={`w-24 shrink-0 text-right ${a.label.startsWith("저축") ? EM : ""}`}>{won(a.krw)}</span>
                 </li>
               ))}
             </ul>
           </div>
-          <p className="mt-3 text-[13px] text-mute">
+          <p className="mt-3 text-[15px] text-mute">
             지출 합계 {won(r.spending.totalKrw)} · 여유자금 <span className={EM}>{won(r.surplusMonthlyKrw)}</span>
           </p>
         </div>
 
         <div className="rounded-3xl border border-line bg-card p-5 shadow-lift">
-          <h3 className="text-[16px] font-extrabold">소비 습관 <span className="text-[13px] font-normal text-mute">{data.spending.source === "마이데이터" ? `카드 승인내역 ${data.spending.monthsObserved}개월 평균` : "직접 입력"}</span></h3>
+          <h3 className="text-[18px] font-extrabold">소비 습관 <span className="text-[15px] font-normal text-mute">{data.spending.source === "마이데이터" ? `카드 승인내역 ${data.spending.monthsObserved}개월 평균` : "직접 입력"}</span></h3>
           {catSegments.length ? (
             <div className="mt-3 flex flex-col items-center gap-4">
-              <Donut segments={catSegments} size={210} centerTitle="카드 월평균" centerValue={man(data.spending.cardMonthlyKrw)} />
-              <ul className="w-full space-y-1.5 text-[13.5px]">
+              <Donut segments={catSegments} size={250} centerTitle="카드 월평균" centerValue={man(data.spending.cardMonthlyKrw)} />
+              <ul className="w-full space-y-1.5 text-[15.5px]">
                 {catSegments.map((c) => (
                   <li key={c.label} className="flex items-center gap-2">
                     <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
                     <span className="min-w-0 flex-1 truncate text-mute">{c.label}</span>
-                    <span className="shrink-0 text-[12.5px] text-mute">{data.spending.cardMonthlyKrw ? Math.round((c.value / data.spending.cardMonthlyKrw) * 100) : 0}%</span>
+                    <span className="shrink-0 text-[14.5px] text-mute">{data.spending.cardMonthlyKrw ? Math.round((c.value / data.spending.cardMonthlyKrw) * 100) : 0}%</span>
                     <span className="w-24 shrink-0 text-right">{won(c.value)}</span>
                   </li>
                 ))}
               </ul>
             </div>
           ) : (
-            <p className="mt-3 text-[13.5px] text-mute">카드 승인내역이 없어 카테고리 분석을 건너뛰었습니다. 월 카드 소비 {won(data.spending.cardMonthlyKrw)}로 계산했습니다.</p>
+            <p className="mt-3 text-[15.5px] text-mute">카드 승인내역이 없어 카테고리 분석을 건너뛰었습니다. 월 카드 소비 {won(data.spending.cardMonthlyKrw)}로 계산했습니다.</p>
           )}
-          <p className={`mt-3 rounded-xl px-3 py-2 text-[13px] ${r.debt.advice === "PAY_FIRST" ? "bg-butter" : "bg-mint-soft"}`}>
+          <p className={`mt-3 rounded-xl px-3 py-2 text-[15px] ${r.debt.advice === "PAY_FIRST" ? "bg-butter" : "bg-mint-soft"}`}>
             <span className={r.debt.advice === "PAY_FIRST" ? "text-[#b23b3b]" : EM}>{r.debt.advice === "NONE" ? "대출 없음" : r.debt.advice === "PAY_FIRST" ? "상환 우선" : "저축 병행"}</span>
             {r.debt.totalKrw > 0 && <> · 잔액 {man(r.debt.totalKrw)} · 월 {won(r.debt.monthlyKrw)}</>} — {r.debt.reason}
           </p>
@@ -311,17 +311,17 @@ function Result({ data }: { data: ApiResponse }) {
       {/* 목표·시나리오 */}
       <section className="rounded-3xl border border-line bg-card p-5 shadow-lift">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-[16px] font-extrabold">
+          <h3 className="text-[18px] font-extrabold">
             목표 {r.goals.length > 1 ? `${r.goals.length}개 · 합계 ` : "· "}<span className={EM}>{man(r.totalTargetKrw)}</span>
           </h3>
-          <span className="text-[13px] text-mute">현재 예·적금 {man(r.startingAssetsKrw)}에서 시작</span>
+          <span className="text-[15px] text-mute">현재 예·적금 {man(r.startingAssetsKrw)}에서 시작</span>
         </div>
         <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {r.goals.map((g) => (
             <li key={g.type} className="rounded-2xl bg-mint-soft p-3">
               <p>{g.emoji} {g.label} <span className={EM}>{man(g.targetKrw)}</span></p>
               {Object.entries(g.detail).length > 0 && (
-                <ul className="mt-1.5 space-y-0.5 text-[12.5px] text-mute">
+                <ul className="mt-1.5 space-y-0.5 text-[14.5px] text-mute">
                   {Object.entries(g.detail).map(([k, v]) => (
                     <li key={k} className="flex justify-between gap-2"><span>{k}</span><span className="text-ink">{typeof v === "number" ? man(v) : v}</span></li>
                   ))}
@@ -333,17 +333,17 @@ function Result({ data }: { data: ApiResponse }) {
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {r.scenarios.map((s) => (
             <div key={s.key} className={`rounded-2xl border p-4 ${s.key === "기본" ? "border-ink" : "border-line"}`}>
-              <p className="text-[13px] text-mute">{s.key} · {s.label}</p>
-              <p className="mt-1 text-[18px]">월 <span className={EM}>{man(s.savingsMonthlyKrw)}</span> 저축</p>
-              {s.spendingCutKrw > 0 && <p className="text-[12.5px] text-mute">소비 절감 {won(s.spendingCutKrw)} 포함</p>}
-              <ol className="mt-3 space-y-1.5 border-t border-line pt-3 text-[13.5px]">
+              <p className="text-[15px] text-mute">{s.key} · {s.label}</p>
+              <p className="mt-1 text-[20px]">월 <span className={EM}>{man(s.savingsMonthlyKrw)}</span> 저축</p>
+              {s.spendingCutKrw > 0 && <p className="text-[14.5px] text-mute">소비 절감 {won(s.spendingCutKrw)} 포함</p>}
+              <ol className="mt-3 space-y-1.5 border-t border-line pt-3 text-[15.5px]">
                 {s.milestones.map((m) => (
                   <li key={m.type} className="flex items-start justify-between gap-2">
                     <span className="text-mute">{GOAL_META[m.type].emoji} {m.label}</span>
                     {m.monthsToGoal === null ? (
                       <span className="text-[#b23b3b]">도달 불가</span>
                     ) : (
-                      <span className="text-right"><span className={EM}>{m.goalMonth ? ymLabel(m.goalMonth) : "-"}</span><br /><span className="text-[12px] text-mute">{dur(m.monthsToGoal)}</span></span>
+                      <span className="text-right"><span className={EM}>{m.goalMonth ? ymLabel(m.goalMonth) : "-"}</span><br /><span className="text-[14px] text-mute">{dur(m.monthsToGoal)}</span></span>
                     )}
                   </li>
                 ))}
@@ -351,42 +351,42 @@ function Result({ data }: { data: ApiResponse }) {
             </div>
           ))}
         </div>
-        <ul className="mt-4 list-disc pl-5 text-[12.5px] text-mute">
+        <ul className="mt-4 list-disc pl-5 text-[14.5px] text-mute">
           {r.assumptions.map((a) => <li key={a}>{a}</li>)}
         </ul>
       </section>
 
       {r.warnings.length > 0 && (
         <ul className="space-y-1.5">
-          {r.warnings.map((w) => <li key={w} className="rounded-xl bg-butter px-4 py-2.5 text-[13.5px]">⚠️ {w}</li>)}
+          {r.warnings.map((w) => <li key={w} className="rounded-xl bg-butter px-4 py-2.5 text-[15.5px]">⚠️ {w}</li>)}
         </ul>
       )}
 
       {/* 제도 */}
       <section className="rounded-3xl border border-line bg-card p-5 shadow-lift">
-        <h3 className="text-[16px] font-extrabold">취업하면 열리는 제도 <span className="text-[13px] font-normal text-mute">규칙 판정 · {data.programs.likely.length + data.programs.needsCheck.length}건</span></h3>
-        <ul className="mt-3 grid gap-2.5 md:grid-cols-2">
+        <h3 className="text-[18px] font-extrabold">취업하면 열리는 제도 <span className="text-[15px] font-normal text-mute">규칙 판정 · {data.programs.likely.length + data.programs.needsCheck.length}건</span></h3>
+        <ul className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {[...data.programs.likely, ...data.programs.needsCheck].map((p) => (
             <li key={p.id} className="rounded-2xl bg-mint-soft p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${STATUS_BADGE[p.status]?.cls ?? ""}`}>{STATUS_BADGE[p.status]?.text}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[14px] font-bold ${STATUS_BADGE[p.status]?.cls ?? ""}`}>{STATUS_BADGE[p.status]?.text}</span>
                 <span className="font-bold">{p.name}</span>
               </div>
-              <p className="mt-0.5 text-[12.5px] text-mute">{p.provider} · {p.category}</p>
-              <p className="mt-1.5 text-[13.5px]">{p.summary}</p>
-              <p className={`mt-1 text-[13.5px] ${EM}`}>🎁 {p.benefit}</p>
-              <p className="mt-1 text-[12.5px] text-mute">판정 근거: {p.reason} · 기준 {p.asOf}</p>
-              <a href={p.url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-[13px] underline">공식 페이지 ↗</a>
+              <p className="mt-0.5 text-[14.5px] text-mute">{p.provider} · {p.category}</p>
+              <p className="mt-1.5 text-[15.5px]">{p.summary}</p>
+              <p className={`mt-1 text-[15.5px] ${EM}`}>🎁 {p.benefit}</p>
+              <p className="mt-1 text-[14.5px] text-mute">판정 근거: {p.reason} · 기준 {p.asOf}</p>
+              <a href={p.url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-[15px] underline">공식 페이지 ↗</a>
             </li>
           ))}
         </ul>
         {data.programs.unlikely.length > 0 && (
           <div className="mt-3">
-            <button onClick={() => setShowUnlikely(!showUnlikely)} className="text-[13px] text-mute underline">
+            <button onClick={() => setShowUnlikely(!showUnlikely)} className="text-[15px] text-mute underline">
               요건 미충족 {data.programs.unlikely.length}건 {showUnlikely ? "접기" : "보기"}
             </button>
             {showUnlikely && (
-              <ul className="mt-1.5 space-y-0.5 text-[13px] text-mute">
+              <ul className="mt-1.5 space-y-0.5 text-[15px] text-mute">
                 {data.programs.unlikely.map((u) => <li key={u.id}>· {u.name} — {u.reason}</li>)}
               </ul>
             )}
@@ -396,7 +396,7 @@ function Result({ data }: { data: ApiResponse }) {
 
       {/* AI */}
       <section className="rounded-3xl border border-line bg-card p-5 shadow-lift">
-        <h3 className="text-[16px] font-extrabold">🤖 AI 코치 한마디 <span className="text-[13px] font-normal text-mute">계산값만 인용해 설명</span></h3>
+        <h3 className="text-[18px] font-extrabold">🤖 AI 코치 한마디 <span className="text-[15px] font-normal text-mute">계산값만 인용해 설명</span></h3>
         {data.ai ? (
           <>
             <p className="mt-3 leading-relaxed">{data.ai.summary}</p>
@@ -404,7 +404,7 @@ function Result({ data }: { data: ApiResponse }) {
               {data.ai.priorities.map((p) => <li key={p}><span className={EM}>{p}</span></li>)}
             </ol>
             {data.ai.cautions.length > 0 && (
-              <ul className="mt-3 space-y-1 text-[13.5px] text-mute">
+              <ul className="mt-3 space-y-1 text-[15.5px] text-mute">
                 {data.ai.cautions.map((c) => <li key={c}>⚠️ {c}</li>)}
               </ul>
             )}
@@ -414,7 +414,7 @@ function Result({ data }: { data: ApiResponse }) {
         )}
       </section>
 
-      <footer className="text-[12.5px] text-mute">
+      <footer className="text-[14.5px] text-mute">
         {data.notes.map((x) => <p key={x}>· {x}</p>)}
         {r.references.map((x) => <p key={x.label}>· {x.label} (기준 {x.asOf})</p>)}
         <p className="mt-1.5">{data.disclaimer}</p>

@@ -69,17 +69,17 @@ export function Donut({
       {pieces
         .filter((p) => p.pct >= minLabelPct)
         .map((p) => (
-          <text key={p.label + "-l"} x={p.lx} y={p.ly} textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={700} fill={textColorOn(p.color)}>
+          <text key={p.label + "-l"} x={p.lx} y={p.ly} textAnchor="middle" dominantBaseline="central" fontSize={14} fontWeight={700} fill={textColorOn(p.color)}>
             {p.pct}%
           </text>
         ))}
       {centerTitle && (
-        <text x={cx} y={cy - 10} textAnchor="middle" fontSize={11.5} fill="#6b6b6b">
+        <text x={cx} y={cy - 12} textAnchor="middle" fontSize={13} fill="#6b6b6b">
           {centerTitle}
         </text>
       )}
       {centerValue && (
-        <text x={cx} y={cy + 10} textAnchor="middle" fontSize={14} fontWeight={700} fill="#1d1d1f">
+        <text x={cx} y={cy + 12} textAnchor="middle" fontSize={17} fontWeight={700} fill="#1d1d1f">
           {centerValue}
         </text>
       )}
