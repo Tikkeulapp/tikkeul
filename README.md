@@ -29,6 +29,19 @@ npm run build && npm run start # http://localhost:3000
 
 ---
 
+## 함께 개발하는 방식 — 브랜치 · 프리뷰 · 머지
+
+- **`main` = 배포판** (https://tikle.vercel.app). `main`에 푸시되면 Vercel이 자동 배포합니다. 빌드가 깨지는 커밋을 `main`에 직접 올리지 않습니다.
+- **작업은 브랜치에서**: `feat/<기능>` (예: `feat/chatbot`, `feat/simulation-db`), 문서는 `docs/<주제>`.
+- **브랜치를 푸시하면 Vercel이 프리뷰 URL을 자동 생성**합니다. 확인 방법 두 가지:
+  1. GitHub에서 PR을 열면 Vercel 봇이 댓글로 프리뷰 링크를 달아줍니다 (권장).
+  2. Vercel 대시보드 → 프로젝트 → Deployments 탭에서 브랜치 이름으로 찾기. 브랜치 고정 URL은 `tikle-git-<브랜치명>-<팀>.vercel.app` 형태입니다.
+- 프리뷰가 뜨려면 Vercel 환경변수(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GROQ_API_KEY, GROQ_MODEL, ONTONG_YOUTH_API_KEY, DATA_GO_KR_API_KEY) 각각에 **Preview 환경이 체크**되어 있어야 합니다. Production만 체크되어 있으면 프리뷰의 API가 전부 500(빈 응답)을 냅니다. 바꾼 뒤엔 해당 브랜치를 Redeploy.
+- 프리뷰는 **프로덕션과 같은 Supabase·Groq 환경변수**를 씁니다. 즉 같은 DB를 읽고 씁니다. 스키마를 바꾸는 실험은 먼저 `supabase/schema.sql`에 SQL을 적고 팀에 공유한 뒤 실행합니다.
+- 머지는 **PR → 프리뷰에서 동작 확인 → `main`에 머지**. 충돌이 나면 `git rebase origin/main` 후 다시 푸시.
+- 로컬 실행: `npm run build && npm run start` (이 서버는 `next dev`가 파일 감시 한도로 죽습니다. 다른 환경에선 `npm run dev`도 됩니다).
+- 챗봇(팀원) 코드가 Python이면 Vercel 프리뷰에 포함되지 않습니다. TS로 이식하거나, 별도 서버 URL을 `CHATBOT_API_URL` 환경변수로 연결하는 방식 중 하나를 정해야 합니다 (미결).
+
 ## 지금 뭐가 되고, 뭐가 안 되나 (2026-09-04)
 
 | 기능 | 상태 | 코드 |
