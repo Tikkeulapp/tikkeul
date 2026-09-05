@@ -13,6 +13,9 @@ type ApiResponse = {
   spending: SpendingProfile;
   profile: { age: number | null; housing: string | null; source: string; region: string | null };
   programs: { likely: JudgedProgram[]; needsCheck: JudgedProgram[]; unlikely: { id: string; name: string; reason: string }[] };
+  dbPolicies: { policy_id: string; source: string; title: string; provider: string | null; region: string; theme: string | null; end_date: string | null; always_open: boolean; apply_url: string | null; score: number; reason: string; benefit_summary: string; goal_tags: string[] }[];
+  dbCandidates: number;
+  dbError: string | null;
   ai: { summary: string; priorities: string[]; cautions: string[] } | null;
   aiError: string | null;
   notes: string[];
@@ -50,6 +53,7 @@ const STATUS_BADGE: Record<string, { text: string; cls: string }> = {
   LIKELY: { text: "가능성 높음", cls: "bg-[#2fbf5f] text-white" },
   NEEDS_CHECK: { text: "확인 필요", cls: "bg-[#f6e05e] text-ink" },
 };
+const SOURCE_LABEL: Record<string, string> = { ontong: "온통청년", gov24: "행안부 공공서비스", curated: "큐레이션" };
 const GOAL_META: Record<GoalType, { emoji: string; label: string; hint: string }> = {
   LUMP_SUM: { emoji: "💰", label: "목돈 모으기", hint: "금액을 정해 모으기" },
   HOUSE: { emoji: "🏠", label: "내집마련", hint: "권역별 참고 주택가격 기준" },
@@ -362,9 +366,39 @@ function Result({ data }: { data: ApiResponse }) {
         </ul>
       )}
 
+      {/* 정책 DB에서 선별한 실제 정책 */}
+      <section className="rounded-3xl border border-line bg-card p-6 text-[16px] shadow-lift">
+        <h3 className="text-[18px] font-extrabold">
+          취업 후 받을 수 있는 정책 <span className="text-[15px] font-normal text-mute">정책 DB(온통청년·행안부 공공 API 수집분) 후보 {data.dbCandidates}건에서 AI가 선별</span>
+        </h3>
+        <p className="mt-1 text-[14px] text-mute">공공 API에 등록된 실제 정책입니다. 소득·거주 요건은 AI 1차 판단이므로 신청 전 공식 페이지에서 확인하세요.</p>
+        {data.dbPolicies.length ? (
+          <ul className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+            {data.dbPolicies.map((p) => (
+              <li key={p.policy_id} className="rounded-2xl border border-line p-4">
+                <div className="flex flex-wrap items-center gap-2 text-[13.5px] text-mute">
+                  <span className="rounded-full bg-mint px-2 py-0.5 font-bold text-leaf-deep">{SOURCE_LABEL[p.source] ?? p.source}</span>
+                  <span>{p.region}</span>
+                  {p.theme && <span>· {p.theme}</span>}
+                  <span className={`ml-auto ${EM}`}>관련도 {p.score}점</span>
+                </div>
+                <p className="mt-1.5 font-bold leading-snug">{p.title}</p>
+                {p.provider && <p className="text-[13.5px] text-mute">{p.provider}</p>}
+                <p className="mt-1.5 text-[15px]">{p.reason}</p>
+                <p className={`mt-1 text-[15px] ${EM}`}>🎁 {p.benefit_summary}</p>
+                <p className="mt-1 text-[13.5px] text-mute">{p.always_open ? "상시 신청" : p.end_date ? `마감 ${p.end_date}` : "기간 확인 필요"}</p>
+                {p.apply_url && <a href={p.apply_url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-[14px] underline">공식 페이지 ↗</a>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-mute">{data.dbError ? `정책 DB 선별에 실패했습니다 (${data.dbError}).` : "조건에 맞는 취업 후 정책을 정책 DB에서 찾지 못했습니다."} 아래 금융상품·세제 큐레이션은 그대로 유효합니다.</p>
+        )}
+      </section>
+
       {/* 제도 */}
       <section className="rounded-3xl border border-line bg-card p-5 shadow-lift">
-        <h3 className="text-[18px] font-extrabold">취업하면 열리는 제도 <span className="text-[15px] font-normal text-mute">규칙 판정 · {data.programs.likely.length + data.programs.needsCheck.length}건</span></h3>
+        <h3 className="text-[18px] font-extrabold">금융상품·세제 혜택 <span className="text-[15px] font-normal text-mute">기관 공고 요약 큐레이션 14종 중 규칙 판정 · {data.programs.likely.length + data.programs.needsCheck.length}건</span></h3>
         <ul className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {[...data.programs.likely, ...data.programs.needsCheck].map((p) => (
             <li key={p.id} className="rounded-2xl bg-mint-soft p-4">

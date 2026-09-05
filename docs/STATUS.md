@@ -28,7 +28,7 @@
 | `finance` | 9 | 정책 판정용 금융 피처 (페르소나=derive 계산 / 직접입력=입력값) | seed / signup |
 | `users` | 16 | demo 10 + member 6 | `/api/session` `/api/signup` |
 | `user_calendar` | 6 | 일정 (시드 + 직접 입력) | `/api/session` seed, `/api/events` |
-| `policies` | **3,344** | 온통청년 2,750 + gov24(취준 필터) 592 + curated 2 | `scripts/load_*.mts` |
+| `policies` | **4,475** | 온통청년 2,750 + gov24(취준 592 + 취업 후·재직자·자산형성·주거 1,124) + curated 9 | `scripts/load_*.mts`, `collect_gov24.py <out> employed` |
 | (없음) `user_policy_matches` | — | 마이티끌·매칭 결과 저장용 — **미생성** | |
 | (없음) `policy_sources` `policy_discovery_queue` | — | 다중출처·웹발견 큐 — **설계만** | |
 
@@ -48,7 +48,7 @@ policies 주요 컬럼: `source, title, provider, theme, region_sidos[], is_nati
 | **일정 → AI 정책 매칭** (의미추출 → 지역우선 SQL 후보 → LLM 선별) | ✅ | "대전 이사"→대전 월세지원, "자소서 준비"→AI 거점 검증 |
 | 정책 자세히보기 모달 + **AI 자격 판정** | ✅ | 추천/마이티끌의 데모 정책 대상 |
 | 마이티끌 담기/빼기 → 원 위젯 합산 | ✅ | localStorage |
-| **취업 후 시뮬레이션** (`/app/simulate` 전용 페이지, 기업구분·연봉·**목적 복수 선택** → 실수령·한 달 흐름/소비 도넛 차트·목표별 순차 도달 시점 3 시나리오·열리는 제도 14종·AI 해설) | ✅ | `/api/simulate`, `simulate.ts` 결정론 계산, 카드 승인·대출 mock 시드. 문서(기능명세서)는 제출 직전 일괄 갱신 예정 |
+| **취업 후 시뮬레이션** (`/app/simulate` 전용 페이지, 기업구분·연봉·**목적 복수 선택** → 실수령·한 달 흐름/소비 도넛 차트·목표별 순차 도달 시점 3 시나리오·**정책 DB에서 AI가 선별한 실제 취업 후 정책** + 금융상품·세제 큐레이션 14종·AI 해설) | ✅ | `/api/simulate`, `simulate.ts` 결정론 계산, 카드 승인·대출 mock 시드. 문서(기능명세서)는 제출 직전 일괄 갱신 예정 |
 
 ### 자리만 있음
 | 기능 | 상태 |
