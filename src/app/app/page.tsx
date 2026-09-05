@@ -6,6 +6,7 @@ import { getPersona, type Persona } from "@/data/personas";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
+import { SimulateModal } from "@/components/app/SimulateModal";
 
 type CalendarEvent = {
   event_id: string;
@@ -100,6 +101,7 @@ export default function AppPage() {
 
   // 정책 상세 모달 + AI 판정
   const [detail, setDetail] = useState<Rec | null>(null);
+  const [simOpen, setSimOpen] = useState(false);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [judging, setJudging] = useState(false);
   const [judgeError, setJudgeError] = useState<string | null>(null);
@@ -603,11 +605,21 @@ export default function AppPage() {
                 <p className="mt-0.5 text-[10px] opacity-75">마이티끌 기준</p>
               </div>
             </div>
+            <button
+              onClick={() => setSimOpen(true)}
+              className="w-full max-w-[170px] rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
+            >
+              <p className="text-[11px] font-bold text-mute">취업 후엔?</p>
+              <p className="mt-0.5 text-[13px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>
+              <p className="mt-1 text-[10.5px] text-mute">연봉·목표 → 자산 배분·열리는 제도</p>
+            </button>
           </aside>
         </div>
       </div>
 
       {/* ── 정책 상세 모달 ─────────────────────── */}
+      {simOpen && session && <SimulateModal session={session} onClose={() => setSimOpen(false)} />}
+
       {detail && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setDetail(null)}>
           <div
