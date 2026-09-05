@@ -32,9 +32,9 @@ type Delta = {
 type Cand = {
   policy_id: string; title: string; provider: string | null; theme: string | null;
   region_sidos: string[] | null; is_national: boolean; age_min: number | null; age_max: number | null;
-  apply_url: string | null; search_text: string | null;
+  apply_url: string | null; search_text: string | null; end_date?: string | null; always_open?: boolean | null;
 };
-const COLS = "policy_id, title, provider, theme, region_sidos, is_national, age_min, age_max, apply_url, search_text";
+const COLS = "policy_id, title, provider, theme, region_sidos, is_national, age_min, age_max, apply_url, search_text, end_date, always_open";
 
 const EXTRACT_SYSTEM = `당신은 한국 취업준비생의 캘린더 일정 텍스트를 분석합니다.
 일정에서 다음을 추출해 JSON 하나만 출력하세요:
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     }));
     const shape = (c: Cand) => ({
       policy_id: c.policy_id, title: c.title, provider: c.provider,
-      region: c.is_national ? "전국" : (c.region_sidos ?? []).join(", "), apply_url: c.apply_url,
+      region: c.is_national ? "전국" : (c.region_sidos ?? []).join(", "), apply_url: c.apply_url, end_date: c.end_date ?? null, always_open: !!c.always_open,
     });
 
     // ── 3) LLM 선별 (일정에 직접 붙는 혜택) ──

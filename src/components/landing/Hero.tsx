@@ -36,7 +36,7 @@ export function Hero() {
         </div>
 
         <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-semibold text-mute">
-          <span>✓ 공식 정부 데이터 기반</span>
+          <span>✓ 공식 정부 데이터 4,475건</span>
           <span>✓ 절약액은 계산 코드로</span>
           <span>✓ 모르면 추측하지 않음</span>
         </div>

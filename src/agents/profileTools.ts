@@ -9,6 +9,9 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase";
+import { PERSONAS } from "@/data/personas";
+
+const isPersonaId = (id: string) => PERSONAS.some((p) => p.id === id);
 
 const TRACKED_FIELDS = new Set(["region_sido", "education_status", "employment_status"]);
 
@@ -50,6 +53,26 @@ export function buildProfileTools(userId: string, profileId: string) {
       if (Object.keys(cleaned).length === 0) return JSON.stringify({ updated: {} });
 
       const db = supabaseAdmin();
+      // 페르소나(minji/junho/seoyeon)는 데모 공용 행이므로 절대 수정하지 않는다.
+      // 대신 이 사용자에게만 적용되는 profile_changes 이력으로 남긴다 (resolveProfile이 반영).
+      if (isPersonaId(profileId)) {
+        const today = new Date().toISOString().slice(0, 10);
+        const recorded: string[] = [];
+        for (const [field, newValue] of Object.entries(cleaned)) {
+          if (!TRACKED_FIELDS.has(field)) continue;
+          await db.from("profile_changes").insert({
+            user_id: userId, field, old_value: null, new_value: String(newValue),
+            effective_from: today, source_event: "chat:profile_agent", status: "applied",
+          });
+          recorded.push(field);
+        }
+        return JSON.stringify({
+          updated: {},
+          persona_locked: true,
+          recorded_as_profile_change: recorded,
+          note: "데모 페르소나의 기본 정보는 고정되어 있어 직접 수정하지 않았습니다. 거주지·학력·취업상태 변경은 이 사용자에게만 적용되는 변경 이력으로 기록했습니다.",
+        });
+      }
       const { error } = await db.from("profile_survey").update(cleaned).eq("id", profileId);
       if (error) return JSON.stringify({ error: error.message });
 

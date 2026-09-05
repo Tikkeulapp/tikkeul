@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getPersona, type Persona } from "@/data/personas";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
+import { examFeeFor } from "@/data/exam_fees";
 
 type CalendarEvent = {
   event_id: string;
@@ -24,11 +25,21 @@ type Rec = {
   benefit: string;
   amountMaxKrw: number; // 절약액 계산 불가 유형은 0
   region: string;
-  target: string; // 지원대상 요약
-  content: string; // 지원내용 요약
-  method: string; // 신청방법
-  url: string; // 공식 링크
+  target?: string; // 지원대상 요약
+  content?: string; // 지원내용 요약
+  method?: string; // 신청방법
+  url: string | null; // 공식 링크
+  /** demo = 페르소나별 데모 추천, db = 정책 DB에서 담은 실제 정책 */
+  source?: "demo" | "db";
+  provider?: string | null;
+  endDate?: string | null;
+  alwaysOpen?: boolean;
 };
+
+/** 마이티끌에 담을 때 함께 기억하는 맥락 (연결 일정·시험비·혜택 요약) — 브라우저 저장 */
+type SavedMeta = { linkedEvent?: { title: string; date: string }; examName?: string; examFeeKrw?: number | null; amountKrw?: number; benefit?: string };
+type DbPolicyRow = { policy_id: string; source: string; title: string; provider: string | null; theme: string | null; region_sidos: string[] | null; is_national: boolean | null; end_date: string | null; always_open: boolean | null; apply_url: string | null; income_condition: string | null; search_text: string | null };
+const fmtMD = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 type Verdict = {
   score: number;
@@ -47,24 +58,24 @@ const ELIG_LABEL: Record<Verdict["eligibility"], { text: string; cls: string }> 
 /** 데모용 추천 정책 — AI 매칭 엔진이 붙기 전까지의 자리 (페르소나별 기대 매칭과 동일) */
 const RECS: Record<string, Rec[]> = {
   minji: [
-    { id: "jungnang-exam", title: "중랑구 미취업청년 자격증 응시료 지원", benefit: "응시료 최대 10만 원", amountMaxKrw: 100000, region: "서울 중랑구", target: "중랑구 거주 미취업 청년 (만 19~39세)", content: "어학·자격증 시험 응시료를 연 최대 10만 원까지 실비 지원. 예산 소진 시 조기 마감될 수 있음", method: "중랑구청 홈페이지 온라인 신청 + 응시확인 증빙 제출", url: "https://www.jungnang.go.kr" },
-    { id: "seoul-allowance", title: "서울 청년수당", benefit: "월 50만 원 × 최대 6개월", amountMaxKrw: 500000, region: "서울", target: "서울 거주 만 19~34세 졸업 후 미취업 청년, 중위소득 150% 이하", content: "구직활동 지원금 월 50만 원을 최대 6개월 지급 (클린카드)", method: "청년몽땅정보통에서 모집 기간 내 온라인 신청", url: "https://youth.seoul.go.kr" },
-    { id: "seoul-suit", title: "취업날개 면접정장 무료대여", benefit: "회당 정장 대여 무료", amountMaxKrw: 40000, region: "서울", target: "서울 거주 만 18~39세 구직 청년", content: "면접용 정장·구두·넥타이 등 무료 대여 (연 10회)", method: "온라인 예약 후 대여점 방문", url: "https://job.seoul.go.kr" },
+    { id: "jungnang-exam", title: "중랑구 미취업청년 자격증 응시료 지원", benefit: "응시료 최대 10만 원", amountMaxKrw: 100000, region: "서울 중랑구", target: "중랑구 거주 미취업 청년 (만 19~39세)", content: "어학·자격증 시험 응시료를 연 최대 10만 원까지 실비 지원. 예산 소진 시 조기 마감될 수 있음", method: "중랑구청 홈페이지 온라인 신청 + 응시확인 증빙 제출", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/306000000224" },
+    { id: "seoul-allowance", title: "서울 청년수당", benefit: "월 50만 원 × 최대 6개월", amountMaxKrw: 500000, region: "서울", target: "서울 거주 만 19~34세 졸업 후 미취업 청년, 중위소득 150% 이하", content: "구직활동 지원금 월 50만 원을 최대 6개월 지급 (클린카드)", method: "청년몽땅정보통에서 모집 기간 내 온라인 신청", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/611000000126" },
+    { id: "seoul-suit", title: "취업날개 면접정장 무료대여", benefit: "회당 정장 대여 무료", amountMaxKrw: 40000, region: "서울", target: "서울 거주 만 18~39세 구직 청년", content: "면접용 정장·구두·넥타이 등 무료 대여 (연 10회)", method: "온라인 예약 후 대여점 방문", url: "https://youth.seoul.go.kr/content.do?key=2310100015" },
   ],
   junho: [
-    { id: "gg-interview", title: "경기도 청년 면접수당", benefit: "면접 회당 5만 원", amountMaxKrw: 50000, region: "경기", target: "경기도 거주 만 18~39세 구직 청년", content: "면접 참여 시 회당 5만 원, 연 최대 50만 원 지역화폐 지급", method: "잡아바 온라인 신청 + 면접확인서 제출", url: "https://www.jobaba.net" },
-    { id: "kua-allowance", title: "국민취업지원제도 구직촉진수당", benefit: "월 50만 원+ × 6개월", amountMaxKrw: 500000, region: "전국", target: "15~69세 구직자 중 중위소득 60% 이하 + 가구 재산 요건 (청년은 특례 완화)", content: "구직촉진수당 월 50만 원(부양가족 가산 시 최대 90만) × 6개월 + 취업지원 서비스", method: "고용24 온라인 신청 또는 고용센터 방문", url: "https://www.work24.go.kr" },
-    { id: "wide-jobhunt", title: "광역 구직활동비", benefit: "장거리 면접 교통·숙박", amountMaxKrw: 70000, region: "전국", target: "거주지에서 25km 이상 떨어진 면접 참여 구직급여 수급자 등", content: "장거리 면접 시 교통비·숙박비 실비 지원", method: "고용센터 신청 + 면접확인서 제출", url: "https://www.work24.go.kr" },
+    { id: "gg-interview", title: "경기도 청년 면접수당", benefit: "면접 회당 5만 원", amountMaxKrw: 50000, region: "경기", target: "경기도 거주 만 18~39세 구직 청년", content: "면접 참여 시 회당 5만 원, 연 최대 50만 원 지역화폐 지급", method: "잡아바 온라인 신청 + 면접확인서 제출", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/641000000193" },
+    { id: "kua-allowance", title: "국민취업지원제도 구직촉진수당", benefit: "월 50만 원+ × 6개월", amountMaxKrw: 500000, region: "전국", target: "15~69세 구직자 중 중위소득 60% 이하 + 가구 재산 요건 (청년은 특례 완화)", content: "구직촉진수당 월 50만 원(부양가족 가산 시 최대 90만) × 6개월 + 취업지원 서비스", method: "고용24 온라인 신청 또는 고용센터 방문", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200005007" },
+    { id: "wide-jobhunt", title: "광역 구직활동비", benefit: "장거리 면접 교통·숙박", amountMaxKrw: 70000, region: "전국", target: "거주지에서 25km 이상 떨어진 면접 참여 구직급여 수급자 등", content: "장거리 면접 시 교통비·숙박비 실비 지원", method: "고용센터 신청 + 면접확인서 제출", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200005002" },
   ],
   seoyeon: [
-    { id: "nbcard", title: "국민내일배움카드 + 훈련장려금", benefit: "훈련비 지원 + 월 장려금", amountMaxKrw: 116000, region: "전국", target: "구직자·재직자 대부분 발급 가능 (실업 상태는 구직등록 필요)", content: "5년간 300~500만 원 훈련비 + 출석 요건 충족 시 월 훈련장려금", method: "고용24(HRD-Net)에서 카드 발급 후 훈련과정 수강신청", url: "https://www.work24.go.kr" },
+    { id: "nbcard", title: "국민내일배움카드 + 훈련장려금", benefit: "훈련비 지원 + 월 장려금", amountMaxKrw: 116000, region: "전국", target: "구직자·재직자 대부분 발급 가능 (실업 상태는 구직등록 필요)", content: "5년간 300~500만 원 훈련비 + 출석 요건 충족 시 월 훈련장려금", method: "고용24(HRD-Net)에서 카드 발급 후 훈련과정 수강신청", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200000026" },
     { id: "youth-rent", title: "청년월세 특별지원", benefit: "월세 월 20만 원 × 12개월", amountMaxKrw: 200000, region: "전국", target: "만 19~34세 무주택 1인 가구, 본인·원가구 소득 및 보증금·월세 상한 요건", content: "월 최대 20만 원 월세를 12개월 지원", method: "복지로 온라인 신청 또는 주민센터", url: "https://www.bokjiro.go.kr" },
-    { id: "kua-link", title: "국민취업지원제도 (수급 종료 후 연계)", benefit: "구직급여 종료 대비", amountMaxKrw: 500000, region: "전국", target: "구직급여 수급 종료 후 미취업 상태인 구직자 (수급 중에는 중복 불가)", content: "수급 종료 후 국취제 연계로 구직촉진수당·취업지원 서비스 연결", method: "구직급여 종료 시점에 맞춰 고용24에서 신청", url: "https://www.work24.go.kr" },
+    { id: "kua-link", title: "국민취업지원제도 (수급 종료 후 연계)", benefit: "구직급여 종료 대비", amountMaxKrw: 500000, region: "전국", target: "구직급여 수급 종료 후 미취업 상태인 구직자 (수급 중에는 중복 불가)", content: "수급 종료 후 국취제 연계로 구직촉진수당·취업지원 서비스 연결", method: "구직급여 종료 시점에 맞춰 고용24에서 신청", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200005007" },
   ],
   _default: [
-    { id: "kua", title: "국민취업지원제도", benefit: "구직촉진수당 + 취업지원", amountMaxKrw: 500000, region: "전국", target: "15~69세 구직자, 소득·재산 요건 (청년 특례 완화)", content: "구직촉진수당 월 50만 원 × 6개월 + 맞춤 취업지원", method: "고용24 온라인 신청 또는 고용센터 방문", url: "https://www.work24.go.kr" },
-    { id: "nbcard", title: "국민내일배움카드", benefit: "훈련비 최대 지원", amountMaxKrw: 300000, region: "전국", target: "구직자·재직자 대부분 발급 가능 (실업 상태는 구직등록 필요)", content: "5년간 300~500만 원 훈련비 지원", method: "고용24(HRD-Net)에서 카드 발급 후 수강신청", url: "https://www.work24.go.kr" },
-    { id: "sunshine", title: "햇살론유스", benefit: "저금리 생활자금", amountMaxKrw: 0, region: "전국", target: "만 19~34세, 연소득 3,500만 원 이하 (무소득 취준생 가능)", content: "생활·학업 자금 저금리 보증부 대출 (한도 1,200만 원)", method: "서민금융진흥원 앱 보증 신청 후 은행 대출", url: "https://www.kinfa.or.kr" },
+    { id: "kua", title: "국민취업지원제도", benefit: "구직촉진수당 + 취업지원", amountMaxKrw: 500000, region: "전국", target: "15~69세 구직자, 소득·재산 요건 (청년 특례 완화)", content: "구직촉진수당 월 50만 원 × 6개월 + 맞춤 취업지원", method: "고용24 온라인 신청 또는 고용센터 방문", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200005007" },
+    { id: "nbcard", title: "국민내일배움카드", benefit: "훈련비 최대 지원", amountMaxKrw: 300000, region: "전국", target: "구직자·재직자 대부분 발급 가능 (실업 상태는 구직등록 필요)", content: "5년간 300~500만 원 훈련비 지원", method: "고용24(HRD-Net)에서 카드 발급 후 수강신청", url: "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200000026" },
+    { id: "sunshine", title: "햇살론유스", benefit: "저금리 생활자금", amountMaxKrw: 0, region: "전국", target: "만 19~34세, 연소득 3,500만 원 이하 (무소득 취준생 가능)", content: "생활·학업 자금 저금리 보증부 대출 (한도 1,200만 원)", method: "서민금융진흥원 앱 보증 신청 후 은행 대출", url: "https://www.kinfa.or.kr/financialProduct/hessalLoanYoos.do" },
   ],
 };
 
@@ -99,6 +110,9 @@ export default function AppPage() {
   // 사이드바: 아코디언 (하나만 열림)
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [dbRecs, setDbRecs] = useState<Record<string, Rec>>({}); // 정책 DB에서 담은 항목의 기본정보
+  const [savedMeta, setSavedMeta] = useState<Record<string, SavedMeta>>({});
+  const fetchedRef = useRef<Set<string>>(new Set());
 
   // 정책 상세 모달 + AI 판정
   const [detail, setDetail] = useState<Rec | null>(null);
@@ -124,7 +138,7 @@ export default function AppPage() {
   const [matching, setMatching] = useState(false);
   const [matchFor, setMatchFor] = useState<string | null>(null);
   const [matchRecs, setMatchRecs] = useState<
-    { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null }[] | null
+    { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean }[] | null
   >(null);
 
   const recs = useMemo(
@@ -161,6 +175,7 @@ export default function AppPage() {
           if (s.userId) {
             setSession(s);
             setPersona(s.personaId ? (getPersona(s.personaId) ?? null) : null);
+            try { const m = localStorage.getItem(`tikkeul.mymeta.${s.userId}`); if (m) setSavedMeta(JSON.parse(m)); } catch { /* 없음 */ }
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             try {
               const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(s.userId)}`).then((r) => r.json());
@@ -190,9 +205,63 @@ export default function AppPage() {
   const addToMy = (id: string) => setSaved(id, "save");
   const removeFromMy = (id: string) => setSaved(id, "remove");
 
-  const savedRecs = recs.filter((r) => savedIds.includes(r.id));
+  const recFromRow = (p: DbPolicyRow): Rec => ({
+    id: p.policy_id, title: p.title, benefit: [p.theme, p.provider].filter(Boolean).join(" · "), amountMaxKrw: 0,
+    region: p.is_national ? "전국" : (p.region_sidos ?? []).join(", "), provider: p.provider, content: p.search_text ?? undefined,
+    url: p.apply_url, source: "db", endDate: p.end_date, alwaysOpen: !!p.always_open,
+  });
+  // 마이티끌에 담긴 DB 정책(데모 추천 목록에 없는 id)의 기본정보를 불러온다
+  useEffect(() => {
+    const missing = savedIds.filter((id) => !recs.some((r) => r.id === id) && !dbRecs[id] && !fetchedRef.current.has(id));
+    if (!missing.length) return;
+    missing.forEach((id) => fetchedRef.current.add(id));
+    fetch(`/api/policies?ids=${encodeURIComponent(missing.join(","))}`)
+      .then((r) => r.json())
+      .then((json) => {
+        const rows = (json.policies ?? []) as DbPolicyRow[];
+        setDbRecs((prev) => { const next = { ...prev }; for (const p of rows) next[p.policy_id] = recFromRow(p); return next; });
+      })
+      .catch(() => {});
+  }, [savedIds, recs, dbRecs]);
+
+  const persistMeta = (userId: string, next: Record<string, SavedMeta>) => { try { localStorage.setItem(`tikkeul.mymeta.${userId}`, JSON.stringify(next)); } catch { /* 무시 */ } };
+  const savedRecs: Rec[] = savedIds.map((id) => recs.find((r) => r.id === id) ?? dbRecs[id]).filter((r): r is Rec => !!r);
   const unsavedRecs = recs.filter((r) => !savedIds.includes(r.id));
-  const monthlySaving = savedRecs.reduce((s, r) => s + r.amountMaxKrw, 0);
+  const amountOf = (r: Rec) => (r.source === "db" ? savedMeta[r.id]?.amountKrw ?? 0 : r.amountMaxKrw);
+  const monthlySaving = savedRecs.reduce((s, r) => s + amountOf(r), 0);
+
+  // 담은 정책의 마감일 → 달력 표시 + 3일 이내 임박 알림
+  const daysUntil = (d: string) => Math.round((new Date(d + "T00:00:00").getTime() - new Date(TODAY + "T00:00:00").getTime()) / 86400000);
+  const deadlinesByDate = new Map<string, Rec[]>();
+  for (const r of savedRecs) if (r.endDate) deadlinesByDate.set(r.endDate, [...(deadlinesByDate.get(r.endDate) ?? []), r]);
+  const urgent = savedRecs
+    .filter((r) => r.endDate && daysUntil(r.endDate) >= 0 && daysUntil(r.endDate) <= 3)
+    .sort((a, b) => (a.endDate! < b.endDate! ? -1 : 1));
+
+  /** 일정 매칭 카드에서 마이티끌로 담기 — 연결 일정·시험비(참고)·혜택 요약을 함께 기억 */
+  const saveFromMatch = (r: NonNullable<typeof matchRecs>[number]) => {
+    if (!session) return;
+    const fee = examFeeFor(matchFor);
+    const examSupport = /응시료|시험|자격증|어학|검정/.test(`${r.title} ${r.benefit_summary}`);
+    const amountKrw = fee && examSupport ? fee.feeKrw : 0;
+    const rec: Rec = { id: r.policy_id, title: r.title, benefit: r.benefit_summary, amountMaxKrw: amountKrw, region: r.region, provider: r.provider, content: r.reason, url: r.apply_url, source: "db", endDate: r.end_date ?? null, alwaysOpen: !!r.always_open };
+    setDbRecs((prev) => ({ ...prev, [r.policy_id]: rec }));
+    setSavedMeta((prev) => {
+      const next = { ...prev, [r.policy_id]: { linkedEvent: matchFor ? { title: matchFor, date } : undefined, examName: fee?.name, examFeeKrw: fee?.feeKrw ?? null, amountKrw, benefit: r.benefit_summary } };
+      persistMeta(session.userId, next);
+      return next;
+    });
+    setSaved(r.policy_id, "save");
+    setOpenTab("my");
+  };
+
+  const deleteEvent = async (ev: CalendarEvent) => {
+    if (!session) return;
+    if (!window.confirm(`'${ev.title}' 일정을 삭제할까요?`)) return;
+    await fetch(`/api/events?eventId=${encodeURIComponent(ev.event_id)}&userId=${encodeURIComponent(session.userId)}`, { method: "DELETE" });
+    await loadEvents(session.userId);
+    if (matchFor === ev.title) { setMatchRecs(null); setMatchFor(null); setRegionChange(null); }
+  };
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -421,7 +490,18 @@ export default function AppPage() {
                   {savedRecs.map((r) => (
                     <div key={r.id} className="rounded-[12px] border border-line bg-mint-soft/60 p-3">
                       <p className="text-[15px] font-bold leading-snug">{r.title}</p>
-                      <p className="mt-0.5 text-[13.5px] text-mute">{r.benefit}</p>
+                      <p className="mt-0.5 text-[13.5px] text-mute">{savedMeta[r.id]?.benefit ?? r.benefit}{r.source === "db" && r.region ? ` · ${r.region}` : ""}</p>
+                      {savedMeta[r.id]?.linkedEvent && (
+                        <p className="mt-1 text-[13px] text-leaf-deep">
+                          📅 {savedMeta[r.id]!.linkedEvent!.title} · {fmtMD(savedMeta[r.id]!.linkedEvent!.date)}
+                          {savedMeta[r.id]?.examFeeKrw ? ` · ${savedMeta[r.id]!.examName} 응시료 ${savedMeta[r.id]!.examFeeKrw!.toLocaleString("ko-KR")}원(참고)` : ""}
+                        </p>
+                      )}
+                      {(r.endDate || r.alwaysOpen) && (
+                        <p className={`mt-0.5 text-[13px] ${r.endDate && daysUntil(r.endDate) <= 3 && daysUntil(r.endDate) >= 0 ? "font-bold text-[#b45309]" : "text-mute"}`}>
+                          {r.endDate ? `⏰ 마감 ${fmtMD(r.endDate)}${daysUntil(r.endDate) >= 0 ? ` · D-${daysUntil(r.endDate)}` : " · 마감됨"}` : "상시 신청"}
+                        </p>
+                      )}
                       <div className="mt-2 flex items-center justify-between">
                         <span className="rounded-full bg-mint px-2 py-0.5 text-[12.5px] font-bold text-leaf-deep">진행중</span>
                         <span className="flex gap-2">
@@ -481,6 +561,21 @@ export default function AppPage() {
               </div>
             </div>
 
+            {urgent.length > 0 && (
+              <div className="mt-3 rounded-[12px] border border-[#f6c453] bg-[#fff7e0] px-4 py-3">
+                <p className="text-[14.5px] font-bold text-[#b45309]">⏰ 마감 임박 — 3일 안에 신청이 닫히는 담은 정책 {urgent.length}건</p>
+                <ul className="mt-1 flex flex-col gap-0.5 text-[14px]">
+                  {urgent.map((r) => (
+                    <li key={r.id} className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{r.title}</span>
+                      <span className="text-[#b45309]">D-{daysUntil(r.endDate!)} ({fmtMD(r.endDate!)})</span>
+                      {r.url && <a href={r.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* 요일 헤더 */}
             <div className="mt-4 grid grid-cols-7 text-center text-[13px] font-bold text-mute">
               {["일", "월", "화", "수", "목", "금", "토"].map((d) => (
@@ -518,6 +613,9 @@ export default function AppPage() {
                       {(eventsByDate.get(cell)?.length ?? 0) > 2 && (
                         <span className="text-[11.5px] font-bold text-mute">+{(eventsByDate.get(cell)?.length ?? 0) - 2}</span>
                       )}
+                      {(deadlinesByDate.get(cell) ?? []).slice(0, 1).map((r) => (
+                        <span key={"dl-" + r.id} className="truncate rounded-[4px] bg-[#f6c453] px-1 py-0.5 text-[11.5px] font-semibold text-ink" title={`${r.title} 신청 마감`}>⏰ {r.title}</span>
+                      ))}
                     </div>
                   </button>
                 ),
@@ -537,6 +635,7 @@ export default function AppPage() {
                     <span className="ml-auto text-[12px] font-semibold text-mute">
                       {ev.source === "seed" ? "기본 일정" : "내가 적음"}
                     </span>
+                    <button onClick={() => deleteEvent(ev)} className="grid h-6 w-6 place-items-center rounded-full text-[14px] text-mute transition hover:bg-line hover:text-ink" aria-label="일정 삭제" title="일정 삭제">✕</button>
                   </div>
                 ))}
                 {(eventsByDate.get(date) ?? []).length === 0 && (
@@ -578,9 +677,17 @@ export default function AppPage() {
                       <p className="mt-0.5 text-[13px] text-mute">{r.provider} · {r.region} · 관련도 {r.score}점</p>
                       <p className="mt-1 text-[14px]">{r.reason}</p>
                       <p className="mt-0.5 text-[13.5px] font-bold text-leaf-deep">🎁 {r.benefit_summary}</p>
-                      {r.apply_url && (
-                        <a href={r.apply_url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>
-                      )}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {savedIds.includes(r.policy_id) ? (
+                          <span className="rounded-full bg-mint px-2.5 py-1 text-[12.5px] font-bold text-leaf-deep">✓ 마이티끌에 담김</span>
+                        ) : (
+                          <button onClick={() => saveFromMatch(r)} className="rounded-full bg-leaf px-3 py-1 text-[12.5px] font-bold text-white transition hover:bg-[#333333]">+ 마이티끌에 담기</button>
+                        )}
+                        {r.end_date ? <span className="text-[12.5px] text-mute">마감 {fmtMD(r.end_date)}</span> : r.always_open ? <span className="text-[12.5px] text-mute">상시</span> : null}
+                        {r.apply_url && (
+                          <a href={r.apply_url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -685,15 +792,15 @@ export default function AppPage() {
             <dl className="mt-4 flex flex-col gap-3 text-[15px]">
               <div>
                 <dt className="font-bold text-mute">지원대상</dt>
-                <dd className="mt-0.5">{detail.target}</dd>
+                <dd className="mt-0.5">{detail.target ?? (detail.source === "db" ? "정책 원문·공식 페이지 참고" : "-")}</dd>
               </div>
               <div>
                 <dt className="font-bold text-mute">지원내용</dt>
-                <dd className="mt-0.5">{detail.content}</dd>
+                <dd className="mt-0.5 whitespace-pre-line">{detail.content ?? "-"}</dd>
               </div>
               <div>
                 <dt className="font-bold text-mute">신청방법</dt>
-                <dd className="mt-0.5">{detail.method}</dd>
+                <dd className="mt-0.5">{detail.method ?? "공식 페이지에서 확인"}</dd>
               </div>
             </dl>
 
@@ -710,9 +817,11 @@ export default function AppPage() {
                   + 마이티끌에 담기
                 </button>
               )}
-              <a href={detail.url} target="_blank" rel="noreferrer" className="text-[14.5px] font-bold text-leaf-deep underline">
-                공식 페이지 ↗
-              </a>
+              {detail.url && (
+                <a href={detail.url} target="_blank" rel="noreferrer" className="text-[14.5px] font-bold text-leaf-deep underline">
+                  공식 페이지 ↗
+                </a>
+              )}
             </div>
 
             {judgeError && <p className="mt-3 rounded-[10px] bg-mint px-3 py-2 text-[14px] font-bold text-[#d33]">⚠ {judgeError}</p>}
