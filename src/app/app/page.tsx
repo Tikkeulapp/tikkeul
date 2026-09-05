@@ -110,6 +110,14 @@ export default function AppPage() {
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [calNotice, setCalNotice] = useState<string | null>(null);
+  // 거주지 변경(이사) 감지 결과 + 적용 상태
+  type DeltaItem = { policy_id: string; title: string; provider: string | null; region: string; apply_url: string | null; score?: number; reason: string };
+  type RegionChange = { field: string; from: string | null; to: string; effectiveFrom: string; opening: DeltaItem[]; closing: DeltaItem[]; openingTotal: number };
+  const [regionChange, setRegionChange] = useState<RegionChange | null>(null);
+  const [applyingChange, setApplyingChange] = useState(false);
+  const [appliedChange, setAppliedChange] = useState<string | null>(null); // "2026-09-25부터 대전광역시"
+  const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (기존 변경 이력)
+
   // 일정 → AI 정책 매칭 결과
   const [matching, setMatching] = useState(false);
   const [matchFor, setMatchFor] = useState<string | null>(null);
@@ -145,6 +153,11 @@ export default function AppPage() {
               if (ids.length > 0) setOpenTab("my");
             }
             await loadEvents(s.userId);
+            try {
+              const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(s.userId)}`).then((r) => r.json());
+              const last = (pc.changes ?? []).filter((c: { field: string }) => c.field === "region_sido").pop();
+              if (last) setProfileNote(`${last.effective_from.slice(5).replace("-", "/")}부터 ${last.new_value}`);
+            } catch { /* 이력 없음 */ }
           }
         }
       } catch {
@@ -207,6 +220,30 @@ export default function AppPage() {
     }
   };
 
+  const applyRegionChange = async (effectiveFrom: string) => {
+    if (!session || !regionChange || applyingChange) return;
+    setApplyingChange(true);
+    try {
+      const res = await fetch("/api/profile-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: session.userId, field: "region_sido", oldValue: regionChange.from,
+          newValue: regionChange.to, effectiveFrom, sourceEvent: matchFor,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "적용 실패");
+      const label = `${effectiveFrom.slice(5).replace("-", "/")}부터 ${regionChange.to}`;
+      setAppliedChange(label);
+      setProfileNote(label);
+    } catch (e) {
+      alert(`거주지 변경 적용 실패: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setApplyingChange(false);
+    }
+  };
+
   const search = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
@@ -244,15 +281,18 @@ export default function AppPage() {
     setMatching(true);
     setMatchFor(eventTitle);
     setMatchRecs(null);
+    setRegionChange(null);
+    setAppliedChange(null);
     try {
       const res = await fetch("/api/event-match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personaId: session?.personaId ?? null, profileId: session?.profileId ?? null, title: eventTitle, date }),
+        body: JSON.stringify({ userId: session?.userId ?? null, personaId: session?.personaId ?? null, profileId: session?.profileId ?? null, title: eventTitle, date }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "매칭 실패");
       setMatchRecs(json.recommendations ?? []);
+      if (json.regionChange) setRegionChange(json.regionChange);
     } catch {
       setMatchRecs([]);
     } finally {
@@ -283,6 +323,7 @@ export default function AppPage() {
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
         <span className="ml-auto text-[13px] text-mute">
+          {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[11px] font-bold text-white">🏠 {profileNote}</span>}
           {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
           <Link href="/app/start" className="underline">프로필 변경</Link>
         </span>
@@ -490,6 +531,57 @@ export default function AppPage() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* 거주지 변경 감지 → 프로필 변경 제안 + 델타 리포트 */}
+              {!matching && regionChange && (
+                <div className="mt-3 rounded-[14px] border-2 border-leaf-deep bg-card p-4">
+                  <p className="text-[13.5px] font-bold">
+                    🏠 거주지 변경 감지 — {regionChange.from ?? "미상"} → <span className="text-leaf-deep">{regionChange.to}</span>
+                  </p>
+                  <p className="mt-1 text-[12.5px] text-mute">
+                    이사하면 받을 수 있는 정책이 통째로 바뀌어요. 프로필 거주지를 바꿀까요? 이후 추천·매칭이 {regionChange.to} 기준으로 전환됩니다.
+                  </p>
+                  {appliedChange ? (
+                    <p className="mt-2 rounded-[10px] bg-[#2fbf5f] px-3 py-2 text-[12.5px] font-bold text-white">✓ 적용됨 — {appliedChange} 거주로 반영</p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => applyRegionChange(regionChange.effectiveFrom)} disabled={applyingChange}
+                        className="rounded-full bg-leaf px-4 py-2 text-[12.5px] font-bold text-white disabled:opacity-60">
+                        {regionChange.effectiveFrom.slice(5).replace("-", "/")}부터 적용
+                      </button>
+                      <button onClick={() => applyRegionChange(new Date().toISOString().slice(0, 10))} disabled={applyingChange}
+                        className="rounded-full border border-line px-4 py-2 text-[12.5px] font-bold disabled:opacity-60">
+                        지금부터 적용
+                      </button>
+                    </div>
+                  )}
+
+                  {regionChange.opening.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[12.5px] font-bold text-[#1f8f45]">🟢 {regionChange.to}로 가면 새로 열리는 혜택 ({regionChange.opening.length}건 · 지역 정책 {regionChange.openingTotal}건 중)</p>
+                      {regionChange.opening.map((o) => (
+                        <div key={o.policy_id} className="mt-1.5 rounded-[10px] bg-mint-soft/70 p-2.5">
+                          <p className="text-[13px] font-bold leading-snug">{o.title} <span className="text-[11px] font-semibold text-mute">· {o.provider} · {o.score}점</span></p>
+                          <p className="mt-0.5 text-[12px]">{o.reason}</p>
+                          {o.apply_url && <a href={o.apply_url} target="_blank" rel="noreferrer" className="text-[11.5px] font-bold underline">신청 페이지 ↗</a>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {regionChange.closing.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[12.5px] font-bold text-[#b23b3b]">🔴 {regionChange.from}을(를) 떠나면 사라지는 혜택 ({regionChange.closing.length}건)</p>
+                      {regionChange.closing.map((c) => (
+                        <div key={c.policy_id} className="mt-1.5 rounded-[10px] bg-[#fbeaea] p-2.5">
+                          <p className="text-[13px] font-bold leading-snug">{c.title} <span className="text-[11px] font-semibold text-mute">· {c.provider}</span></p>
+                          <p className="mt-0.5 text-[12px]">{c.reason}</p>
+                        </div>
+                      ))}
+                      <p className="mt-1.5 text-[11.5px] text-mute">💡 이사 전에 신청 가능한 것은 지금 챙겨두세요.</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

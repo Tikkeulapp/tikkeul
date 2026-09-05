@@ -117,3 +117,33 @@ create table if not exists users (
   created_at   timestamptz default now(),
   last_login_at timestamptz default now()
 );
+
+-- ── PROFILE_CHANGES: 프로필 상태 변화 이력 (이사·졸업·퇴사 등) ──
+create table if not exists profile_changes (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references users(user_id) on delete cascade,
+  field         text not null,            -- region_sido | education_status | employment_status
+  old_value     text,
+  new_value     text not null,
+  effective_from date not null,
+  source_event  text,
+  status        text not null default 'applied',  -- proposed | applied | reverted
+  created_at    timestamptz default now()
+);
+create index if not exists idx_profile_changes_user on profile_changes(user_id, field, effective_from);
+
+-- ── POLICY_DISCOVERY_QUEUE: 신규 정책 발견 큐 (검증 전 격리) ──
+create table if not exists policy_discovery_queue (
+  id            uuid primary key default gen_random_uuid(),
+  found_by      text not null,            -- api:ontong | api:gov24 | web:tavily | crawl:<site>
+  trigger_context text,
+  url           text,
+  title         text,
+  snippet       text,
+  extracted     jsonb,
+  candidate_policy_id text,
+  status        text not null default 'new',  -- new | approved | rejected | merged
+  created_at    timestamptz default now(),
+  reviewed_at   timestamptz
+);
+create unique index if not exists idx_discovery_url on policy_discovery_queue(url) where url is not null;
