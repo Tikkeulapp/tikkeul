@@ -134,12 +134,15 @@ export async function POST(request: Request) {
     let regionChange: object | null = null;
     if (extracted.event_type === "MOVE" && extracted.region_sido && extracted.region_sido !== userSido) {
       const newSido = extracted.region_sido;
-      const [{ data: openRows }, { data: closeRows }] = await Promise.all([
-        db.from("policies").select(COLS).contains("region_sidos", [newSido]).limit(40),
+      // 새 지역 후보: 취준 관련 키워드로 먼저 걸러 60건 (대규모 통합지역에서 농촌·문화 정책에 밀리지 않게)
+      const JOB_OR = "search_text.ilike.%취업%,search_text.ilike.%구직%,search_text.ilike.%면접%,search_text.ilike.%자격증%,search_text.ilike.%응시%,search_text.ilike.%수당%,search_text.ilike.%월세%,search_text.ilike.%주거%,search_text.ilike.%직업훈련%,search_text.ilike.%인턴%";
+      const [{ data: openRows }, { data: closeRows }, { count: openingTotal }] = await Promise.all([
+        db.from("policies").select(COLS).contains("region_sidos", [newSido]).or(JOB_OR).limit(60),
         userSido
           ? db.from("policies").select(COLS).contains("region_sidos", [userSido]).eq("is_national", false)
               .or("search_text.ilike.%취업%,search_text.ilike.%구직%,search_text.ilike.%면접%,search_text.ilike.%수당%,search_text.ilike.%응시%").limit(30)
           : Promise.resolve({ data: [] as Cand[] }),
+        db.from("policies").select("*", { count: "exact", head: true }).contains("region_sidos", [newSido]),
       ]);
       const open = (openRows ?? []) as Cand[];
       const close = (closeRows ?? []) as Cand[];
@@ -162,7 +165,7 @@ export async function POST(request: Request) {
           .map((o) => ({ ...shape(openById.get(o.policy_id)!), score: o.score, reason: o.reason })),
         closing: (delta.closing ?? []).filter((c) => closeById.has(c.policy_id)).slice(0, 4)
           .map((c) => ({ ...shape(closeById.get(c.policy_id)!), reason: c.reason })),
-        openingTotal: open.length,
+        openingTotal: openingTotal ?? open.length,
       };
     }
 
