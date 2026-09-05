@@ -13,7 +13,7 @@
 | 7 | policies에 **신뢰도·출처·생명주기 컬럼 없음** (verification_status, source_url, last_seen_at) — 다중 소스·웹발견 편입 불가 구조 | 🟡 | DB |
 | 8 | eligibility_json(구조화 자격조건) 미생성 — 현재 LLM이 search_text 원문으로 판정 | 🟡 | 정밀도 |
 | 9 | 절약 리포트 원 위젯 — 담은 정책 예상액 합산일 뿐, 실제 절약 계산 로직 없음 | 🟡 | 기능 |
-| 10 | 팀원(희민) 에이전트 코드와 머지 방법 미정 (Python? → TS 이식 vs FastAPI 분리) | 🟡 | 협업 |
+| 10 | 팀원 에이전트 코드와 머지 방법 미정 (Python? → TS 이식 vs FastAPI 분리) | 🟡 | 협업 |
 | 11 | 매칭 LLM 품질 — 후보 15~20건 안에서만 선별, 비결정적, 가끔 무관 정책 포함 (60점 컷으로 완화) | 🟢 | 품질 |
 | 12 | 온통청년 제공방법코드(0042xxx) 의미가 표본 추정 — 공식 코드표 미확보 → benefit_types 분류 미구현 | 🟢 | 데이터 |
 
@@ -70,6 +70,6 @@ policies 주요 컬럼: `source, title, provider, theme, region_sidos[], is_nati
 
 1. "대전 이사" 응답 범위 — 직접 혜택만 vs 지역 전체 혜택 2층 구조 (팀원 의견: 전체)
 2. 웹검색·크롤 계층 도입 여부와 시점 — 도입 시 미검증 격리 큐(`policy_discovery_queue`) 필수
-3. 희민 에이전트 코드 통합 방식 — TS 이식 vs FastAPI 분리
+3. 팀원 에이전트 코드 통합 방식 — TS 이식 vs FastAPI 분리
 4. 벡터 검색(pgvector) 시점 — 팀원 v2 분담
 5. 제출 문서(기획서·기능명세서) 작성 시작 시점
