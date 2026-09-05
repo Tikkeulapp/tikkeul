@@ -2,34 +2,14 @@ import { NextResponse } from "next/server";
 import { getPersona } from "@/data/personas";
 import { derive } from "@/lib/derive";
 import { supabaseAdmin } from "@/lib/supabase";
-import { groqJson } from "@/lib/groq";
-
-type Verdict = {
-  score: number;
-  eligibility: "LIKELY" | "NEEDS_CHECK" | "UNLIKELY";
-  reasons: string[];
-  missing_information: string[];
-  evidence_todo: string[];
-};
-
-const SYSTEM = `당신은 한국 청년·취업준비생 정책의 자격 판정 어시스턴트입니다.
-
-규칙 (반드시 지킬 것):
-1. 제공된 사용자 정보와 정책 정보만 사용한다. 세상 지식으로 정책 조건을 지어내지 않는다.
-2. 모르는 조건은 절대 추측하지 않는다 — 확인이 필요하면 eligibility를 NEEDS_CHECK로 하고 missing_information에 "무엇을 어떻게 확인할지"를 적는다.
-3. 사용자 정보의 null은 "모름"이라는 뜻이다. null인 조건이 판정에 필요하면 missing_information에 넣는다.
-4. 명백히 미충족인 조건(나이 초과, 타지역 거주 등)이 있으면 UNLIKELY로 하고 그 이유를 reasons에 적는다.
-5. '미취업' 요건 판정 시: 아르바이트 등 단기 근로소득이 있어도 취업상태가 미취업이면 미취업으로 본다 (정책이 근로시간 제한을 명시한 경우에만 확인 필요로 처리).
-6. evidence_todo에는 신청에 대비해 미리 챙길 증빙(면접확인서, 영수증 등)을 적는다. 없으면 빈 배열.
-7. 반드시 JSON 하나만 출력한다:
-{"score": 0~100 정수, "eligibility": "LIKELY"|"NEEDS_CHECK"|"UNLIKELY", "reasons": ["..."], "missing_information": ["..."], "evidence_todo": ["..."]}
-- score: 이 사용자에게 이 정책이 얼마나 유의미한지 (자격 + 상황 관련성 종합)
-- reasons: 한국어 존댓말, 각 1문장`;
+import { judgePolicy, saveMatchResult } from "@/lib/policyMatch";
 
 export async function POST(request: Request) {
   let body: {
+    userId?: string | null;
     personaId?: string | null;
     profileId?: string | null;
+    policyId?: string | null;
     policy?: { title: string; benefit?: string; target?: string; content?: string; region?: string };
   };
   try {
@@ -37,13 +17,18 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "잘못된 요청 본문" }, { status: 400 });
   }
-  const { personaId, profileId, policy } = body;
+  const { userId, personaId, profileId, policyId, policy } = body;
   if (!policy?.title) {
     return NextResponse.json({ error: "policy 정보가 필요합니다" }, { status: 400 });
   }
 
   // ── 사용자 프로필 구성: 페르소나(코드) 또는 직접입력 사용자(DB) ──
+  // profileRow/financeRow는 규칙엔진(judgePolicy)용 원본 데이터, userProfile은 폴백 LLM 판정용 한국어 요약.
   let userProfile: Record<string, unknown>;
+  let profileRow: Record<string, unknown> | null = null;
+  let financeRow: Record<string, unknown> | null = null;
+  const db = supabaseAdmin();
+
   if (personaId) {
     const p = getPersona(personaId);
     if (!p) return NextResponse.json({ error: "알 수 없는 페르소나" }, { status: 400 });
@@ -72,30 +57,40 @@ export async function POST(request: Request) {
         최근취준지출: d.jobPrepSpending.slice(0, 5),
       },
     };
+    // 페르소나도 scripts/seed.mts로 profile_survey/finance에 시드돼 있으므로 규칙엔진용 원본을 조회.
+    // (아직 시드 전이거나 실패했어도 null로 넘어가 규칙엔진이 insufficient_info로 처리하므로 안전)
+    const [{ data: survey }, { data: fin }] = await Promise.all([
+      db.from("profile_survey").select("*").eq("id", personaId).maybeSingle(),
+      db.from("finance").select("*").eq("user_id", personaId).maybeSingle(),
+    ]);
+    profileRow = survey ?? null;
+    financeRow = fin ?? null;
   } else if (profileId) {
-    const db = supabaseAdmin();
     const [{ data: survey }, { data: fin }] = await Promise.all([
       db.from("profile_survey").select("*").eq("id", profileId).single(),
       db.from("finance").select("*").eq("user_id", profileId).single(),
     ]);
     if (!survey) return NextResponse.json({ error: "프로필을 찾을 수 없습니다" }, { status: 404 });
     userProfile = { 출처: "설문 + 직접 입력 금융정보", 설문: survey, 금융: fin };
+    profileRow = survey;
+    financeRow = fin ?? null;
   } else {
     return NextResponse.json({ error: "personaId 또는 profileId가 필요합니다" }, { status: 400 });
   }
 
-  const user = `[오늘 날짜] ${new Date().toISOString().slice(0, 10)}
-
-[사용자 정보]
-${JSON.stringify(userProfile, null, 1)}
-
-[정책 정보]
-${JSON.stringify(policy, null, 1)}
-
-이 사용자가 이 정책의 대상인지 판정하고 규칙대로 JSON만 출력하세요.`;
-
   try {
-    const verdict = await groqJson<Verdict>(SYSTEM, user);
+    const verdict = await judgePolicy({
+      profileSummary: userProfile,
+      profileRow,
+      financeRow,
+      policyId: policyId ?? null,
+      policy,
+    });
+    // userId+policyId가 둘 다 있을 때만 저장 (policyId 없으면 policies에 없는 데모 정책이라
+    // 저장할 방법이 없음 — saveMatchResult 내부에서도 FK 실패는 로그만 남기고 넘어감)
+    if (userId && policyId) {
+      await saveMatchResult({ userId, policyId, matchMode: "lookup_and_check", verdict });
+    }
     return NextResponse.json({ verdict, disclaimer: "AI의 1차 판정입니다. 최종 자격은 공식 기관에서 확인하세요." });
   } catch (e) {
     return NextResponse.json(

@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { groqJson } from "@/lib/groq";
 import { resolveProfile } from "@/lib/profile";
 import { normalizeSido } from "@/lib/region";
+import { isPolicyRelevantEvent } from "@/lib/calendarRules";
+import { saveMatchResult } from "@/lib/policyMatch";
 
 /**
  * POST /api/event-match — 일정 텍스트 → 관련 정책 추천 (서비스의 심장)
@@ -77,6 +79,15 @@ export async function POST(request: Request) {
       1200,
     );
     extracted.region_sido = normalizeSido(extracted.region_sido); // 옛 명칭·약칭 → 표준 시도명
+
+    // ── 정책 무관 이벤트는 여기서 끝 — SQL 후보검색·랭킹 LLM 호출을 생략해 비용·오탐을 줄인다 ──
+    if (!isPolicyRelevantEvent(extracted.event_type)) {
+      return NextResponse.json({
+        extracted, recommendations: [], regionChange: null, skipped: "not_policy_relevant",
+        profile: { sido: profile.sido, pending: profile.pending },
+      });
+    }
+
     const GENERIC = new Set(["준비", "작성", "지원", "신청", "등록", "참여", "운영", "안내", "프로그램", "청년", "사업", "활동", "일정"]);
     const keywords = (extracted.keywords ?? [])
       .map((k) => String(k).trim())
@@ -130,6 +141,28 @@ export async function POST(request: Request) {
         .filter((r) => byId.has(r.policy_id) && r.score >= 60)
         .slice(0, 3)
         .map((r) => ({ ...shape(byId.get(r.policy_id)!), score: r.score, reason: r.reason, benefit_summary: r.benefit_summary }));
+
+      // search 모드 영속화. eligibility_status는 항상 insufficient_info로 남긴다 —
+      // 이 랭킹은 "관련도" 판단이지 policy_eligibility 규칙엔진을 거친 자격 확정이 아니기 때문
+      // (eligibility_json 백필 전까지는 대부분의 실제 정책에 조건이 없다).
+      if (userId) {
+        await Promise.all(
+          (recommendations as { policy_id: string; score: number; reason: string }[]).map((r) =>
+            saveMatchResult({
+              userId,
+              policyId: r.policy_id,
+              matchMode: "search",
+              verdict: {
+                score: r.score,
+                eligibility: "NEEDS_CHECK",
+                reasons: [r.reason],
+                missing_information: ["규칙엔진 자격조건 미확인 — eligibility_json 백필 전"],
+                evidence_todo: [],
+              },
+            }),
+          ),
+        );
+      }
     }
 
     // ── + 거주지 변경(MOVE) → 프로필 변경 제안 + 델타 리포트 ──

@@ -46,6 +46,7 @@ async function main() {
       education_status: d.education.status,
       major: d.education.major,
       graduated_at: d.education.graduatedAt,
+      employment_status: d.employmentStatus,
       target_job: d.targetJob,
       living_with_parents: d.household.livingWithParents,
       household_size: d.household.size,

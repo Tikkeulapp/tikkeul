@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { notifyCalendarEvent } from "@/lib/notifications";
 
 /** GET /api/events?userId=... — 해당 사용자의 캘린더 일정 목록 */
 export async function GET(request: Request) {
@@ -45,5 +46,7 @@ export async function POST(request: Request) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // user_calendar 갱신 -> Notification Scheduler 트리거 (select 절에 user_id가 없어 별도로 넘김)
+  await notifyCalendarEvent({ ...data, user_id: userId });
   return NextResponse.json({ event: data });
 }

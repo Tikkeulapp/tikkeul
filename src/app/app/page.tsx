@@ -90,9 +90,11 @@ export default function AppPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // 검색바
+  // 검색바 (AI 채팅 — /api/chat)
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [chatReply, setChatReply] = useState<string | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
 
   // 사이드바: 아코디언 (하나만 열림)
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
@@ -129,12 +131,25 @@ export default function AppPage() {
     () => RECS[session?.personaId ?? "_default"] ?? RECS._default,
     [session?.personaId],
   );
-  const savedKey = session ? `tikkeul.mypolicies.${session.userId}` : null;
 
   const loadEvents = useCallback(async (userId: string) => {
     const res = await fetch(`/api/events?userId=${encodeURIComponent(userId)}`);
     const json = await res.json();
     if (res.ok) setEvents(json.events);
+  }, []);
+
+  /** match_mode==='search'(event-match의 AI 추천)는 제외 — 마이티끌은 사용자가 정책 1건을
+   * 직접 담은/판정한 행위만 센다 (POST /api/policy-matches, /api/relevance 참고). */
+  const loadSavedIds = useCallback(async (userId: string) => {
+    const res = await fetch(`/api/policy-matches?userId=${encodeURIComponent(userId)}`);
+    const json = await res.json();
+    if (!res.ok) return;
+    type Match = { policy_id: string; match_mode: string; status: string };
+    const ids = (json.matches as Match[])
+      .filter((m) => m.match_mode !== "search" && (m.status === "recommended" || m.status === "applied"))
+      .map((m) => m.policy_id);
+    setSavedIds(ids);
+    if (ids.length > 0) setOpenTab("my");
   }, []);
 
   useEffect(() => {
@@ -146,13 +161,7 @@ export default function AppPage() {
           if (s.userId) {
             setSession(s);
             setPersona(s.personaId ? (getPersona(s.personaId) ?? null) : null);
-            const saved = localStorage.getItem(`tikkeul.mypolicies.${s.userId}`);
-            if (saved) {
-              const ids = JSON.parse(saved) as string[];
-              setSavedIds(ids);
-              if (ids.length > 0) setOpenTab("my");
-            }
-            await loadEvents(s.userId);
+            await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             try {
               const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(s.userId)}`).then((r) => r.json());
               const last = (pc.changes ?? []).filter((c: { field: string }) => c.field === "region_sido").pop();
@@ -165,14 +174,21 @@ export default function AppPage() {
       }
       setLoaded(true);
     })();
-  }, [loadEvents]);
+  }, [loadEvents, loadSavedIds]);
 
-  const persistSaved = (ids: string[]) => {
-    setSavedIds(ids);
-    if (savedKey) localStorage.setItem(savedKey, JSON.stringify(ids));
+  /** 낙관적 업데이트 후 서버에 반영 — 실패해도 UI를 되돌리진 않는다(기존 localStorage 방식과
+   * 동일하게 "일단 눈에 보이는 상태"를 우선하되, 다음 로드 때 서버 상태로 다시 맞춰진다). */
+  const setSaved = (id: string, action: "save" | "remove") => {
+    setSavedIds((prev) => (action === "save" ? [...new Set([...prev, id])] : prev.filter((x) => x !== id)));
+    if (!session) return;
+    fetch("/api/policy-matches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: session.userId, policyId: id, action }),
+    }).catch(() => {});
   };
-  const addToMy = (id: string) => persistSaved([...new Set([...savedIds, id])]);
-  const removeFromMy = (id: string) => persistSaved(savedIds.filter((x) => x !== id));
+  const addToMy = (id: string) => setSaved(id, "save");
+  const removeFromMy = (id: string) => setSaved(id, "remove");
 
   const savedRecs = recs.filter((r) => savedIds.includes(r.id));
   const unsavedRecs = recs.filter((r) => !savedIds.includes(r.id));
@@ -199,8 +215,12 @@ export default function AppPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          userId: session.userId,
           personaId: session.personaId,
           profileId: session.profileId ?? null,
+          // detail.id는 지금은 RECS 데모 데이터의 고정 id — policy_eligibility에 같은 id로
+          // 시드해두면 규칙엔진 경로를 타고, 없으면 지금처럼 LLM 폴백 판정으로 그대로 동작한다.
+          policyId: detail.id,
           policy: {
             title: detail.title,
             benefit: detail.benefit,
@@ -244,12 +264,35 @@ export default function AppPage() {
     }
   };
 
-  const search = (e: React.FormEvent) => {
+  const search = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
-    setNotice(`"${query.trim()}" — AI 검색·채팅은 다음 단계에서 연결됩니다.`);
+    if (!query.trim() || !session || chatLoading) return;
+    const message = query.trim();
     setQuery("");
-    setTimeout(() => setNotice(null), 4000);
+    setChatLoading(true);
+    setChatReply(null);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: session.userId,
+          personaId: session.personaId,
+          profileId: session.profileId ?? null,
+          message,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "요청 실패");
+      setChatReply(json.reply);
+      // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
+      if (session) void loadSavedIds(session.userId);
+    } catch (e) {
+      setNotice(`AI 응답에 실패했어요: ${e instanceof Error ? e.message : e}`);
+      setTimeout(() => setNotice(null), 4000);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const addEvent = async (e: React.FormEvent) => {
@@ -340,11 +383,20 @@ export default function AppPage() {
             className="min-w-0 flex-1 bg-transparent py-2 text-[14.5px] text-white placeholder-white/60 outline-none"
             aria-label="AI에게 질문"
           />
-          <button type="submit" className="rounded-[10px] bg-white px-4 py-2 text-[13.5px] font-bold text-ink transition hover:bg-mint">
-            물어보기
+          <button
+            type="submit"
+            disabled={chatLoading}
+            className="rounded-[10px] bg-white px-4 py-2 text-[13.5px] font-bold text-ink transition hover:bg-mint disabled:opacity-60"
+          >
+            {chatLoading ? "생각 중…" : "물어보기"}
           </button>
         </form>
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[13px] font-bold text-leaf-deep">💬 {notice}</p>}
+        {chatReply && (
+          <div className="mt-2 whitespace-pre-wrap rounded-[10px] border border-line bg-white px-3 py-2.5 text-[13.5px] leading-relaxed text-ink">
+            🤖 {chatReply}
+          </div>
+        )}
 
         {/* ── 본문 3단: 사이드바 / 일정 등록 / 위젯 ────── */}
         <div className="mt-4 grid gap-4 lg:grid-cols-[280px_1fr_170px]">
