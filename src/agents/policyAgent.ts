@@ -14,6 +14,7 @@ import {
   buildSaveSearchMatchTool,
   buildSaveVerdictTool,
   buildSearchPoliciesTool,
+  buildWebSearchFallbackTool,
   type ProfileCtx,
 } from "./policyTools";
 
@@ -22,7 +23,10 @@ const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
 
 절차:
 1. search_policies로 사용자 질의와 관련된 정책 후보를 찾으세요.
-2. 각 후보에 대해 check_eligibility_detail로 규칙엔진 판정을 확인하세요.
+1-1. search_policies가 0건이면(빈 배열) web_search_fallback으로 실시간 웹검색을 한 번 시도하세요.
+     이 결과는 미검증이므로 save_match를 절대 호출하지 말고, 최종 답변에 반드시
+     "⚠️ 웹 검색 결과 — 미검증, 공식 사이트에서 꼭 확인하세요"라고 표시한 뒤 제목·URL만 안내하세요.
+2. search_policies로 찾은 각 후보에 대해 check_eligibility_detail로 규칙엔진 판정을 확인하세요.
    - status가 "excluded"면 그 후보는 버리세요 (추천하지 않음).
    - "confirmed" 또는 "insufficient_info"인 후보만 다음 단계로.
 3. 남은 각 후보에 대해 save_match를 호출해 저장하세요. matchScore는 0~100 사이 관련도,
@@ -32,7 +36,7 @@ const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
    안내하고 끝냅니다. 사용자가 특정 후보를 다시 지칭할 때만 lookup_and_check로 넘어갑니다
    (이는 Orchestrator가 다음 턴에 처리합니다).
 5. 마지막에 후보 목록과 각각의 추천 이유, 확인 필요 여부를 한국어로 요약해 답하세요.
-   해당 없으면 "관련 정책을 찾지 못했습니다"라고 답하세요.`;
+   search_policies도 web_search_fallback도 아무것도 못 찾았으면 "관련 정책을 찾지 못했습니다"라고 답하세요.`;
 
 const LOOKUP_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(lookup_and_check 모드)입니다. 특정
 정책 1건에 대한 자격 여부를 확답하는 것이 목표입니다. 자격 판정은 항상 도구(규칙엔진)가 합니다.
@@ -86,7 +90,12 @@ export async function runPolicySearch(
 ): Promise<string> {
   const agent = createReactAgent({
     llm: makeLlm(),
-    tools: [buildSearchPoliciesTool(regionSido), buildCheckEligibilityTool(ctx), buildSaveSearchMatchTool(ctx)],
+    tools: [
+      buildSearchPoliciesTool(regionSido),
+      buildWebSearchFallbackTool(),
+      buildCheckEligibilityTool(ctx),
+      buildSaveSearchMatchTool(ctx),
+    ],
     prompt: SEARCH_SYSTEM_PROMPT,
   });
   const turnMessages = [...messages];
