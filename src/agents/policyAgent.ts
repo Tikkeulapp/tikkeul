@@ -22,11 +22,12 @@ const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
 도구(규칙엔진)가 하고, 당신은 해석/설명만 합니다.
 
 절차:
-1. search_policies로 사용자 질의와 관련된 정책 후보를 찾으세요.
-1-1. search_policies가 0건이면(빈 배열) web_search_fallback으로 실시간 웹검색을 한 번 시도하세요.
+1. search_policies로 사용자 질의와 관련된 정책 후보를 찾으세요. 결과는 {keywords, results[]}
+   형태입니다 — results가 빈 배열이면 "0건"입니다.
+1-1. results가 빈 배열이면 web_search_fallback으로 실시간 웹검색을 한 번 시도하세요.
      이 결과는 미검증이므로 save_match를 절대 호출하지 말고, 최종 답변에 반드시
      "⚠️ 웹 검색 결과 — 미검증, 공식 사이트에서 꼭 확인하세요"라고 표시한 뒤 제목·URL만 안내하세요.
-2. search_policies로 찾은 각 후보에 대해 check_eligibility_detail로 규칙엔진 판정을 확인하세요.
+2. search_policies의 results로 찾은 각 후보에 대해 check_eligibility_detail로 규칙엔진 판정을 확인하세요.
    - status가 "excluded"면 그 후보는 버리세요 (추천하지 않음).
    - "confirmed" 또는 "insufficient_info"인 후보만 다음 단계로.
 3. 남은 각 후보에 대해 save_match를 호출해 저장하세요. matchScore는 0~100 사이 관련도,
