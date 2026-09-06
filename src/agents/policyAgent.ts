@@ -18,6 +18,16 @@ import {
   type ProfileCtx,
 } from "./policyTools";
 
+/** check_eligibility_detail의 missingFields가 정확히 이 값 하나뿐이면, 사용자 정보가 없어서가
+ * 아니라 이 정책 자체에 자격조건(policy_eligibility)이 아직 등록 안 됐다는 뜻이다 — 세 모드
+ * 프롬프트가 공유하는 함정이라 공용 문구로 뽑아둔다. */
+const ELIGIBILITY_UNDEFINED_NOTE = `※ check_eligibility_detail의 missingFields가 정확히
+["eligibility_conditions_not_defined"] 하나뿐이면, 이건 사용자 정보가 부족해서가 아니라
+이 정책 자체의 자격조건이 아직 시스템에 등록 안 됐다는 뜻입니다. 이 경우 나이·거주지 등을
+사용자에게 되묻지 마세요 — 대신 "이 정책은 아직 자동 판정 대상이 아니니 공식 안내문
+(apply_url)에서 직접 확인하세요"라고 정직하게 안내하고, get_benefit_info나 정책 원문에서
+확인되는 내용만 참고 정보로 요약하세요.`;
+
 const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(search 모드)입니다. 자격 판정은 항상
 도구(규칙엔진)가 하고, 당신은 해석/설명만 합니다.
 
@@ -30,6 +40,7 @@ const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
 2. search_policies의 results로 찾은 각 후보에 대해 check_eligibility_detail로 규칙엔진 판정을 확인하세요.
    - status가 "excluded"면 그 후보는 버리세요 (추천하지 않음).
    - "confirmed" 또는 "insufficient_info"인 후보만 다음 단계로.
+${ELIGIBILITY_UNDEFINED_NOTE}
 3. 남은 각 후보에 대해 save_match를 호출해 저장하세요. matchScore는 0~100 사이 관련도,
    reason은 왜 이 정책이 적합한지(그리고 insufficient_info라면 어떤 정보가 더 필요한지)
    한국어로 설명합니다.
@@ -54,6 +65,7 @@ const LOOKUP_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
      (이 단계에서는 save_lookup_result를 호출하지 마세요).
    - search_policies도 못 찾았으면 "관련 정책을 찾지 못했습니다"라고 답하세요.
 2. check_eligibility_detail로 eligibility_json 항목별 충족 여부를 확인하세요.
+${ELIGIBILITY_UNDEFINED_NOTE}
 3. get_benefit_info로 혜택 내용을 확인해 답변에 포함하세요.
 4. 부족한 필드(actual이 없는 항목)가 있으면, 그래도 지금까지 확인된 결과를 바탕으로
    save_lookup_result를 호출해 insufficient_info로 저장하고, 답변에서 어떤 정보가
@@ -70,6 +82,7 @@ titleQuery(신규 지칭) 또는 referenceMatchId(직전 결과 재지칭) 중 �
 절차:
 1. 비교 대상 각각에 대해 find_policy로 정책을 특정하세요.
 2. 특정된 각 정책에 대해 check_eligibility_detail로 항목별 충족 여부를 확인하세요.
+${ELIGIBILITY_UNDEFINED_NOTE}
 3. 부족한 필드가 있으면, lookup_and_check처럼 정책마다 따로 묻지 말고 **비교 대상 전체의
    부족 필드를 모아서 한 번에** 답변에 적으세요 (예: "고용보험 가입기간이랑 소득분위만
    알려주시면 두 개 다 비교해드릴게요"). 이 경우 save_compare_result는 호출하지 말고
@@ -123,7 +136,7 @@ export async function runPolicyLookup(
   const agent = createReactAgent({
     llm: makeLlm(),
     tools: [
-      buildFindPolicyTool(regionSido, (ctx.profileRow?.region_sigungu as string | undefined) ?? null),
+      buildFindPolicyTool(),
       buildSearchPoliciesTool(regionSido),
       buildCheckEligibilityTool(ctx),
       buildBenefitInfoTool(),

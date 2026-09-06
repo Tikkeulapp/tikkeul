@@ -9,6 +9,7 @@ import { runPolicyCompare, runPolicyLookup, runPolicySearch } from "@/agents/pol
 import { runProfileAgent } from "@/agents/profileAgent";
 import type { ChatMessage } from "@/agents/state";
 import type { ProfileCtx } from "@/agents/policyTools";
+import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 
 const HISTORY_LIMIT = 12;
 
@@ -160,7 +161,12 @@ export async function POST(request: Request) {
         .order("checked_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      const missingFields = (lastMatch?.missing_information as string[] | undefined) ?? [];
+      // eligibility_conditions_not_defined는 "이 정책에 자격조건이 등록 안 됐다"는 정책 쪽
+      // sentinel이지 profile_survey/finance의 실제 필드가 아니다 — 그대로 넘기면 Profile Agent가
+      // 이걸 진짜 슬롯필링 대상으로 착각해 사용자에게 "자격 조건을 알려주세요"라고 되묻는다.
+      const missingFields = ((lastMatch?.missing_information as string[] | undefined) ?? []).filter(
+        (f) => f !== ELIGIBILITY_CONDITIONS_NOT_DEFINED,
+      );
 
       const deferUntil = deterministic?.isFuture ? deterministic.effectiveFrom : null;
       const profileReply = await runProfileAgent(userId, profileRowId, messages, missingFields, deferUntil);
@@ -190,11 +196,6 @@ export async function POST(request: Request) {
         policyReply = await runPolicyCompare(ctx, messages, plan.compareTargets ?? []);
       } else if (plan.policyMode === "lookup_and_check") {
         policyReply = await runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId);
-        // 정책명이 아닌 서술("토익 시험 응시료")을 정책명으로 오인해 못 찾은 경우 → 키워드 검색으로 재시도
-        if (/찾을 수 없|찾지 못했|존재하는지 확인/.test(policyReply)) {
-          const searched = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery ?? message.trim());
-          if (!/찾지 못했|답변을 정리하는 중 문제/.test(searched)) policyReply = searched;
-        }
       } else {
         policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery);
         if (/답변을 정리하는 중 문제/.test(policyReply)) policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery); // 모델이 빈 답을 낸 경우 1회 재시도
