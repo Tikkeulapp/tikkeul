@@ -220,7 +220,7 @@ export default function AppPage() {
   const EMPLOYMENT_OPTIONS = ["취업 준비 중", "이직 준비 중", "재취업 준비 중", "기타"];
   const INCOME_OPTIONS = ["~60%", "60~100%", "100~150%", "150%~"];
   const ASSET_OPTIONS = ["2억 미만", "2~4억", "4억 초과"];
-  const HOUSING_OPTIONS = ["본가", "월세", "전세"];
+  const HOUSING_OPTIONS = ["1인가구(월세)", "1인가구(전세)", "본가"];
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingField, setSavingField] = useState<EditableField | null>(null);
 
@@ -707,7 +707,7 @@ export default function AppPage() {
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
-        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-leaf-deep p-2 pl-4">
+        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-gradient-to-r from-leaf-deep to-[#2fbf5f] p-2 pl-4">
           <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
@@ -751,6 +751,12 @@ export default function AppPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr_220px]">
           {/* 좌측: 마이티끌 / 추천 아코디언 */}
           <aside className="flex flex-col gap-2">
+            {/* 이번 달 아낄 티끌 */}
+            <div className="rounded-[18px] border border-line bg-[#2fbf5f] p-4 text-white">
+              <p className="text-[12.5px] font-bold opacity-90">이번 달 아낄 티끌</p>
+              <p className="mt-1 text-[34px] font-bold leading-none">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
+            </div>
+
             {/* 마이티끌 */}
             <section className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
@@ -1143,7 +1149,7 @@ export default function AppPage() {
             {(persona || directProfile) && (
               <div className="rounded-[18px] border border-line bg-card p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-[12.5px] font-bold text-mute">기본 정보 · 금융 정보</p>
+                  <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setEditingProfile((v) => !v)}
@@ -1173,14 +1179,20 @@ export default function AppPage() {
                         : (() => { const bd = currentFieldValue("birth_date"); return bd ? `${new Date().getFullYear() - Number(bd.slice(0, 4))}세` : <MissingBadge />; })()}
                     </dd>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-mute">거주지</dt>
-                    <dd className="font-semibold">
-                      {editingProfile
-                        ? <span className="flex gap-1"><FieldSelect field="region_sido" options={SIDO_OPTIONS} /><FieldText field="region_sigungu" placeholder="시·군·구" /></span>
-                        : `${currentFieldValue("region_sido") ?? ""} ${currentFieldValue("region_sigungu") ?? ""}`.trim() || <MissingBadge />}
-                    </dd>
-                  </div>
+                  {editingProfile ? (
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-mute">거주지</dt>
+                      <dd className="flex flex-col gap-1 font-semibold">
+                        <FieldSelect field="region_sido" options={SIDO_OPTIONS} />
+                        <FieldText field="region_sigungu" placeholder="시·군·구" />
+                      </dd>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">거주지</dt>
+                      <dd className="font-semibold">{`${currentFieldValue("region_sido") ?? ""} ${currentFieldValue("region_sigungu") ?? ""}`.trim() || <MissingBadge />}</dd>
+                    </div>
+                  )}
                   {shouldShowField("education_status") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">학력</dt>
@@ -1220,16 +1232,6 @@ export default function AppPage() {
                 </dl>
               </div>
             )}
-
-            <div className="rounded-[18px] border border-line bg-card p-4">
-              <p className="text-[12.5px] font-bold text-mute">이번 달 담은 혜택</p>
-              <p className="mt-1 text-[26px] font-bold leading-none text-leaf-deep">{savedRecs.length}<span className="text-[15px] font-bold">건</span></p>
-            </div>
-
-            <div className="rounded-[18px] border border-line bg-card p-4">
-              <p className="text-[12.5px] font-bold text-mute">이번 달 아낄 티끌</p>
-              <p className="mt-1 text-[26px] font-bold leading-none text-leaf-deep">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
-            </div>
 
             <Link
               href="/app/simulate"

@@ -21,7 +21,7 @@ export type Declared = {
   household: {
     livingWithParents: boolean;
     size: number;
-    housing: "본가" | "월세" | "전세";
+    housing: "1인가구(월세)" | "1인가구(전세)" | "본가";
     depositKrw: number | null;
   };
   /** 가구 중위소득 구간 — 모르면 null ("추가 확인 필요"로 안내) */
@@ -201,7 +201,7 @@ const junho: Persona = {
     education: { status: "졸업", major: "기계공학", graduatedAt: "2024-08-20" },
     employmentStatus: "취업 준비 중",
     targetJob: "품질·생산관리",
-    household: { livingWithParents: false, size: 1, housing: "월세", depositKrw: 5000000 },
+    household: { livingWithParents: false, size: 1, housing: "1인가구(월세)", depositKrw: 5000000 },
     incomeBracket: "~60%",
     assetBracket: "2억 미만",
     benefitHistory: [],
@@ -282,7 +282,7 @@ const seoyeon: Persona = {
     education: { status: "졸업", major: "시각디자인", graduatedAt: "2022-02-18" },
     employmentStatus: "재취업 준비 중",
     targetJob: "UX 디자인",
-    household: { livingWithParents: false, size: 1, housing: "월세", depositKrw: 10000000 },
+    household: { livingWithParents: false, size: 1, housing: "1인가구(월세)", depositKrw: 10000000 },
     incomeBracket: "60~100%",
     assetBracket: "2억 미만",
     benefitHistory: [],

@@ -14,7 +14,7 @@ export type ProgramCtx = {
   companyType: CompanyType;
   /** 선택한 목적들 (복수) */
   goals: GoalType[];
-  housing: "본가" | "월세" | "전세" | null;
+  housing: "1인가구(월세)" | "1인가구(전세)" | "본가" | null;
   /** 무주택 여부 — 본가 거주는 세대주 여부에 따라 달라져 null */
   homeless: boolean | null;
   loans: { type: string; interestRate: number }[];
@@ -175,7 +175,7 @@ export const PROGRAMS: Program[] = [
     asOf: "2025",
     tags: ["월세"],
     judge: (c) => {
-      if (c.housing !== "월세") return { status: "UNLIKELY", reason: "월세 거주자 대상" };
+      if (!c.housing?.includes("월세")) return { status: "UNLIKELY", reason: "월세 거주자 대상" };
       if (c.annualSalaryKrw > 80_000_000) return { status: "UNLIKELY", reason: "총급여 8,000만 원 초과" };
       return { status: "LIKELY", reason: `월세 거주·총급여 요건 충족 → 공제율 ${c.annualSalaryKrw <= 55_000_000 ? "17%" : "15%"}. 임대차계약서·이체내역 보관` };
     },
