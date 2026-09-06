@@ -396,6 +396,7 @@ export default function AppPage() {
       const label = `${effectiveFrom.slice(5).replace("-", "/")}부터 ${regionChange.to}`;
       setAppliedChange(label);
       setProfileNote(label);
+      if (session) void loadRecs(session, true); // 거주지가 바뀌었으니 추천 탭을 새 지역 기준으로 다시
     } catch (e) {
       alert(`거주지 변경 적용 실패: ${e instanceof Error ? e.message : e}`);
     } finally {
@@ -505,7 +506,9 @@ export default function AppPage() {
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
         <span className="ml-auto text-[14.5px] text-mute">
-          {alarmCount > 0 && <span className="mr-2 rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink" title="마감 임박 알림">🔔 {alarmCount}</span>}
+          {alarmCount > 0 && (
+            <a href="#alarm" className="mr-2 rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
+          )}
           {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
           {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
           <Link href="/app/start" className="underline">프로필 변경</Link>
@@ -651,7 +654,7 @@ export default function AppPage() {
             </div>
 
             {alarmCount > 0 && (
-              <div className="mt-3 rounded-[12px] border border-[#f6c453] bg-[#fff7e0] px-4 py-3">
+              <div id="alarm" className="mt-3 scroll-mt-4 rounded-[12px] border border-[#f6c453] bg-[#fff7e0] px-4 py-3">
                 <p className="text-[14.5px] font-bold text-[#b45309]">🔔 마감 임박 알림 {alarmCount}건</p>
                 <ul className="mt-1 flex flex-col gap-1 text-[14px]">
                   {urgentExams.map((x) => (
