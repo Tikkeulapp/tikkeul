@@ -247,16 +247,26 @@ export default function AppPage() {
     }
   };
 
+  // 정책 판정에 흔히 쓰이는 4개 필드가 비어 있으면 "채워주세요" 표시가 필요함 — 챗봇이 방금
+  // 뭘 물어봤는지 파싱해 맞추는 대신, 비어 있으면 언제나 눈에 띄게 해서 먼저 채우도록 유도한다.
+  const isFieldMissing = (field: EditableField) => !currentFieldValue(field);
+
   const FieldSelect = ({ field, options }: { field: EditableField; options: string[] }) => (
     <select
       value={currentFieldValue(field) ?? ""}
       disabled={savingField === field}
       onChange={(e) => void saveProfileField(field, e.target.value)}
-      className="rounded border border-line bg-card px-1.5 py-0.5 text-[13px] disabled:opacity-50"
+      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${
+        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
+      }`}
     >
       <option value="" disabled>선택</option>
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
+  );
+
+  const MissingBadge = () => (
+    <span className="rounded border border-[#f6c453] bg-[#fff7e0] px-1.5 py-0.5 text-[11.5px] font-bold text-[#b45309]">❗ 입력 필요</span>
   );
 
   const resetProfileToDefault = async () => {
@@ -1113,12 +1123,16 @@ export default function AppPage() {
                   <div className="flex items-center justify-between">
                     <dt className="text-mute">학력</dt>
                     <dd className="font-semibold">
-                      {editingProfile ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} /> : persona ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}` : currentFieldValue("education_status") ?? "-"}
+                      {editingProfile
+                        ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} />
+                        : persona
+                          ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}`
+                          : currentFieldValue("education_status") ?? <MissingBadge />}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between">
                     <dt className="text-mute">취업상태</dt>
-                    <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? "-"}</dd>
+                    <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? <MissingBadge />}</dd>
                   </div>
                 </dl>
               </div>
@@ -1131,11 +1145,11 @@ export default function AppPage() {
                   <>
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">소득분위</dt>
-                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="income_bracket" options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? "-"}</dd>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="income_bracket" options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? <MissingBadge />}</dd>
                     </div>
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">자산분위</dt>
-                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="asset_bracket" options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? "-"}</dd>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="asset_bracket" options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? <MissingBadge />}</dd>
                     </div>
                   </>
                 )}

@@ -173,7 +173,8 @@ export async function POST(request: Request) {
       messages.push({ role: "assistant", content: profileReply });
       reply = profileReply;
       if (deterministic?.cleaned) {
-        const shown = Object.entries(deterministic.cleaned).map(([k, v]) => `${k} → ${v}`).join(", ");
+        const FIELD_LABELS: Record<string, string> = { region_sido: "거주지(시·도)", region_sigungu: "거주지(시·군·구)", employment_status: "취업상태", education_status: "학력", housing_type: "주거형태" };
+        const shown = Object.entries(deterministic.cleaned).map(([k, v]) => `${FIELD_LABELS[k] ?? k} → ${v}`).join(", ");
         const when = deterministic.isFuture ? ` (${deterministic.effectiveFrom.slice(5).replace("-", "/")}부터 적용 예정)` : "";
         reply += deterministic.personaLocked
           ? `\n\n✅ 반영됨(이 사용자에게만)${when}: ${shown}. 데모 페르소나의 기본 정보는 고정되어 있어 원본은 바뀌지 않고, 이후 추천·매칭은 변경된 값으로 계산됩니다.`

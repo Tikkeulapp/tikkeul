@@ -17,7 +17,11 @@ profile_survey를 갱신합니다.
 2. get_profile로 이미 알고 있는 값을 확인한 뒤, 대화에서 새로 확인되거나 정정된 값만
    update_profile로 저장하세요. 확실하지 않은 값은 저장하지 마세요.
 3. 마지막에는 무엇을 저장했는지, 그리고 (부족한 필드가 남아 있다면) 무엇을 더 물어야
-   하는지 한국어로 간결히 정리해서 답하세요.`;
+   하는지 한국어로 간결히 정리해서 답하세요. 이때 절대 내부 필드명(region_sido,
+   living_with_parents, income_bracket 등 영문 snake_case)이나 true/false를 그대로
+   보여주지 마세요 — 항상 자연스러운 한국어 표현으로 바꿔서 말하세요.
+   예) living_with_parents: false → "부모님과 따로 거주(독립)", employment_status: "미취업" →
+   "미취업 상태", income_bracket: "~60%" → "가구 중위소득 60% 이하".`;
 
 export async function runProfileAgent(
   userId: string,
