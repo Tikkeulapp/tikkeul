@@ -342,7 +342,7 @@ function SignupForm({ onBack }: { onBack: () => void }) {
     const household = pick(["1인 가구", "부모님과 거주"]);
     const housing = household === "부모님과 거주" ? "본가" : pick(["월세", "전세"]);
     setF({
-      name: pick(["김취준", "이준비", "박도전", "최시작", "정새벽"]) + ri(1, 99),
+      name: pick(["김하늘", "이서준", "박지우", "최민서", "정도윤", "한예린", "윤지호", "장수아", "오유진", "송민재"]),
       birthDate: birth,
       gender: pick(["여성", "남성"]),
       sido,
