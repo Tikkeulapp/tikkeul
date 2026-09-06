@@ -10,7 +10,7 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase";
-import { classifyPolicyForUser, saveMatchResult, type Verdict } from "@/lib/policyMatch";
+import { classifyPolicyForUser, judgePolicy, saveMatchResult, type Verdict } from "@/lib/policyMatch";
 import { groqJson } from "@/lib/groq";
 import { tavilySearch } from "@/lib/tavily";
 
@@ -217,19 +217,38 @@ export function buildCheckEligibilityTool(ctx: ProfileCtx) {
     async ({ policyId }: { policyId: string }) => {
       const classified = await classifyPolicyForUser(policyId, ctx.profileRow, ctx.financeRow);
       if (!classified) {
-        return JSON.stringify({
-          status: "insufficient_info",
-          missingFields: ["eligibility_conditions_not_defined"],
-          checks: [],
-        });
+        // 구조화 자격조건(policy_eligibility)이 없는 정책(대부분) → 정책 원문 + 프로필로 LLM 1차 판정 (자세히보기의 AI 판정과 같은 경로)
+        const db = supabaseAdmin();
+        const { data: pol } = await db.from("policies").select("title, provider, region_sidos, is_national, search_text, end_date, always_open").eq("policy_id", policyId).maybeSingle();
+        const row = ctx.profileRow ?? {};
+        const birth = typeof row.birth_date === "string" ? row.birth_date : null;
+        const age = birth ? new Date().getFullYear() - Number(birth.slice(0, 4)) : null;
+        const summary = {
+          나이: age, 거주지: `${row.region_sido ?? ""} ${row.region_sigungu ?? ""}`.trim() || null, 학력: row.education_status ?? null,
+          취업상태: row.employment_status ?? null, 주거형태: row.housing_type ?? null, 가구중위소득구간: row.income_bracket ?? null,
+          월평균근로소득: ctx.financeRow?.monthly_work_income_krw ?? null, 수급중수당: ctx.financeRow?.receiving_benefits ?? null,
+        };
+        try {
+          const v = await judgePolicy({
+            profileSummary: summary, profileRow: null, financeRow: null, policyId: null,
+            policy: { title: pol?.title ?? policyId, region: pol?.is_national ? "전국" : (pol?.region_sidos ?? []).join(", "), target: (pol?.search_text ?? "").slice(0, 700), content: pol?.provider ?? undefined } as never,
+          });
+          const status = v.eligibility === "LIKELY" ? "confirmed" : v.eligibility === "UNLIKELY" ? "excluded" : "insufficient_info";
+          return JSON.stringify({
+            status, checks: [], missingFields: v.missing_information ?? [], reasons: v.reasons ?? [], evidence_todo: v.evidence_todo ?? [], score: v.score,
+            basis: "llm_fallback", note: "이 정책은 구조화 자격조건이 아직 없어 정책 원문과 프로필을 대조한 AI 1차 판정입니다. 최종 자격은 공식 기관 확인.",
+          });
+        } catch {
+          return JSON.stringify({ status: "insufficient_info", missingFields: ["자격 조건 원문 확인 필요"], checks: [], note: "구조화 자격조건이 없고 AI 판정도 실패해 공식 페이지 확인이 필요합니다." });
+        }
       }
       return JSON.stringify(classified.result);
     },
     {
       name: "check_eligibility_detail",
       description:
-        "이 정책의 eligibility_json 조건을 항목별로 규칙엔진이 확인한 결과를 읽기 전용으로 반환합니다. " +
-        "이 결과의 status(confirmed/excluded/insufficient_info)를 뒤집지 말고 그대로 인용해 설명하세요.",
+        "이 정책의 자격 조건을 확인합니다. 구조화 조건이 있으면 규칙엔진 항목별 결과를, 없으면(basis=llm_fallback) 정책 원문과 프로필을 대조한 AI 1차 판정(reasons·evidence_todo 포함)을 반환합니다. " +
+        "status(confirmed/excluded/insufficient_info)를 뒤집지 말고 그대로 인용하고, reasons가 있으면 그 근거를 사용자에게 풀어 설명하세요. 내부 필드명(eligibility_conditions_not_defined 등)은 사용자에게 노출하지 마세요.",
       schema: z.object({ policyId: z.string() }),
     },
   );
