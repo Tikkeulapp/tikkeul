@@ -47,18 +47,23 @@ export function buildFindPolicyTool(regionSido: string | null = null) {
         const kws = searchKeywords(titleQuery);
         let q2 = db.from("policies").select("*");
         for (const k of kws.slice(0, 3)) q2 = q2.ilike("search_text", `%${k}%`);
-        const { data: andRows } = await q2.limit(5);
-        const pool = andRows && andRows.length ? andRows : (await (async () => {
+        const { data: andRows } = await q2.limit(10);
+        type Row = { title: string; search_text: string | null; is_national: boolean | null; region_sidos: string[] | null };
+        const inRegion = (r: Row) => !regionSido || r.is_national || (r.region_sidos ?? []).includes(regionSido);
+        let pool: Row[] = ((andRows ?? []) as Row[]).filter(inRegion);
+        if (!pool.length) {
+          // 거주지·전국 범위에서 키워드 OR로 넓게 (다른 지역 전용 정책이 1순위로 잡히지 않게 지역을 먼저 제한)
           const orExpr = kws.map((k) => `search_text.ilike.%${k}%`).join(",");
-          const { data } = await db.from("policies").select("*").or(orExpr).limit(40);
-          return data ?? [];
-        })());
+          let q3 = db.from("policies").select("*").or(orExpr);
+          if (regionSido) q3 = q3.or(`is_national.eq.true,region_sidos.cs.{"${regionSido}"}`);
+          const { data } = await q3.limit(60);
+          pool = ((data ?? []) as Row[]);
+        }
+        if (!pool.length && andRows?.length) pool = andRows as Row[]; // 지역 내 후보가 전혀 없으면 타지역이라도 안내
         if (pool.length) {
-          // 사용자 거주지 정책 또는 전국 정책을 우선 (다른 지역 전용 정책이 1순위로 잡히지 않게)
-          const regional = regionSido ? pool.filter((r: { is_national: boolean | null; region_sidos: string[] | null }) => r.is_national || (r.region_sidos ?? []).includes(regionSido)) : pool;
-          const scored = regional.length ? regional : pool;
+          const scored = pool;
           const best = [...scored].sort((a, b) => {
-            const sc = (r: { title: string; search_text: string | null }) => kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length;
+            const sc = (r: { title: string; search_text: string | null; is_national: boolean | null }) => kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1);
             return sc(b) - sc(a);
           })[0];
           return JSON.stringify({ found: true, policy: best, matched_by: "keywords", keywords: kws });
