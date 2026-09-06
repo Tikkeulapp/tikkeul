@@ -175,8 +175,8 @@ const minji: Persona = {
     loans: [],
   },
   seedEvents: [
-    { date: "2026-09-05", title: "토익 시험", location: "서울" },
-    { date: "2026-09-13", title: "SQLD 시험", location: "서울" },
+    { date: "2026-09-20", title: "토익 시험", location: "서울" }, // 제579회 (실제 2026 회차)
+    { date: "2026-09-13", title: "컴활 1급 실기 시험", location: "서울" }, // 상시 시험
     { date: "2026-09-18", title: "A기업 면접", location: "서울 강남" },
     { date: "2026-09-23", title: "B기업 면접", location: "서울 마포" },
     { date: "2026-10-06", title: "Python 데이터분석 강의 시작" },
