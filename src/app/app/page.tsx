@@ -707,7 +707,7 @@ export default function AppPage() {
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
-        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-gradient-to-r from-[#c5b0f4] to-[#dceeb1] p-2 pl-4">
+        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border-2 border-ink/15 bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4">
           <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
