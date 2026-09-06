@@ -707,13 +707,13 @@ export default function AppPage() {
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
-        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-gradient-to-r from-leaf-deep/60 to-[#2fbf5f]/60 p-2 pl-4">
+        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-gradient-to-r from-[#c5b0f4] to-[#dceeb1] p-2 pl-4">
           <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="모르는 거 물어보기 — 예: 국민취업지원제도가 뭐야?"
-            className="min-w-0 flex-1 bg-transparent py-2 text-[16px] text-white placeholder-white/60 outline-none"
+            className="min-w-0 flex-1 bg-transparent py-2 text-[16px] text-ink placeholder-ink/50 outline-none"
             aria-label="AI에게 질문"
           />
           <button
