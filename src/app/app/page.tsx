@@ -716,10 +716,12 @@ export default function AppPage() {
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
+        {/* border-image는 border-radius를 무시해 모서리가 각지게 보이는 문제가 있어(직접 확인함),
+            바깥 링을 그라데이션 배경으로 만들고 안쪽에 패딩만큼 띄워 "그라데이션 테두리"처럼 보이게 함 */}
+        <div className="rounded-[18px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-[2px] shadow-md">
         <form
           onSubmit={search}
-          className="flex items-center gap-2 rounded-[16px] border-2 bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4"
-          style={{ borderImage: "linear-gradient(to right, #dceeb1, #c5b0f4) 1" }}
+          className="flex items-center gap-2 rounded-[16px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4"
         >
           <span className="text-[16.5px]">🔍</span>
           <input
@@ -737,6 +739,7 @@ export default function AppPage() {
             {chatLoading ? "생각 중…" : "물어보기"}
           </button>
         </form>
+        </div>
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
         {chatQuestion && (
           <div className="mt-2 rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
@@ -1149,7 +1152,7 @@ export default function AppPage() {
               <img
                 src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
                 alt={`${displayName} 프로필 사진`}
-                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-leaf-deep/20"
+                className="mx-auto h-24 w-24 rounded-full object-cover ring-[3px] ring-[#c5b0f4]"
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = "/avatars/default.svg";
