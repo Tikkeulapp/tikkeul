@@ -1132,18 +1132,18 @@ export default function AppPage() {
 
           {/* 우측: 프로필 요약 — 얼굴 사진 + 기본/금융 정보(한 박스) + 혜택·티끌(각각 박스) */}
           <aside className="flex flex-col gap-3">
-            <div className="rounded-[18px] border border-line bg-card p-4 text-center">
+            <div className="rounded-[18px] border border-line bg-leaf-deep p-4 text-center text-white">
               <img
                 src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
                 alt={`${displayName} 프로필 사진`}
-                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-leaf-deep/20"
+                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-white/30"
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = "/avatars/default.svg";
                 }}
               />
               <p className="mt-2 text-[15px] font-bold">{persona ? `${persona.emoji} ${persona.name}` : displayName}</p>
-              {persona && <p className="text-[12px] text-mute">{persona.tagline}</p>}
+              {persona && <p className="text-[12px] text-white/70">{persona.tagline}</p>}
             </div>
 
             {(persona || directProfile) && (
