@@ -182,6 +182,13 @@ export default function AppPage() {
   type RegionChange = { field: string; from: string | null; to: string; effectiveFrom: string; opening: DeltaItem[]; closing: DeltaItem[]; openingTotal: number };
   const [applyingChange, setApplyingChange] = useState(false);
   const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (거주지 변경 이력)
+  // 마감 임박 알림 닫기 — 오늘 날짜로 닫음 기록을 남겨서, 새로고침해도 오늘은 안 뜨고 날짜가
+  // 바뀌면(새 임박 항목이 생길 수 있으니) 다시 뜨게 한다.
+  const [alarmDismissed, setAlarmDismissed] = useState(false);
+  const dismissAlarm = () => {
+    setAlarmDismissed(true);
+    if (session) { try { localStorage.setItem(`tikkeul.alarmDismissed.${session.userId}`, TODAY); } catch { /* 무시 */ } }
+  };
   // 우측 프로필 카드 실시간 반영 — 채팅으로 바뀐 학력/취업상태/소득·자산분위를 페르소나 기본값 위에 덮어씀
   const OVERRIDE_FIELDS = ["region_sido", "region_sigungu", "birth_date", "education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"] as const;
   const [profileOverrides, setProfileOverrides] = useState<Partial<Record<(typeof OVERRIDE_FIELDS)[number], string>>>({});
@@ -409,6 +416,7 @@ export default function AppPage() {
             setPersona(s.personaId ? (getPersona(s.personaId) ?? null) : null);
             try { const m = localStorage.getItem(`tikkeul.mymeta.${s.userId}`); if (m) setSavedMeta(JSON.parse(m)); } catch { /* 없음 */ }
             try { const mm = localStorage.getItem(`tikkeul.matches.${s.userId}`); if (mm) setMatchMap(JSON.parse(mm)); } catch { /* 없음 */ }
+            try { setAlarmDismissed(localStorage.getItem(`tikkeul.alarmDismissed.${s.userId}`) === TODAY); } catch { /* 없음 */ }
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             void loadRecs(s);
             void refreshProfileOverrides(s.userId);
@@ -711,7 +719,7 @@ export default function AppPage() {
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
         <span className="ml-auto flex items-center gap-2.5 text-[14.5px] text-mute">
-          {alarmCount > 0 && (
+          {alarmCount > 0 && !alarmDismissed && (
             <a href="#alarm" className="rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
           )}
           {profileNote && <span className="rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
@@ -924,9 +932,12 @@ export default function AppPage() {
               </div>
             </div>
 
-            {alarmCount > 0 && (
+            {alarmCount > 0 && !alarmDismissed && (
               <div id="alarm" className="mt-3 scroll-mt-4 rounded-[12px] border border-[#f6c453] bg-[#fff7e0] px-4 py-3">
-                <p className="text-[14.5px] font-bold text-[#b45309]">🔔 마감 임박 알림 {alarmCount}건</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[14.5px] font-bold text-[#b45309]">🔔 마감 임박 알림 {alarmCount}건</p>
+                  <button onClick={dismissAlarm} className="shrink-0 rounded px-1 text-[13px] font-bold text-[#b45309]/70 hover:text-[#b45309]" title="오늘은 그만 보기" aria-label="알림 닫기">✕</button>
+                </div>
                 <ul className="mt-1 flex flex-col gap-1 text-[14px]">
                   {urgentExams.map((x) => (
                     <li key={"ex-" + x.ev.event_id} className="flex flex-wrap items-center gap-2">
