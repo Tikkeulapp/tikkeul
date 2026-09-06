@@ -50,3 +50,18 @@ export async function POST(request: Request) {
   await notifyCalendarEvent({ ...data, user_id: userId });
   return NextResponse.json({ event: data });
 }
+
+/** DELETE /api/events?eventId=...&userId=... — 사용자가 등록한 일정 삭제 (본인 것만) */
+export async function DELETE(request: Request) {
+  const url = new URL(request.url);
+  const eventId = url.searchParams.get("eventId");
+  const userId = url.searchParams.get("userId");
+  if (!eventId || !userId) return NextResponse.json({ error: "eventId, userId가 필요합니다" }, { status: 400 });
+  const { error, count } = await supabaseAdmin()
+    .from("user_calendar")
+    .delete({ count: "exact" })
+    .eq("event_id", eventId)
+    .eq("user_id", userId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, deleted: count ?? 0 });
+}

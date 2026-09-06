@@ -51,6 +51,12 @@ export async function POST(request: Request) {
     await db.from("chat_messages").insert({ user_id: userId, role: "user", content: message.trim() });
 
     const plan = await planTurn(userId, messages);
+    // Orchestrator(LLM)가 "이사했어" 같은 개인정보 변경 발화를 간헐적으로 놓친다(같은 문장도 실행마다 다름).
+    // 거주지·학력·취업상태 변경을 뜻하는 표현이 있으면 profile_update 의도를 결정적으로 보장한다.
+    const PROFILE_HINT = /이사|거주지|주소|살고\s*있|살아|살게|이주|전입|졸업했|졸업함|휴학|복학|취업했|입사|퇴사|재직|월세로|전세로|본가로|독립했/;
+    if (PROFILE_HINT.test(message) && !plan.intents.includes("profile_update")) {
+      plan.intents = ["profile_update", ...plan.intents];
+    }
 
     let reply = "정책 관련 질문이나 궁금한 지원제도를 물어봐 주세요. 예: \"국민취업지원제도 저 되나요?\"";
     let profile = initialProfile;
