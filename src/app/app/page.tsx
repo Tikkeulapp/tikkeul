@@ -9,6 +9,7 @@ import { formatKrw } from "@/lib/derive";
 import { examFeeFor } from "@/data/exam_fees";
 import { findExamSession } from "@/data/exam_schedules";
 import { SIDO_CANONICAL } from "@/lib/region";
+import { EmploymentToggle } from "@/components/app/EmploymentToggle";
 
 type CalendarEvent = {
   event_id: string;
@@ -707,13 +708,16 @@ export default function AppPage() {
       <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
-        <span className="ml-auto text-[14.5px] text-mute">
+        <span className="ml-auto flex items-center gap-2.5 text-[14.5px] text-mute">
           {alarmCount > 0 && (
-            <a href="#alarm" className="mr-2 rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
+            <a href="#alarm" className="rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
           )}
-          {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
-          {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
-          <Link href="/app/start" className="underline">프로필 변경</Link>
+          {profileNote && <span className="rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
+          <EmploymentToggle />
+          <span>
+            {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
+            <Link href="/app/start" className="underline">프로필 변경</Link>
+          </span>
         </span>
       </header>
 
@@ -1284,15 +1288,6 @@ export default function AppPage() {
                 </dl>
               </div>
             )}
-
-            <Link
-              href="/app/simulate"
-              className="block w-full rounded-[18px] border border-line bg-card p-3 text-left transition hover:border-ink"
-            >
-              <p className="text-[12.5px] font-bold text-mute">취업 후엔?</p>
-              <p className="mt-0.5 text-[15px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>
-              <p className="mt-1 text-[12px] text-mute">연봉·목표 → 자산 배분·열리는 제도</p>
-            </Link>
           </aside>
         </div>
       </div>
