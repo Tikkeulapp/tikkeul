@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPersona } from "@/data/personas";
 import { derive } from "@/lib/derive";
-import { supabaseAdmin } from "@/lib/supabase";
+import { resolveProfile } from "@/lib/profile";
 import { judgePolicy, saveMatchResult } from "@/lib/policyMatch";
 
 export async function POST(request: Request) {
@@ -24,11 +24,18 @@ export async function POST(request: Request) {
 
   // ── 사용자 프로필 구성: 페르소나(코드) 또는 직접입력 사용자(DB) ──
   // profileRow/financeRow는 규칙엔진(judgePolicy)용 원본 데이터, userProfile은 폴백 LLM 판정용 한국어 요약.
-  let userProfile: Record<string, unknown>;
-  let profileRow: Record<string, unknown> | null = null;
-  let financeRow: Record<string, unknown> | null = null;
-  const db = supabaseAdmin();
+  // resolveProfile()을 반드시 거쳐야 한다 — 예전엔 profile_survey/finance를 직접 조회해서
+  // 채팅·프로필 카드로 저장한 profile_changes 오버레이(예: income_bracket)가 전혀 반영이 안 됐고,
+  // 그 결과 "채팅에서는 자격 충족인데 상세보기 AI 판정은 소득 정보 없음"이라는 불일치가 실제로
+  // 있었다(직접 확인함). /api/chat과 똑같이 resolveProfile을 써서 항상 같은 값을 보게 한다.
+  if (!personaId && !profileId) {
+    return NextResponse.json({ error: "personaId 또는 profileId가 필요합니다" }, { status: 400 });
+  }
+  const resolved = await resolveProfile({ userId, personaId, profileId });
+  const profileRow = resolved.profileRow;
+  const financeRow = resolved.financeRow;
 
+  let userProfile: Record<string, unknown>;
   if (personaId) {
     const p = getPersona(personaId);
     if (!p) return NextResponse.json({ error: "알 수 없는 페르소나" }, { status: 400 });
@@ -38,14 +45,14 @@ export async function POST(request: Request) {
       생년월일: p.declared.birthDate,
       성별: p.declared.gender,
       병역: p.declared.military,
-      거주지: `${p.declared.region.sido} ${p.declared.region.sigungu}`,
+      거주지: `${resolved.sido ?? p.declared.region.sido} ${resolved.sigungu ?? p.declared.region.sigungu}`,
       거주시작일: p.declared.region.since,
-      학력: p.declared.education,
-      취업상태: p.declared.employmentStatus,
+      학력: profileRow?.education_status ?? p.declared.education.status,
+      취업상태: profileRow?.employment_status ?? p.declared.employmentStatus,
       목표직무: p.declared.targetJob,
       가구: p.declared.household,
-      가구중위소득구간: p.declared.incomeBracket,
-      가구재산구간: p.declared.assetBracket,
+      가구중위소득구간: profileRow?.income_bracket ?? p.declared.incomeBracket,
+      가구재산구간: profileRow?.asset_bracket ?? p.declared.assetBracket,
       과거수급이력: p.declared.benefitHistory,
       보유자격증: p.declared.certificates,
       마이데이터_도출: {
@@ -57,32 +64,14 @@ export async function POST(request: Request) {
         최근취준지출: d.jobPrepSpending.slice(0, 5),
       },
     };
-    // 페르소나도 scripts/seed.mts로 profile_survey/finance에 시드돼 있으므로 규칙엔진용 원본을 조회.
-    // (아직 시드 전이거나 실패했어도 null로 넘어가 규칙엔진이 insufficient_info로 처리하므로 안전)
-    const [{ data: survey }, { data: fin }] = await Promise.all([
-      db.from("profile_survey").select("*").eq("id", personaId).maybeSingle(),
-      db.from("finance").select("*").eq("user_id", personaId).maybeSingle(),
-    ]);
-    profileRow = survey ?? null;
-    financeRow = fin ?? null;
-  } else if (profileId) {
-    const [{ data: survey }, { data: fin }] = await Promise.all([
-      db.from("profile_survey").select("*").eq("id", profileId).single(),
-      db.from("finance").select("*").eq("user_id", profileId).single(),
-    ]);
-    if (!survey) return NextResponse.json({ error: "프로필을 찾을 수 없습니다" }, { status: 404 });
+  } else {
+    if (!profileRow) return NextResponse.json({ error: "프로필을 찾을 수 없습니다" }, { status: 404 });
     // 식별정보(id·이름·생성시각)는 LLM에 보내지 않는다 — 판정에 필요한 속성만 전달.
-    // profileRow/financeRow(규칙엔진용)는 원본 그대로 둔다 — 규칙엔진은 id/name을 쓰지 않고,
-    // LLM에는 애초에 profileRow 자체가 아니라 이 값에서 뽑은 checks 배열만 전달되기 때문.
-    const { id: _id, name: _name, created_at: _c, ...surveyAttrs } = survey as Record<string, unknown>;
+    const { id: _id, name: _name, created_at: _c, ...surveyAttrs } = profileRow;
     void _id; void _name; void _c;
-    const { user_id: _u, ...finAttrs } = (fin ?? {}) as Record<string, unknown>;
+    const { user_id: _u, ...finAttrs } = (financeRow ?? {}) as Record<string, unknown>;
     void _u;
     userProfile = { 출처: "설문 + 직접 입력 금융정보", 설문: surveyAttrs, 금융: finAttrs };
-    profileRow = survey;
-    financeRow = fin ?? null;
-  } else {
-    return NextResponse.json({ error: "personaId 또는 profileId가 필요합니다" }, { status: 400 });
   }
 
   try {

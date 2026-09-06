@@ -8,6 +8,9 @@ import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
 import { examFeeFor } from "@/data/exam_fees";
 import { findExamSession } from "@/data/exam_schedules";
+import { SIDO_CANONICAL } from "@/lib/region";
+import { EmploymentToggle } from "@/components/app/EmploymentToggle";
+import { OnboardingTour, restartOnboardingTour } from "@/components/app/OnboardingTour";
 
 type CalendarEvent = {
   event_id: string;
@@ -144,9 +147,13 @@ export default function AppPage() {
   // 검색바 (AI 채팅 — /api/chat)
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [chatReply, setChatReply] = useState<string | null>(null);
-  const [chatQuestion, setChatQuestion] = useState<string | null>(null); // 방금 물어본 질문 (답변 위에 유지)
+  // 질문 하나로 끝나지 않고 답변 아래에서 바로 추가 질문을 이어갈 수 있게 — 매번 위 검색창을
+  // 다시 눌러야 했던 걸 실제 채팅처럼 스레드로 유지한다. reply가 null이면 아직 응답 대기 중.
+  type ChatTurn = { question: string; reply: string | null };
+  const [chatThread, setChatThread] = useState<ChatTurn[]>([]);
+  const [followUp, setFollowUp] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const chatQuestion = chatThread.length > 0 ? chatThread[chatThread.length - 1].question : null; // 최신 질문 (프로필 카드 자동 이어붙이기용)
 
   // 사이드바: 아코디언 (하나만 열림)
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
@@ -174,7 +181,170 @@ export default function AppPage() {
   type DeltaItem = { policy_id: string; title: string; provider: string | null; region: string; apply_url: string | null; score?: number; reason: string };
   type RegionChange = { field: string; from: string | null; to: string; effectiveFrom: string; opening: DeltaItem[]; closing: DeltaItem[]; openingTotal: number };
   const [applyingChange, setApplyingChange] = useState(false);
-  const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (기존 변경 이력)
+  const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (거주지 변경 이력)
+  // 마감 임박 알림 닫기 — 오늘 날짜로 닫음 기록을 남겨서, 새로고침해도 오늘은 안 뜨고 날짜가
+  // 바뀌면(새 임박 항목이 생길 수 있으니) 다시 뜨게 한다.
+  const [alarmDismissed, setAlarmDismissed] = useState(false);
+  const dismissAlarm = () => {
+    setAlarmDismissed(true);
+    if (session) { try { localStorage.setItem(`tikkeul.alarmDismissed.${session.userId}`, TODAY); } catch { /* 무시 */ } }
+  };
+  // 우측 프로필 카드 실시간 반영 — 채팅으로 바뀐 학력/취업상태/소득·자산분위를 페르소나 기본값 위에 덮어씀
+  const OVERRIDE_FIELDS = ["region_sido", "region_sigungu", "birth_date", "education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"] as const;
+  const [profileOverrides, setProfileOverrides] = useState<Partial<Record<(typeof OVERRIDE_FIELDS)[number], string>>>({});
+  const [resettingProfile, setResettingProfile] = useState(false);
+  // 방금 챗봇이 판정에 필요하다고 한 필드만 담아둔다 — 비어있는 필드를 무조건 다 보여주는 대신
+  // "지금 필요한 것"만 노출해 카드가 항상 빈칸투성이로 보이지 않게 한다.
+  const [neededFields, setNeededFields] = useState<Set<string>>(new Set());
+
+  // "내 정보로 시작하기"(직접입력) 사용자 — 페르소나처럼 코드에 declared가 없어 DB에서 직접 가져와야 함
+  type DirectProfile = { name: string | null; age: number | null; birthDate: string | null; sido: string | null; sigungu: string | null; educationStatus: string | null; employmentStatus: string | null; incomeBracket: string | null; assetBracket: string | null; housingType: string | null };
+  const [directProfile, setDirectProfile] = useState<DirectProfile | null>(null);
+  const refreshDirectProfile = useCallback(async (s: Session) => {
+    if (s.personaId) return; // 페르소나는 persona.declared + profileOverrides로 이미 처리
+    try {
+      const qs = new URLSearchParams({ userId: s.userId, ...(s.profileId ? { profileId: s.profileId } : {}) });
+      const data = await fetch(`/api/profile-summary?${qs}`).then((r) => r.json());
+      setDirectProfile(data);
+    } catch { /* 무시 — 카드가 비어 보이는 정도 */ }
+  }, []);
+
+  const refreshProfileOverrides = useCallback(async (userId: string) => {
+    try {
+      const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(userId)}`).then((r) => r.json());
+      const changes = (pc.changes ?? []) as { field: string; new_value: string; effective_from: string }[];
+      const next: Partial<Record<(typeof OVERRIDE_FIELDS)[number], string>> = {};
+      for (const c of changes) {
+        if (c.effective_from > TODAY) continue; // 아직 적용 전(예약된 미래 변경)은 반영하지 않음
+        if ((OVERRIDE_FIELDS as readonly string[]).includes(c.field)) next[c.field as (typeof OVERRIDE_FIELDS)[number]] = c.new_value;
+      }
+      setProfileOverrides(next);
+      const last = changes.filter((c) => c.field === "region_sido" && c.effective_from <= TODAY).pop();
+      setProfileNote(last ? `${last.effective_from.slice(5).replace("-", "/")}부터 ${last.new_value}` : null);
+    } catch { /* 이력 없음 */ }
+  }, []);
+
+  // 우측 카드에서 학력/취업상태/소득·자산분위를 채팅 없이 바로 고를 수 있게 — 자격 판정에 필요한
+  // 정보를 안다면 굳이 말로 풀어 써야 할 이유가 없다. /api/profile-change가 이미 두 사용자 유형
+  // (페르소나=이력만, 직접입력=원본도) 모두에서 resolveProfile 오버레이로 반영되므로 그대로 재사용.
+  type EditableField = "region_sido" | "region_sigungu" | "birth_date" | "education_status" | "employment_status" | "income_bracket" | "asset_bracket" | "housing_type";
+  const SIDO_OPTIONS = [...SIDO_CANONICAL];
+  const EDUCATION_OPTIONS = ["재학", "휴학", "졸업유예", "졸업"];
+  const EMPLOYMENT_OPTIONS = ["취업 준비 중", "이직 준비 중", "재취업 준비 중", "기타"];
+  const INCOME_OPTIONS = ["~60%", "60~100%", "100~150%", "150%~"];
+  const ASSET_OPTIONS = ["2억 미만", "2~4억", "4억 초과"];
+  const HOUSING_OPTIONS = ["1인가구(월세)", "1인가구(전세)", "본가"];
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingField, setSavingField] = useState<EditableField | null>(null);
+
+  const currentFieldValue = (field: EditableField): string | null => {
+    if (persona) {
+      if (field === "region_sido") return profileOverrides.region_sido ?? persona.declared.region.sido;
+      if (field === "region_sigungu") return profileOverrides.region_sigungu ?? (profileOverrides.region_sido ? null : persona.declared.region.sigungu);
+      if (field === "birth_date") return profileOverrides.birth_date ?? persona.declared.birthDate;
+      if (field === "education_status") return profileOverrides.education_status ?? persona.declared.education.status;
+      if (field === "employment_status") return profileOverrides.employment_status ?? persona.declared.employmentStatus;
+      if (field === "income_bracket") return profileOverrides.income_bracket ?? persona.declared.incomeBracket;
+      if (field === "housing_type") return profileOverrides.housing_type ?? persona.declared.household.housing;
+      return profileOverrides.asset_bracket ?? persona.declared.assetBracket;
+    }
+    if (field === "region_sido") return directProfile?.sido ?? null;
+    if (field === "region_sigungu") return directProfile?.sigungu ?? null;
+    if (field === "birth_date") return directProfile?.birthDate ?? null;
+    if (field === "education_status") return directProfile?.educationStatus ?? null;
+    if (field === "employment_status") return directProfile?.employmentStatus ?? null;
+    if (field === "income_bracket") return directProfile?.incomeBracket ?? null;
+    if (field === "housing_type") return directProfile?.housingType ?? null;
+    return directProfile?.assetBracket ?? null;
+  };
+
+  const saveProfileField = async (field: EditableField, value: string) => {
+    if (!session || !value) return;
+    setSavingField(field);
+    const wasNeeded = neededFields.has(field) && !!chatQuestion; // 방금 챗봇이 이 필드가 없어서 못 답한 상태였는지
+    try {
+      await fetch("/api/profile-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session.userId, field, oldValue: currentFieldValue(field), newValue: value, effectiveFrom: TODAY, sourceEvent: "profile_card_edit" }),
+      });
+      await Promise.all([refreshProfileOverrides(session.userId), refreshDirectProfile(session)]);
+      void loadRecs(session, true); // 자격 판정에 영향을 줄 수 있으니 추천도 새로 계산
+      // 채팅이 "이 정보가 없어서 판단 못 함"이라고 멈춰 있던 상태였다면, 옆에서 정보만 채우고
+      // 끝나는 게 아니라 방금 그 질문을 그대로 다시 물어봐서 대화가 이어지는 것처럼 답을 갱신한다.
+      if (wasNeeded) void sendChatMessage(chatQuestion!);
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  const isFieldMissing = (field: EditableField) => !currentFieldValue(field);
+  // 값이 없는 필드는 기본적으로 숨긴다 — 방금 챗봇이 그 필드를 물어봤을 때만("neededFields")
+  // 눈에 띄게 드러낸다. 수정 모드에서는 사용자가 뭐든 채울 수 있어야 하니 전부 보여준다.
+  const shouldShowField = (field: EditableField) => editingProfile || !!currentFieldValue(field) || neededFields.has(field);
+
+  const FieldSelect = ({ field, options }: { field: EditableField; options: string[] }) => (
+    <select
+      value={currentFieldValue(field) ?? ""}
+      disabled={savingField === field}
+      onChange={(e) => void saveProfileField(field, e.target.value)}
+      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${
+        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
+      }`}
+    >
+      <option value="" disabled>선택</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+
+  // 시·군·구는 정해진 목록이 없어 자유 입력 — 매 키 입력마다 저장하면 타이핑 중 계속 API를
+  // 두드리게 되니, 포커스를 벗어날 때(blur)만 값이 바뀌었으면 저장한다.
+  const FieldText = ({ field, placeholder }: { field: EditableField; placeholder?: string }) => (
+    <input
+      key={currentFieldValue(field) ?? ""}
+      type="text"
+      defaultValue={currentFieldValue(field) ?? ""}
+      placeholder={placeholder}
+      disabled={savingField === field}
+      onBlur={(e) => {
+        const v = e.target.value.trim();
+        if (v && v !== currentFieldValue(field)) void saveProfileField(field, v);
+      }}
+      className={`w-24 rounded border px-1.5 py-0.5 text-right text-[13px] disabled:opacity-50 ${
+        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
+      }`}
+    />
+  );
+
+  const FieldDate = ({ field }: { field: EditableField }) => (
+    <input
+      type="date"
+      value={currentFieldValue(field)?.slice(0, 10) ?? ""}
+      disabled={savingField === field}
+      onChange={(e) => { if (e.target.value) void saveProfileField(field, e.target.value); }}
+      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${
+        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
+      }`}
+    />
+  );
+
+  const MissingBadge = () => (
+    <span className="rounded border border-[#f6c453] bg-[#fff7e0] px-1.5 py-0.5 text-[11.5px] font-bold text-[#b45309]">❗ 입력 필요</span>
+  );
+
+  const resetProfileToDefault = async () => {
+    if (!session || resettingProfile) return;
+    if (!window.confirm("이 프로필의 모든 변경 이력을 지우고 초기 기본값으로 되돌릴까요?")) return;
+    setResettingProfile(true);
+    try {
+      await fetch(`/api/profile-change?userId=${encodeURIComponent(session.userId)}`, { method: "DELETE" });
+      setProfileOverrides({});
+      setProfileNote(null);
+      void loadRecs(session, true); // 거주지가 초기값으로 돌아갔을 수 있으니 추천도 다시
+    } finally {
+      setResettingProfile(false);
+    }
+  };
 
   // 일정 → AI 정책 매칭 결과 — 일정(event_id)별로 보관해 하루에 여러 일정이어도 각각 확인·유지 (브라우저 저장)
   type MatchRec = { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean };
@@ -246,13 +416,11 @@ export default function AppPage() {
             setPersona(s.personaId ? (getPersona(s.personaId) ?? null) : null);
             try { const m = localStorage.getItem(`tikkeul.mymeta.${s.userId}`); if (m) setSavedMeta(JSON.parse(m)); } catch { /* 없음 */ }
             try { const mm = localStorage.getItem(`tikkeul.matches.${s.userId}`); if (mm) setMatchMap(JSON.parse(mm)); } catch { /* 없음 */ }
+            try { setAlarmDismissed(localStorage.getItem(`tikkeul.alarmDismissed.${s.userId}`) === TODAY); } catch { /* 없음 */ }
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             void loadRecs(s);
-            try {
-              const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(s.userId)}`).then((r) => r.json());
-              const last = (pc.changes ?? []).filter((c: { field: string }) => c.field === "region_sido").pop();
-              if (last) setProfileNote(`${last.effective_from.slice(5).replace("-", "/")}부터 ${last.new_value}`);
-            } catch { /* 이력 없음 */ }
+            void refreshProfileOverrides(s.userId);
+            void refreshDirectProfile(s);
           }
         }
       } catch {
@@ -260,7 +428,7 @@ export default function AppPage() {
       }
       setLoaded(true);
     })();
-  }, [loadEvents, loadSavedIds, loadRecs]);
+  }, [loadEvents, loadSavedIds, loadRecs, refreshProfileOverrides, refreshDirectProfile]);
 
   /** 낙관적 업데이트 후 서버에 반영 — 실패해도 UI를 되돌리진 않는다(기존 localStorage 방식과
    * 동일하게 "일단 눈에 보이는 상태"를 우선하되, 다음 로드 때 서버 상태로 다시 맞춰진다). */
@@ -427,7 +595,8 @@ export default function AppPage() {
       if (!res.ok) throw new Error(json.error ?? "적용 실패");
       const label = `${effectiveFrom.slice(5).replace("-", "/")}부터 ${rc.to}`;
       setMatchMap((prev) => { const cur = prev[eventId]; if (!cur) return prev; const next = { ...prev, [eventId]: { ...cur, applied: label } }; persistMatches(session.userId, next); return next; });
-      setProfileNote(label);
+      void refreshProfileOverrides(session.userId);
+      void refreshDirectProfile(session);
       void loadRecs(session, true); // 거주지가 바뀌었으니 추천 탭을 새 지역 기준으로 다시
     } catch (e) {
       alert(`거주지 변경 적용 실패: ${e instanceof Error ? e.message : e}`);
@@ -436,14 +605,10 @@ export default function AppPage() {
     }
   };
 
-  const search = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim() || !session || chatLoading) return;
-    const message = query.trim();
-    setQuery("");
-    setChatQuestion(message);
+  const sendChatMessage = async (message: string) => {
+    if (!message.trim() || !session || chatLoading) return;
+    setChatThread((prev) => [...prev, { question: message, reply: null }]);
     setChatLoading(true);
-    setChatReply(null);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -457,16 +622,15 @@ export default function AppPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "요청 실패");
-      setChatReply(json.reply);
+      setChatThread((prev) => prev.map((t, i) => (i === prev.length - 1 ? { ...t, reply: json.reply } : t)));
+      setNeededFields(new Set(Array.isArray(json.missingFields) ? json.missingFields : []));
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
       // 채팅으로 프로필(거주지 등)이 바뀌었으면 헤더 배지와 추천 탭을 새 프로필 기준으로 갱신
       if (session && Array.isArray(json.plan?.intents) && json.plan.intents.includes("profile_update")) {
         void loadRecs(session, true);
-        fetch(`/api/profile-change?userId=${encodeURIComponent(session.userId)}`).then((r) => r.json()).then((pc) => {
-          const last = (pc.changes ?? []).filter((c: { field: string }) => c.field === "region_sido").pop();
-          if (last) setProfileNote(`${last.effective_from.slice(5).replace("-", "/")}부터 ${last.new_value}`);
-        }).catch(() => {});
+        void refreshProfileOverrides(session.userId);
+        void refreshDirectProfile(session);
       }
     } catch (e) {
       setNotice(`AI 응답에 실패했어요: ${e instanceof Error ? e.message : e}`);
@@ -474,6 +638,14 @@ export default function AppPage() {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const search = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim() || chatLoading) return;
+    const message = query.trim();
+    setQuery("");
+    await sendChatMessage(message);
   };
 
   const addEvent = async (e: React.FormEvent) => {
@@ -542,28 +714,39 @@ export default function AppPage() {
 
   return (
     <main className="min-h-screen bg-paper">
+      <OnboardingTour />
       <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
-        <span className="ml-auto text-[14.5px] text-mute">
-          {alarmCount > 0 && (
-            <a href="#alarm" className="mr-2 rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
+        <span className="ml-auto flex items-center gap-2.5 text-[14.5px] text-mute">
+          {alarmCount > 0 && !alarmDismissed && (
+            <a href="#alarm" className="rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
           )}
-          {profileNote && <span className="mr-2 rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
-          {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
-          <Link href="/app/start" className="underline">프로필 변경</Link>
+          {profileNote && <span className="rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
+          <EmploymentToggle />
+          <span>
+            {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
+            <Link href="/app/start" className="underline">프로필 변경</Link> ·{" "}
+            <button onClick={restartOnboardingTour} className="underline">가이드 다시보기</button>
+          </span>
         </span>
       </header>
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
-        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-leaf-deep p-2 pl-4">
+        {/* border-image는 border-radius를 무시해 모서리가 각지게 보이는 문제가 있어(직접 확인함),
+            바깥 링을 그라데이션 배경으로 만들고 안쪽에 패딩만큼 띄워 "그라데이션 테두리"처럼 보이게 함 */}
+        <div id="tour-search" className="rounded-[18px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-[2px] shadow-md">
+        <form
+          onSubmit={search}
+          className="flex items-center gap-2 rounded-[16px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4"
+        >
           <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="모르는 거 물어보기 — 예: 국민취업지원제도가 뭐야?"
-            className="min-w-0 flex-1 bg-transparent py-2 text-[16px] text-white placeholder-white/60 outline-none"
+            className="min-w-0 flex-1 bg-transparent py-2 text-[16px] text-ink placeholder-ink/50 outline-none"
             aria-label="AI에게 질문"
           />
           <button
@@ -574,26 +757,60 @@ export default function AppPage() {
             {chatLoading ? "생각 중…" : "물어보기"}
           </button>
         </form>
+        </div>
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
-        {chatQuestion && (
+        {chatThread.length > 0 && (
           <div className="mt-2 rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
-            <div className="flex items-start gap-2">
-              <span>🙋</span>
-              <p className="flex-1 font-semibold">{chatQuestion}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-bold text-mute">대화</p>
               {!chatLoading && (
-                <button onClick={() => { setChatQuestion(null); setChatReply(null); }} className="text-[13px] text-mute underline" aria-label="대화 닫기">닫기</button>
+                <button onClick={() => { setChatThread([]); setFollowUp(""); }} className="text-[13px] text-mute underline" aria-label="대화 닫기">닫기</button>
               )}
             </div>
-            <div className="mt-2 flex items-start gap-2 border-t border-line pt-2">
-              <span>🤖</span>
-              {chatLoading ? (
-                <p className="text-mute">생각 중… 프로필과 정책 DB를 대조하고 있어요 (5~20초)</p>
-              ) : chatReply ? (
-                <div className="min-w-0 flex-1 whitespace-pre-wrap">{renderChatMarkdown(chatReply)}</div>
-              ) : (
-                <p className="text-mute">답변을 받지 못했어요. 다시 시도해 주세요.</p>
-              )}
+            <div className="mt-1.5 flex max-h-[420px] flex-col gap-3 overflow-y-auto">
+              {chatThread.map((turn, i) => {
+                const isLast = i === chatThread.length - 1;
+                return (
+                  <div key={i} className={i > 0 ? "border-t border-line pt-3" : ""}>
+                    <div className="flex items-start gap-2">
+                      <span>🙋</span>
+                      <p className="flex-1 font-semibold">{turn.question}</p>
+                    </div>
+                    <div className="mt-2 flex items-start gap-2">
+                      <span>🤖</span>
+                      {turn.reply ? (
+                        <div className="min-w-0 flex-1 whitespace-pre-wrap">{renderChatMarkdown(turn.reply)}</div>
+                      ) : isLast && chatLoading ? (
+                        <p className="text-mute">생각 중… 프로필과 정책 DB를 대조하고 있어요 (5~20초)</p>
+                      ) : (
+                        <p className="text-mute">답변을 받지 못했어요. 다시 시도해 주세요.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {/* 답변 아래에서 바로 추가 질문 — 매번 위 검색창을 다시 누를 필요 없이 이어서 물어봄 */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); const m = followUp.trim(); if (!m) return; setFollowUp(""); void sendChatMessage(m); }}
+              className="mt-3 flex items-center gap-2 border-t border-line pt-2.5"
+            >
+              <input
+                value={followUp}
+                onChange={(e) => setFollowUp(e.target.value)}
+                placeholder="추가로 물어보기 — 예: 신청 방법 알려줘"
+                disabled={chatLoading}
+                className="min-w-0 flex-1 rounded-[8px] border border-line bg-card px-3 py-1.5 text-[14px] outline-none focus:border-ink disabled:opacity-60"
+                aria-label="추가 질문"
+              />
+              <button
+                type="submit"
+                disabled={chatLoading || !followUp.trim()}
+                className="shrink-0 rounded-[8px] bg-leaf px-3.5 py-1.5 text-[13.5px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-50"
+              >
+                {chatLoading ? "…" : "전송"}
+              </button>
+            </form>
           </div>
         )}
 
@@ -601,8 +818,14 @@ export default function AppPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr_220px]">
           {/* 좌측: 마이티끌 / 추천 아코디언 */}
           <aside className="flex flex-col gap-2">
+            {/* 이번 달 아낄 티끌 — 캘린더 선택 날짜와 동일한 그린(bg-mint) */}
+            <div id="tour-saving" className="rounded-[18px] border border-line bg-mint p-4 text-center text-ink">
+              <p className="text-[12.5px] font-bold opacity-80">이번 달 아낄 티끌</p>
+              <p className="mt-1 text-[34px] font-bold leading-none">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
+            </div>
+
             {/* 마이티끌 */}
-            <section className="overflow-hidden rounded-[18px] border border-line bg-card">
+            <section id="tour-mytikkeul" className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
                 onClick={() => setOpenTab("my")}
                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "my" ? "bg-leaf-deep text-white" : ""}`}
@@ -699,7 +922,7 @@ export default function AppPage() {
           </aside>
 
           {/* 중앙: 일정 등록 — 노션식 월 달력 */}
-          <section className="rounded-[18px] border border-line bg-card p-5">
+          <section id="tour-calendar" className="rounded-[18px] border border-line bg-card p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">일정 등록</h2>
               <div className="flex items-center gap-2 text-[15.5px] font-bold">
@@ -709,9 +932,12 @@ export default function AppPage() {
               </div>
             </div>
 
-            {alarmCount > 0 && (
+            {alarmCount > 0 && !alarmDismissed && (
               <div id="alarm" className="mt-3 scroll-mt-4 rounded-[12px] border border-[#f6c453] bg-[#fff7e0] px-4 py-3">
-                <p className="text-[14.5px] font-bold text-[#b45309]">🔔 마감 임박 알림 {alarmCount}건</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-[14.5px] font-bold text-[#b45309]">🔔 마감 임박 알림 {alarmCount}건</p>
+                  <button onClick={dismissAlarm} className="shrink-0 rounded px-1 text-[13px] font-bold text-[#b45309]/70 hover:text-[#b45309]" title="오늘은 그만 보기" aria-label="알림 닫기">✕</button>
+                </div>
                 <ul className="mt-1 flex flex-col gap-1 text-[14px]">
                   {urgentExams.map((x) => (
                     <li key={"ex-" + x.ev.event_id} className="flex flex-wrap items-center gap-2">
@@ -974,13 +1200,13 @@ export default function AppPage() {
             </div>
           </section>
 
-          {/* 우측: 프로필 요약 — 얼굴 사진 + 기본 정보 + 금융 정보 */}
-          <aside className="flex flex-col gap-3">
-            <div className="rounded-2xl border border-line bg-card p-4 text-center shadow-lift">
+          {/* 우측: 프로필 요약 — 얼굴 사진 + 기본/금융 정보(한 박스) + 혜택·티끌(각각 박스) */}
+          <aside id="tour-profile" className="flex flex-col gap-3">
+            <div className="rounded-[18px] border border-line bg-card p-4 text-center">
               <img
-                src={persona ? `/avatars/${persona.id}.png` : "/avatars/default.svg"}
+                src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
                 alt={`${displayName} 프로필 사진`}
-                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-leaf-deep/20"
+                className="mx-auto h-24 w-24 rounded-full object-cover ring-[3px] ring-[#c5b0f4]"
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = "/avatars/default.svg";
@@ -990,43 +1216,92 @@ export default function AppPage() {
               {persona && <p className="text-[12px] text-mute">{persona.tagline}</p>}
             </div>
 
-            {persona && (
-              <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
-                <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
+            {(persona || directProfile) && (
+              <div className="rounded-[18px] border border-line bg-card p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingProfile((v) => !v)}
+                      className="text-[11.5px] font-semibold text-leaf-deep underline decoration-dotted hover:opacity-70"
+                      title="학력·취업상태·주거형태·소득/자산분위를 채팅 없이 바로 선택합니다"
+                    >
+                      {editingProfile ? "완료" : "수정"}
+                    </button>
+                    {persona && (
+                      <button
+                        onClick={resetProfileToDefault}
+                        disabled={resettingProfile}
+                        className="text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink disabled:opacity-50"
+                        title="채팅으로 바뀐 내용을 모두 지우고 이 페르소나의 원래 기본값으로 되돌립니다"
+                      >
+                        ↺ 초기화
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
-                  <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4))}세</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{profileNote ? profileNote.split("부터 ")[1] : `${persona.declared.region.sido} ${persona.declared.region.sigungu}`}</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">학력</dt><dd className="font-semibold">{persona.declared.education.status} · {persona.declared.education.major}</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">취업상태</dt><dd className="font-semibold">{persona.declared.employmentStatus}</dd></div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-mute">{editingProfile ? "생년월일" : "나이"}</dt>
+                    <dd className="font-semibold">
+                      {editingProfile
+                        ? <FieldDate field="birth_date" />
+                        : (() => { const bd = currentFieldValue("birth_date"); return bd ? `${new Date().getFullYear() - Number(bd.slice(0, 4))}세` : <MissingBadge />; })()}
+                    </dd>
+                  </div>
+                  {editingProfile ? (
+                    <div className="flex flex-col gap-1">
+                      <dt className="text-mute">거주지</dt>
+                      <dd className="flex flex-col gap-1 font-semibold">
+                        <FieldSelect field="region_sido" options={SIDO_OPTIONS} />
+                        <FieldText field="region_sigungu" placeholder="시·군·구" />
+                      </dd>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">거주지</dt>
+                      <dd className="font-semibold">{`${currentFieldValue("region_sido") ?? ""} ${currentFieldValue("region_sigungu") ?? ""}`.trim() || <MissingBadge />}</dd>
+                    </div>
+                  )}
+                  {shouldShowField("education_status") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">학력</dt>
+                      <dd className="font-semibold">
+                        {editingProfile
+                          ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} />
+                          : persona
+                            ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}`
+                            : currentFieldValue("education_status") ?? <MissingBadge />}
+                      </dd>
+                    </div>
+                  )}
+                  {shouldShowField("employment_status") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">취업상태</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? <MissingBadge />}</dd>
+                    </div>
+                  )}
+                  {shouldShowField("housing_type") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">가구형태</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="housing_type" options={HOUSING_OPTIONS} /> : currentFieldValue("housing_type") ?? <MissingBadge />}</dd>
+                    </div>
+                  )}
+                  {shouldShowField("income_bracket") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">소득분위</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="income_bracket" options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? <MissingBadge />}</dd>
+                    </div>
+                  )}
+                  {shouldShowField("asset_bracket") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">자산분위</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="asset_bracket" options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? <MissingBadge />}</dd>
+                    </div>
+                  )}
                 </dl>
               </div>
             )}
-
-            <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
-              <p className="text-[12.5px] font-bold text-mute">금융 정보</p>
-              <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
-                {persona && (
-                  <>
-                    <div className="flex justify-between"><dt className="text-mute">소득분위</dt><dd className="font-semibold">{persona.declared.incomeBracket ?? "-"}</dd></div>
-                    <div className="flex justify-between"><dt className="text-mute">자산분위</dt><dd className="font-semibold">{persona.declared.assetBracket ?? "-"}</dd></div>
-                  </>
-                )}
-                <div className="flex justify-between"><dt className="text-mute">이번 달 담은 혜택</dt><dd className="font-semibold">{savedRecs.length}건</dd></div>
-                <div className="mt-1 flex items-center justify-between rounded-[10px] bg-mint px-2.5 py-1.5">
-                  <dt className="text-[13px] font-bold text-leaf-deep">이번 달 아낄 티끌</dt>
-                  <dd className="text-[15px] font-bold text-leaf-deep">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</dd>
-                </div>
-              </dl>
-            </div>
-
-            <Link
-              href="/app/simulate"
-              className="block w-full rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
-            >
-              <p className="text-[12.5px] font-bold text-mute">취업 후엔?</p>
-              <p className="mt-0.5 text-[15px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>
-              <p className="mt-1 text-[12px] text-mute">연봉·목표 → 자산 배분·열리는 제도</p>
-            </Link>
           </aside>
         </div>
       </div>

@@ -6,6 +6,7 @@ import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { getPersona } from "@/data/personas";
 import { SimulateView, type SimSession } from "@/components/app/SimulateView";
+import { EmploymentToggle } from "@/components/app/EmploymentToggle";
 
 export default function SimulatePage() {
   const [session, setSession] = useState<SimSession | null | undefined>(undefined);
@@ -40,14 +41,16 @@ export default function SimulatePage() {
       <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-6 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
-        <span className="ml-auto text-[16px] text-mute">
-          {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
-          <Link href="/app/start" className="underline">프로필 변경</Link>
+        <span className="ml-auto flex items-center gap-2.5 text-[16px] text-mute">
+          <EmploymentToggle />
+          <span>
+            {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
+            <Link href="/app/start" className="underline">프로필 변경</Link>
+          </span>
         </span>
       </header>
 
       <div className="mx-auto w-full max-w-[1600px] px-6 pb-16">
-        <Link href="/app" className="inline-block text-[15px] text-mute underline">← 캘린더로 돌아가기</Link>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[14px] font-bold text-mute">취업 후엔 어떻게 될까</p>

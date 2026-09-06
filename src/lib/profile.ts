@@ -119,6 +119,19 @@ export async function resolveProfile(opts: {
         } else if (c.field === "employment_status") {
           summary["취업상태"] = c.new_value;
           if (profileRow) profileRow = { ...profileRow, employment_status: c.new_value };
+        } else if (c.field === "income_bracket") {
+          summary["가구중위소득구간"] = c.new_value;
+          if (profileRow) profileRow = { ...profileRow, income_bracket: c.new_value };
+        } else if (c.field === "asset_bracket") {
+          if (profileRow) profileRow = { ...profileRow, asset_bracket: c.new_value };
+        } else if (c.field === "housing_type") {
+          if (profileRow) profileRow = { ...profileRow, housing_type: c.new_value };
+        } else if (c.field === "region_sigungu") {
+          sigungu = c.new_value;
+          if (profileRow) profileRow = { ...profileRow, region_sigungu: c.new_value };
+        } else if (c.field === "birth_date") {
+          age = ageFrom(c.new_value);
+          if (profileRow) profileRow = { ...profileRow, birth_date: c.new_value };
         }
       } else {
         pending.push(c);
