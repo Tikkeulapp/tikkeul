@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
-const FIELDS = new Set(["region_sido", "education_status", "employment_status"]);
+const FIELDS = new Set(["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket"]);
 
 /** GET /api/profile-change?userId=… — 사용자의 프로필 변경 이력 */
 export async function GET(request: Request) {
@@ -47,4 +47,16 @@ export async function POST(request: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ change: data });
+}
+
+/** DELETE /api/profile-change?userId=… — 이 사용자의 변경 이력을 전부 지워 페르소나 원본 기본값으로
+ * 되돌린다. 페르소나는 profile_survey 원본을 건드리지 않고 이 이력만으로 덮어써 왔으므로(resolveProfile
+ * 참고), 이력을 지우면 자동으로 코드에 박힌 초기값이 다시 보인다. 직접입력 회원은 이 이력이 감사로그일
+ * 뿐 profile_survey 원본이 이미 갱신돼 있어 되돌릴 "초기값"이 없다 — 프론트에서 페르소나에만 노출한다. */
+export async function DELETE(request: Request) {
+  const userId = new URL(request.url).searchParams.get("userId");
+  if (!userId) return NextResponse.json({ error: "userId가 필요합니다" }, { status: 400 });
+  const { error } = await supabaseAdmin().from("profile_changes").delete().eq("user_id", userId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

@@ -13,7 +13,7 @@ import { PERSONAS } from "@/data/personas";
 
 const isPersonaId = (id: string) => PERSONAS.some((p) => p.id === id);
 
-const TRACKED_FIELDS = new Set(["region_sido", "education_status", "employment_status"]);
+const TRACKED_FIELDS = new Set(["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket"]);
 
 const ProfileFieldsSchema = z.object({
   region_sido: z.string().nullable().optional(),
