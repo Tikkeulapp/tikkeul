@@ -41,8 +41,14 @@ export function buildFindPolicyTool(regionSido: string | null = null, regionSigu
         const words = titleQuery.split(/\s+/).map((w) => w.replace(/[%,()]/g, "")).filter(Boolean);
         let q = db.from("policies").select("*");
         for (const w of words) q = q.ilike("title", `%${w}%`);
-        const { data: rows } = await q.limit(1);
-        if (rows && rows.length > 0) return JSON.stringify({ found: true, policy: rows[0] });
+        const { data: rows } = await q.limit(10);
+        if (rows && rows.length > 0) {
+          // 같은 제목으로 실제 수집 데이터(ontong/gov24)와 큐레이션 데모 정책(curated, 구조화
+          // 자격조건 있음)이 동시에 잡힐 수 있다(예: "국민취업지원제도"가 5건) — 그중 curated가
+          // 있으면 그걸 우선한다. 그래야 매번 다른 정책이 잡혀 판정이 들쭉날쭉해지지 않는다.
+          const best = rows.find((r) => r.source === "curated") ?? rows[0];
+          return JSON.stringify({ found: true, policy: best });
+        }
 
         // 폴백: "토익 시험 응시료"처럼 정책명이 아닌 서술이면 키워드(동의어 포함)로 원문을 검색해 가장 관련 높은 1건
         const kws = searchKeywords(titleQuery);
@@ -117,8 +123,8 @@ export function buildSearchPoliciesTool(regionSido: string | null) {
       const kws = searchKeywords(query);
       const today = new Date().toISOString().slice(0, 10);
       const openOr = `end_date.is.null,end_date.gte.${today},always_open.eq.true`;
-      const COLS = "policy_id, title, provider, region_sidos, is_national, apply_url, search_text, end_date, always_open";
-      type Row = { policy_id: string; title: string; provider: string | null; region_sidos: string[] | null; is_national: boolean | null; apply_url: string | null; search_text: string | null; end_date: string | null; always_open: boolean | null };
+      const COLS = "policy_id, title, provider, region_sidos, is_national, apply_url, search_text, end_date, always_open, source";
+      type Row = { policy_id: string; title: string; provider: string | null; region_sidos: string[] | null; is_national: boolean | null; apply_url: string | null; search_text: string | null; end_date: string | null; always_open: boolean | null; source: string | null };
       // 키워드별로 거주지·전국 풀을 따로 조회 → 한 키워드가 후보를 독식하지 않게
       const pools: Promise<{ data: Row[] | null }>[] = [];
       for (const k of kws) {
@@ -128,11 +134,12 @@ export function buildSearchPoliciesTool(regionSido: string | null) {
       const seen = new Set<string>();
       const rows: Row[] = [];
       for (const r of await Promise.all(pools)) for (const x of r.data ?? []) if (!seen.has(x.policy_id)) { seen.add(x.policy_id); rows.push(x); }
-      // 코드 점수화: 제목 일치 ×3 + 원문 키워드 수 + 거주지 정책 +1, 마감·중복 제거
+      // 코드 점수화: 제목 일치 ×3 + 원문 키워드 수 + 거주지 정책 +1 + curated 출처 +2(같은 제목이
+      // 실제 수집 데이터와 큐레이션 데모 정책 양쪽에 있을 때 항상 curated가 이기게), 마감·중복 제거
       const norm = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
       const seenTitle = new Set<string>();
       const ranked = rows
-        .map((r) => ({ r, sc: kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1) }))
+        .map((r) => ({ r, sc: kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1) + (r.source === "curated" ? 2 : 0) }))
         .filter((x) => x.sc > 0)
         .sort((a, b) => b.sc - a.sc)
         .filter((x) => { const t = norm(x.r.title); if (seenTitle.has(t)) return false; seenTitle.add(t); return true; })
@@ -213,35 +220,44 @@ export function buildWebSearchFallbackTool() {
   );
 }
 
+/** classifyPolicyForUser(규칙엔진)로 판정 불가(구조화 조건 없음)일 때의 공용 LLM 1차 판정 —
+ * check_eligibility_detail(사용자에게 보여줌)과 save_*(DB에 저장함)가 이걸 똑같이 호출해야
+ * "화면엔 가능이라 해놓고 저장은 insufficient_info로 되는" 불일치가 안 생긴다(실제로 있었던 버그:
+ * save 쪽만 이 판정을 안 쓰고 무조건 insufficient_info를 반환하고 있었음). */
+async function judgeWhenUnstructured(ctx: ProfileCtx, policyId: string) {
+  const db = supabaseAdmin();
+  const { data: pol } = await db.from("policies").select("title, provider, region_sidos, is_national, search_text").eq("policy_id", policyId).maybeSingle();
+  const row = ctx.profileRow ?? {};
+  const birth = typeof row.birth_date === "string" ? row.birth_date : null;
+  const age = birth ? new Date().getFullYear() - Number(birth.slice(0, 4)) : null;
+  const summary = {
+    나이: age, 거주지: `${row.region_sido ?? ""} ${row.region_sigungu ?? ""}`.trim() || null, 학력: row.education_status ?? null,
+    취업상태: row.employment_status ?? null, 주거형태: row.housing_type ?? null, 가구중위소득구간: row.income_bracket ?? null,
+    월평균근로소득: ctx.financeRow?.monthly_work_income_krw ?? null, 수급중수당: ctx.financeRow?.receiving_benefits ?? null,
+  };
+  try {
+    const v = await judgePolicy({
+      profileSummary: summary, profileRow: null, financeRow: null, policyId: null,
+      policy: { title: pol?.title ?? policyId, region: pol?.is_national ? "전국" : (pol?.region_sidos ?? []).join(", "), target: (pol?.search_text ?? "").slice(0, 700), content: pol?.provider ?? undefined } as never,
+    });
+    const status = v.eligibility === "LIKELY" ? "confirmed" as const : v.eligibility === "UNLIKELY" ? "excluded" as const : "insufficient_info" as const;
+    return { status, missingFields: v.missing_information ?? [], reasons: v.reasons ?? [], evidenceTodo: v.evidence_todo ?? [], score: v.score };
+  } catch {
+    return { status: "insufficient_info" as const, missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED], reasons: [] as string[], evidenceTodo: [] as string[], score: undefined };
+  }
+}
+
 export function buildCheckEligibilityTool(ctx: ProfileCtx) {
   return tool(
     async ({ policyId }: { policyId: string }) => {
       const classified = await classifyPolicyForUser(policyId, ctx.profileRow, ctx.financeRow);
       if (!classified) {
         // 구조화 자격조건(policy_eligibility)이 없는 정책(대부분) → 정책 원문 + 프로필로 LLM 1차 판정 (자세히보기의 AI 판정과 같은 경로)
-        const db = supabaseAdmin();
-        const { data: pol } = await db.from("policies").select("title, provider, region_sidos, is_national, search_text, end_date, always_open").eq("policy_id", policyId).maybeSingle();
-        const row = ctx.profileRow ?? {};
-        const birth = typeof row.birth_date === "string" ? row.birth_date : null;
-        const age = birth ? new Date().getFullYear() - Number(birth.slice(0, 4)) : null;
-        const summary = {
-          나이: age, 거주지: `${row.region_sido ?? ""} ${row.region_sigungu ?? ""}`.trim() || null, 학력: row.education_status ?? null,
-          취업상태: row.employment_status ?? null, 주거형태: row.housing_type ?? null, 가구중위소득구간: row.income_bracket ?? null,
-          월평균근로소득: ctx.financeRow?.monthly_work_income_krw ?? null, 수급중수당: ctx.financeRow?.receiving_benefits ?? null,
-        };
-        try {
-          const v = await judgePolicy({
-            profileSummary: summary, profileRow: null, financeRow: null, policyId: null,
-            policy: { title: pol?.title ?? policyId, region: pol?.is_national ? "전국" : (pol?.region_sidos ?? []).join(", "), target: (pol?.search_text ?? "").slice(0, 700), content: pol?.provider ?? undefined } as never,
-          });
-          const status = v.eligibility === "LIKELY" ? "confirmed" : v.eligibility === "UNLIKELY" ? "excluded" : "insufficient_info";
-          return JSON.stringify({
-            status, checks: [], missingFields: v.missing_information ?? [], reasons: v.reasons ?? [], evidence_todo: v.evidence_todo ?? [], score: v.score,
-            basis: "llm_fallback", note: "이 정책은 구조화 자격조건이 아직 없어 정책 원문과 프로필을 대조한 AI 1차 판정입니다. 최종 자격은 공식 기관 확인.",
-          });
-        } catch {
-          return JSON.stringify({ status: "insufficient_info", missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED], checks: [], note: "구조화 자격조건이 없고 AI 판정도 실패해 공식 페이지 확인이 필요합니다." });
-        }
+        const j = await judgeWhenUnstructured(ctx, policyId);
+        return JSON.stringify({
+          status: j.status, checks: [], missingFields: j.missingFields, reasons: j.reasons, evidence_todo: j.evidenceTodo, score: j.score,
+          basis: "llm_fallback", note: "이 정책은 구조화 자격조건이 아직 없어 정책 원문과 프로필을 대조한 AI 1차 판정입니다. 최종 자격은 공식 기관 확인.",
+        });
       }
       return JSON.stringify(classified.result);
     },
@@ -277,7 +293,10 @@ export function buildBenefitInfoTool() {
 
 async function computeVerdictForSave(ctx: ProfileCtx, policyId: string) {
   const classified = await classifyPolicyForUser(policyId, ctx.profileRow, ctx.financeRow);
-  if (!classified) return { status: "insufficient_info" as const, missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED] };
+  if (!classified) {
+    const j = await judgeWhenUnstructured(ctx, policyId);
+    return { status: j.status, missingFields: j.missingFields };
+  }
   return { status: classified.result.status, missingFields: classified.result.missingFields };
 }
 
