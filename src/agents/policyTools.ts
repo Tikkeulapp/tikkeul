@@ -20,7 +20,7 @@ export type ProfileCtx = {
   financeRow: Record<string, unknown> | null;
 };
 
-export function buildFindPolicyTool(regionSido: string | null = null) {
+export function buildFindPolicyTool(regionSido: string | null = null, regionSigungu: string | null = null) {
   return tool(
     async ({ titleQuery, referenceMatchId }: { titleQuery?: string | null; referenceMatchId?: string | null }) => {
       const db = supabaseAdmin();
@@ -63,7 +63,15 @@ export function buildFindPolicyTool(regionSido: string | null = null) {
         if (pool.length) {
           const scored = pool;
           const best = [...scored].sort((a, b) => {
-            const sc = (r: { title: string; search_text: string | null; is_national: boolean | null }) => kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1);
+            const gu = regionSigungu ? regionSigungu.replace(/(특례시|시|군|구)$/, "") : null;
+            const sc = (r: { title: string; provider?: string | null; search_text: string | null; is_national: boolean | null }) => {
+              let v = kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1);
+              const prov = r.provider ?? "";
+              if (gu && (prov.includes(gu) || r.title.includes(gu))) v += 5; // 사용자 시군구 정책 우선
+              const m = prov.match(/(?:특별시|광역시|특별자치시|도|특별자치도)\s*([가-힣]+?)(?:특례시|시|군|구)(?=\s|$)/);
+              if (m && gu && !m[1].startsWith(gu)) v -= 4; // 다른 시군구 전용은 감점
+              return v;
+            };
             return sc(b) - sc(a);
           })[0];
           return JSON.stringify({ found: true, policy: best, matched_by: "keywords", keywords: kws });
