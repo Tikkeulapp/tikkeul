@@ -63,6 +63,13 @@ export async function POST(request: Request) {
         수급중수당: d.benefits,
         최근취준지출: d.jobPrepSpending.slice(0, 5),
       },
+      // 판정 LLM이 "응시료 결제 = 해당 시험 응시"를 매번 스스로 추론하게 두면 같은 사용자·같은 정책에서
+      // 판정이 흔들린다(실제로 신청 가능성 높음 ↔ 미충족이 오갔음). 결제내역에서 응시 사실을 코드로 뽑아
+      // 확정 사실로 넘긴다 — "숫자·사실은 코드가, 해설은 AI가" 원칙.
+      자격시험_응시이력: d.jobPrepSpending
+        .filter((t) => /응시료|시험/.test(t.description))
+        .map((t) => `${t.date} ${t.description.replace(/\s*응시료.*$/, "")} 응시 (응시료 ${t.amountKrw.toLocaleString("ko-KR")}원 결제, 마이데이터 확정)`),
+      자격시험_응시여부: d.jobPrepSpending.some((t) => /응시료|시험/.test(t.description)) ? "있음 (2025년 이후 응시료 결제내역 존재)" : "결제내역상 확인되지 않음",
     };
   } else {
     if (!profileRow) return NextResponse.json({ error: "프로필을 찾을 수 없습니다" }, { status: 404 });
