@@ -11,6 +11,11 @@ git checkout -q -B "$DST" "origin/$SRC"
 if ! git merge --no-ff -q origin/main -m "merge: main → $SRC 프리뷰 미러"; then
   echo "❌ 충돌 발생 — 아래 파일을 해결한 뒤 'git commit && git push -f -u origin $DST'"; git diff --name-only --diff-filter=U; exit 1
 fi
+# 팀원이 이미 main을 머지해 둔 경우 위 머지는 커밋을 만들지 않는다 → 맨 위 커밋 작성자가 팀원이면 Vercel(Hobby)이 배포를 차단.
+# 본인 계정 커밋이 항상 맨 위에 오도록 빈 커밋을 하나 얹는다.
+if [ "$(git log -1 --format=%ae)" != "$(git config user.email)" ]; then
+  git commit -q --allow-empty -m "chore: $SRC 프리뷰 미러 (본인 계정 커밋으로 배포 트리거)"
+fi
 git push -q -f -u origin "$DST"
 echo "✅ pushed $DST ($(git rev-parse --short HEAD)) → https://tikle-git-$(echo "$DST" | tr '/' '-')-cau-et.vercel.app"
 git checkout -q "$cur"
