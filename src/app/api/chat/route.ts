@@ -189,7 +189,7 @@ export async function POST(request: Request) {
       if (plan.policyMode === "compare") {
         policyReply = await runPolicyCompare(ctx, messages, plan.compareTargets ?? []);
       } else if (plan.policyMode === "lookup_and_check") {
-        policyReply = await runPolicyLookup(ctx, messages, plan.policyQuery, plan.referenceMatchId);
+        policyReply = await runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId);
       } else {
         policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery);
         if (/답변을 정리하는 중 문제/.test(policyReply)) policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery); // 모델이 빈 답을 낸 경우 1회 재시도
