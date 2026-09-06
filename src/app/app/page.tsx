@@ -8,6 +8,7 @@ import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
 import { examFeeFor } from "@/data/exam_fees";
 import { findExamSession } from "@/data/exam_schedules";
+import { SIDO_CANONICAL } from "@/lib/region";
 
 type CalendarEvent = {
   event_id: string;
@@ -176,7 +177,7 @@ export default function AppPage() {
   const [applyingChange, setApplyingChange] = useState(false);
   const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (거주지 변경 이력)
   // 우측 프로필 카드 실시간 반영 — 채팅으로 바뀐 학력/취업상태/소득·자산분위를 페르소나 기본값 위에 덮어씀
-  const OVERRIDE_FIELDS = ["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"] as const;
+  const OVERRIDE_FIELDS = ["region_sido", "region_sigungu", "birth_date", "education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"] as const;
   const [profileOverrides, setProfileOverrides] = useState<Partial<Record<(typeof OVERRIDE_FIELDS)[number], string>>>({});
   const [resettingProfile, setResettingProfile] = useState(false);
   // 방금 챗봇이 판정에 필요하다고 한 필드만 담아둔다 — 비어있는 필드를 무조건 다 보여주는 대신
@@ -184,7 +185,7 @@ export default function AppPage() {
   const [neededFields, setNeededFields] = useState<Set<string>>(new Set());
 
   // "내 정보로 시작하기"(직접입력) 사용자 — 페르소나처럼 코드에 declared가 없어 DB에서 직접 가져와야 함
-  type DirectProfile = { name: string | null; age: number | null; sido: string | null; sigungu: string | null; educationStatus: string | null; employmentStatus: string | null; incomeBracket: string | null; assetBracket: string | null; housingType: string | null };
+  type DirectProfile = { name: string | null; age: number | null; birthDate: string | null; sido: string | null; sigungu: string | null; educationStatus: string | null; employmentStatus: string | null; incomeBracket: string | null; assetBracket: string | null; housingType: string | null };
   const [directProfile, setDirectProfile] = useState<DirectProfile | null>(null);
   const refreshDirectProfile = useCallback(async (s: Session) => {
     if (s.personaId) return; // 페르소나는 persona.declared + profileOverrides로 이미 처리
@@ -213,7 +214,8 @@ export default function AppPage() {
   // 우측 카드에서 학력/취업상태/소득·자산분위를 채팅 없이 바로 고를 수 있게 — 자격 판정에 필요한
   // 정보를 안다면 굳이 말로 풀어 써야 할 이유가 없다. /api/profile-change가 이미 두 사용자 유형
   // (페르소나=이력만, 직접입력=원본도) 모두에서 resolveProfile 오버레이로 반영되므로 그대로 재사용.
-  type EditableField = "education_status" | "employment_status" | "income_bracket" | "asset_bracket" | "housing_type";
+  type EditableField = "region_sido" | "region_sigungu" | "birth_date" | "education_status" | "employment_status" | "income_bracket" | "asset_bracket" | "housing_type";
+  const SIDO_OPTIONS = [...SIDO_CANONICAL];
   const EDUCATION_OPTIONS = ["재학", "휴학", "졸업유예", "졸업"];
   const EMPLOYMENT_OPTIONS = ["취업 준비 중", "이직 준비 중", "재취업 준비 중", "기타"];
   const INCOME_OPTIONS = ["~60%", "60~100%", "100~150%", "150%~"];
@@ -224,12 +226,18 @@ export default function AppPage() {
 
   const currentFieldValue = (field: EditableField): string | null => {
     if (persona) {
+      if (field === "region_sido") return profileOverrides.region_sido ?? persona.declared.region.sido;
+      if (field === "region_sigungu") return profileOverrides.region_sigungu ?? (profileOverrides.region_sido ? null : persona.declared.region.sigungu);
+      if (field === "birth_date") return profileOverrides.birth_date ?? persona.declared.birthDate;
       if (field === "education_status") return profileOverrides.education_status ?? persona.declared.education.status;
       if (field === "employment_status") return profileOverrides.employment_status ?? persona.declared.employmentStatus;
       if (field === "income_bracket") return profileOverrides.income_bracket ?? persona.declared.incomeBracket;
       if (field === "housing_type") return profileOverrides.housing_type ?? persona.declared.household.housing;
       return profileOverrides.asset_bracket ?? persona.declared.assetBracket;
     }
+    if (field === "region_sido") return directProfile?.sido ?? null;
+    if (field === "region_sigungu") return directProfile?.sigungu ?? null;
+    if (field === "birth_date") return directProfile?.birthDate ?? null;
     if (field === "education_status") return directProfile?.educationStatus ?? null;
     if (field === "employment_status") return directProfile?.employmentStatus ?? null;
     if (field === "income_bracket") return directProfile?.incomeBracket ?? null;
@@ -270,6 +278,37 @@ export default function AppPage() {
       <option value="" disabled>선택</option>
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
+  );
+
+  // 시·군·구는 정해진 목록이 없어 자유 입력 — 매 키 입력마다 저장하면 타이핑 중 계속 API를
+  // 두드리게 되니, 포커스를 벗어날 때(blur)만 값이 바뀌었으면 저장한다.
+  const FieldText = ({ field, placeholder }: { field: EditableField; placeholder?: string }) => (
+    <input
+      key={currentFieldValue(field) ?? ""}
+      type="text"
+      defaultValue={currentFieldValue(field) ?? ""}
+      placeholder={placeholder}
+      disabled={savingField === field}
+      onBlur={(e) => {
+        const v = e.target.value.trim();
+        if (v && v !== currentFieldValue(field)) void saveProfileField(field, v);
+      }}
+      className={`w-24 rounded border px-1.5 py-0.5 text-right text-[13px] disabled:opacity-50 ${
+        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
+      }`}
+    />
+  );
+
+  const FieldDate = ({ field }: { field: EditableField }) => (
+    <input
+      type="date"
+      value={currentFieldValue(field)?.slice(0, 10) ?? ""}
+      disabled={savingField === field}
+      onChange={(e) => { if (e.target.value) void saveProfileField(field, e.target.value); }}
+      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${
+        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
+      }`}
+    />
   );
 
   const MissingBadge = () => (
@@ -1111,7 +1150,7 @@ export default function AppPage() {
                       className="text-[11.5px] font-semibold text-leaf-deep underline decoration-dotted hover:opacity-70"
                       title="학력·취업상태·주거형태·소득/자산분위를 채팅 없이 바로 선택합니다"
                     >
-                      {editingProfile ? "완료" : "✏️ 수정"}
+                      {editingProfile ? "완료" : "수정"}
                     </button>
                     {persona && (
                       <button
@@ -1126,8 +1165,22 @@ export default function AppPage() {
                   </div>
                 </div>
                 <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
-                  <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{persona ? new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4)) : directProfile?.age ?? "-"}세</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{persona ? `${profileOverrides.region_sido ?? persona.declared.region.sido} ${!profileOverrides.region_sido ? persona.declared.region.sigungu : ""}` : `${directProfile?.sido ?? ""} ${directProfile?.sigungu ?? ""}`.trim() || "-"}</dd></div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-mute">{editingProfile ? "생년월일" : "나이"}</dt>
+                    <dd className="font-semibold">
+                      {editingProfile
+                        ? <FieldDate field="birth_date" />
+                        : (() => { const bd = currentFieldValue("birth_date"); return bd ? `${new Date().getFullYear() - Number(bd.slice(0, 4))}세` : <MissingBadge />; })()}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-mute">거주지</dt>
+                    <dd className="font-semibold">
+                      {editingProfile
+                        ? <span className="flex gap-1"><FieldSelect field="region_sido" options={SIDO_OPTIONS} /><FieldText field="region_sigungu" placeholder="시·군·구" /></span>
+                        : `${currentFieldValue("region_sido") ?? ""} ${currentFieldValue("region_sigungu") ?? ""}`.trim() || <MissingBadge />}
+                    </dd>
+                  </div>
                   {shouldShowField("education_status") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">학력</dt>

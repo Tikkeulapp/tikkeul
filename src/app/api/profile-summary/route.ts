@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   return NextResponse.json({
     name: (row.name as string | undefined) ?? null,
     age: profile.age,
+    birthDate: (row.birth_date as string | undefined) ?? null,
     sido: profile.sido,
     sigungu: profile.sigungu,
     educationStatus: (row.education_status as string | undefined) ?? null,

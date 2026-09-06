@@ -126,6 +126,12 @@ export async function resolveProfile(opts: {
           if (profileRow) profileRow = { ...profileRow, asset_bracket: c.new_value };
         } else if (c.field === "housing_type") {
           if (profileRow) profileRow = { ...profileRow, housing_type: c.new_value };
+        } else if (c.field === "region_sigungu") {
+          sigungu = c.new_value;
+          if (profileRow) profileRow = { ...profileRow, region_sigungu: c.new_value };
+        } else if (c.field === "birth_date") {
+          age = ageFrom(c.new_value);
+          if (profileRow) profileRow = { ...profileRow, birth_date: c.new_value };
         }
       } else {
         pending.push(c);
