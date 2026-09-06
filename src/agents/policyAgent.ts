@@ -45,6 +45,14 @@ const LOOKUP_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
 절차:
 1. find_policy로 정책을 특정하세요. referenceMatchId가 주어졌다면 그것으로, 아니면
    titleQuery로 찾으세요.
+1-1. find_policy가 못 찾았으면(found: false), titleQuery가 실은 정확한 정책명이 아니라
+   "토익 응시료 지원"처럼 주제를 서술한 표현일 수 있습니다(실제 정책명은 지자체마다
+   "OO구 미취업청년 자격증 응시료 지원" 식으로 다르게 붙어 있는 경우가 흔함). 이 경우
+   search_policies로 같은 질의를 다시 검색해서 관련 후보를 찾으세요.
+   - 후보가 1건이면 그 정책으로 이어서 진행하세요(2번부터).
+   - 후보가 여러 건이면 목록을 나열하고 어떤 걸 원하는지 사용자에게 되물으세요
+     (이 단계에서는 save_lookup_result를 호출하지 마세요).
+   - search_policies도 못 찾았으면 "관련 정책을 찾지 못했습니다"라고 답하세요.
 2. check_eligibility_detail로 eligibility_json 항목별 충족 여부를 확인하세요.
 3. get_benefit_info로 혜택 내용을 확인해 답변에 포함하세요.
 4. 부족한 필드(actual이 없는 항목)가 있으면, 그래도 지금까지 확인된 결과를 바탕으로
@@ -107,13 +115,20 @@ export async function runPolicySearch(
 
 export async function runPolicyLookup(
   ctx: ProfileCtx,
+  regionSido: string | null,
   messages: ChatMessage[],
   policyQuery: string | null | undefined,
   referenceMatchId: string | null | undefined,
 ): Promise<string> {
   const agent = createReactAgent({
     llm: makeLlm(),
-    tools: [buildFindPolicyTool(), buildCheckEligibilityTool(ctx), buildBenefitInfoTool(), buildSaveVerdictTool(ctx, "lookup_and_check")],
+    tools: [
+      buildFindPolicyTool(),
+      buildSearchPoliciesTool(regionSido),
+      buildCheckEligibilityTool(ctx),
+      buildBenefitInfoTool(),
+      buildSaveVerdictTool(ctx, "lookup_and_check"),
+    ],
     prompt: LOOKUP_SYSTEM_PROMPT,
   });
   const turnMessages = [...messages];
