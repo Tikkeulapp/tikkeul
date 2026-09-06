@@ -180,6 +180,18 @@ export default function AppPage() {
   const [profileOverrides, setProfileOverrides] = useState<Partial<Record<(typeof OVERRIDE_FIELDS)[number], string>>>({});
   const [resettingProfile, setResettingProfile] = useState(false);
 
+  // "내 정보로 시작하기"(직접입력) 사용자 — 페르소나처럼 코드에 declared가 없어 DB에서 직접 가져와야 함
+  type DirectProfile = { name: string | null; age: number | null; sido: string | null; sigungu: string | null; educationStatus: string | null; employmentStatus: string | null; incomeBracket: string | null; assetBracket: string | null };
+  const [directProfile, setDirectProfile] = useState<DirectProfile | null>(null);
+  const refreshDirectProfile = useCallback(async (s: Session) => {
+    if (s.personaId) return; // 페르소나는 persona.declared + profileOverrides로 이미 처리
+    try {
+      const qs = new URLSearchParams({ userId: s.userId, ...(s.profileId ? { profileId: s.profileId } : {}) });
+      const data = await fetch(`/api/profile-summary?${qs}`).then((r) => r.json());
+      setDirectProfile(data);
+    } catch { /* 무시 — 카드가 비어 보이는 정도 */ }
+  }, []);
+
   const refreshProfileOverrides = useCallback(async (userId: string) => {
     try {
       const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(userId)}`).then((r) => r.json());
@@ -282,6 +294,7 @@ export default function AppPage() {
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             void loadRecs(s);
             void refreshProfileOverrides(s.userId);
+            void refreshDirectProfile(s);
           }
         }
       } catch {
@@ -289,7 +302,7 @@ export default function AppPage() {
       }
       setLoaded(true);
     })();
-  }, [loadEvents, loadSavedIds, loadRecs, refreshProfileOverrides]);
+  }, [loadEvents, loadSavedIds, loadRecs, refreshProfileOverrides, refreshDirectProfile]);
 
   /** 낙관적 업데이트 후 서버에 반영 — 실패해도 UI를 되돌리진 않는다(기존 localStorage 방식과
    * 동일하게 "일단 눈에 보이는 상태"를 우선하되, 다음 로드 때 서버 상태로 다시 맞춰진다). */
@@ -457,6 +470,7 @@ export default function AppPage() {
       const label = `${effectiveFrom.slice(5).replace("-", "/")}부터 ${rc.to}`;
       setMatchMap((prev) => { const cur = prev[eventId]; if (!cur) return prev; const next = { ...prev, [eventId]: { ...cur, applied: label } }; persistMatches(session.userId, next); return next; });
       void refreshProfileOverrides(session.userId);
+      void refreshDirectProfile(session);
       void loadRecs(session, true); // 거주지가 바뀌었으니 추천 탭을 새 지역 기준으로 다시
     } catch (e) {
       alert(`거주지 변경 적용 실패: ${e instanceof Error ? e.message : e}`);
@@ -493,6 +507,7 @@ export default function AppPage() {
       if (session && Array.isArray(json.plan?.intents) && json.plan.intents.includes("profile_update")) {
         void loadRecs(session, true);
         void refreshProfileOverrides(session.userId);
+        void refreshDirectProfile(session);
       }
     } catch (e) {
       setNotice(`AI 응답에 실패했어요: ${e instanceof Error ? e.message : e}`);
@@ -1004,7 +1019,7 @@ export default function AppPage() {
           <aside className="flex flex-col gap-3">
             <div className="rounded-2xl border border-line bg-card p-4 text-center shadow-lift">
               <img
-                src={persona ? `/avatars/${persona.id}.png` : "/avatars/default.svg"}
+                src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
                 alt={`${displayName} 프로필 사진`}
                 className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-leaf-deep/20"
                 onError={(e) => {
@@ -1016,24 +1031,26 @@ export default function AppPage() {
               {persona && <p className="text-[12px] text-mute">{persona.tagline}</p>}
             </div>
 
-            {persona && (
+            {(persona || directProfile) && (
               <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
                 <div className="flex items-center justify-between">
                   <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
-                  <button
-                    onClick={resetProfileToDefault}
-                    disabled={resettingProfile}
-                    className="text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink disabled:opacity-50"
-                    title="채팅으로 바뀐 내용을 모두 지우고 이 페르소나의 원래 기본값으로 되돌립니다"
-                  >
-                    ↺ 초기값으로 되돌리기
-                  </button>
+                  {persona && (
+                    <button
+                      onClick={resetProfileToDefault}
+                      disabled={resettingProfile}
+                      className="text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink disabled:opacity-50"
+                      title="채팅으로 바뀐 내용을 모두 지우고 이 페르소나의 원래 기본값으로 되돌립니다"
+                    >
+                      ↺ 초기값으로 되돌리기
+                    </button>
+                  )}
                 </div>
                 <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
-                  <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4))}세</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{profileOverrides.region_sido ?? persona.declared.region.sido} {!profileOverrides.region_sido && persona.declared.region.sigungu}</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">학력</dt><dd className="font-semibold">{profileOverrides.education_status ?? persona.declared.education.status} · {persona.declared.education.major}</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">취업상태</dt><dd className="font-semibold">{profileOverrides.employment_status ?? persona.declared.employmentStatus}</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{persona ? new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4)) : directProfile?.age ?? "-"}세</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{persona ? `${profileOverrides.region_sido ?? persona.declared.region.sido} ${!profileOverrides.region_sido ? persona.declared.region.sigungu : ""}` : `${directProfile?.sido ?? ""} ${directProfile?.sigungu ?? ""}`.trim() || "-"}</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">학력</dt><dd className="font-semibold">{persona ? `${profileOverrides.education_status ?? persona.declared.education.status} · ${persona.declared.education.major}` : directProfile?.educationStatus ?? "-"}</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">취업상태</dt><dd className="font-semibold">{persona ? profileOverrides.employment_status ?? persona.declared.employmentStatus : directProfile?.employmentStatus ?? "-"}</dd></div>
                 </dl>
               </div>
             )}
@@ -1041,10 +1058,10 @@ export default function AppPage() {
             <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
               <p className="text-[12.5px] font-bold text-mute">금융 정보</p>
               <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
-                {persona && (
+                {(persona || directProfile) && (
                   <>
-                    <div className="flex justify-between"><dt className="text-mute">소득분위</dt><dd className="font-semibold">{profileOverrides.income_bracket ?? persona.declared.incomeBracket ?? "-"}</dd></div>
-                    <div className="flex justify-between"><dt className="text-mute">자산분위</dt><dd className="font-semibold">{profileOverrides.asset_bracket ?? persona.declared.assetBracket ?? "-"}</dd></div>
+                    <div className="flex justify-between"><dt className="text-mute">소득분위</dt><dd className="font-semibold">{(persona ? profileOverrides.income_bracket ?? persona.declared.incomeBracket : directProfile?.incomeBracket) ?? "-"}</dd></div>
+                    <div className="flex justify-between"><dt className="text-mute">자산분위</dt><dd className="font-semibold">{(persona ? profileOverrides.asset_bracket ?? persona.declared.assetBracket : directProfile?.assetBracket) ?? "-"}</dd></div>
                   </>
                 )}
                 <div className="flex justify-between"><dt className="text-mute">이번 달 담은 혜택</dt><dd className="font-semibold">{savedRecs.length}건</dd></div>
