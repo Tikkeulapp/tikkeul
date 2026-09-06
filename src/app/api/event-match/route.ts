@@ -244,7 +244,7 @@ export async function POST(request: Request) {
         from: userSido,
         to: newSido,
         effectiveFrom: date ?? new Date().toISOString().slice(0, 10),
-        opening: (delta.opening ?? []).filter((o) => openById.has(o.policy_id) && o.score >= 60).slice(0, 6)
+        opening: (delta.opening ?? []).filter((o) => openById.has(o.policy_id) && o.score >= 60).filter((o, idx, arr) => { const t = normTitle(openById.get(o.policy_id)!.title); return arr.findIndex((x) => normTitle(openById.get(x.policy_id)!.title) === t) === idx; }).slice(0, 6)
           .map((o) => ({ ...shape(openById.get(o.policy_id)!), score: o.score, reason: o.reason })),
         closing: (delta.closing ?? []).filter((c) => closeById.has(c.policy_id)).slice(0, 4)
           .map((c) => ({ ...shape(closeById.get(c.policy_id)!), reason: c.reason })),
