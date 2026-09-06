@@ -65,45 +65,61 @@ export function buildFindPolicyTool() {
   );
 }
 
-// 질의 전체 문구를 통짜로 ilike하면 "면접 준비하는데 도움되는 지원금" 같은 자연어 문장이
-// search_text에 그대로 있을 리 없어 거의 항상 0건이 나온다(실제로 확인된 문제 — 모델도
-// 재시도 없이 바로 "못 찾음"으로 답해버림). 단어 단위로 쪼개 OR 매칭한다
-// (src/app/api/event-match/route.ts의 키워드 추출과 같은 원칙).
-const GENERIC_WORDS = new Set([
-  "준비", "작성", "지원", "신청", "등록", "참여", "운영", "안내", "프로그램",
-  "청년", "사업", "활동", "일정", "도움", "있어", "관련", "혜택", "제도", "있나요",
-]);
+const SEARCH_GENERIC = new Set(["정책", "지원", "제도", "혜택", "나한테", "저한테", "적합한", "있어", "있나요", "뭐", "무엇", "알려", "추천", "바뀌는게", "바뀌는", "받을", "수", "것", "거", "게", "있는", "내가", "저는", "나는", "다음주에", "이번", "관련"]);
+const SEARCH_SYNONYMS: Record<string, string[]> = {
+  실업보험: ["실업급여", "구직급여", "고용보험"], 실업: ["실업급여", "구직급여"], 정장: ["정장", "면접"], 토익: ["토익", "어학", "응시료"],
+  시험: ["응시료", "자격증", "시험"], 자격증: ["자격증", "응시료"], 집: ["주거", "월세", "전세"], 이사: ["이사", "월세", "전세", "보증금", "주거"],
+  월세: ["월세", "주거"], 취준: ["취업", "구직"], 취업: ["취업", "구직", "취업지원"], 수당: ["수당", "지원금"], 알바: ["아르바이트", "근로"],
+  학원: ["교육", "훈련", "내일배움"], 교육: ["교육", "훈련"], 면접: ["면접", "정장", "면접수당"], 교통: ["교통비", "교통"], 대출: ["대출", "이자"],
+};
+const SEARCH_DEFAULT_KW = ["취업", "구직", "면접", "자격증", "응시료", "월세"];
 
-function extractKeywords(query: string): string[] {
-  const words = query
-    .replace(/[%,()?!~]/g, " ")
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter((w) => w.length >= 2 && !GENERIC_WORDS.has(w));
-  return words.length > 0 ? words.slice(0, 6) : [query.replace(/[%,()]/g, "").trim()];
+/** 자유 질의 → 검색 키워드 (단어 분리 + 조사 제거 + 동의어 확장). 의미 있는 단어가 없으면 취준 기본 키워드 */
+export function searchKeywords(query: string): string[] {
+  const words = query.replace(/[%,()?!.]/g, " ").split(/\s+/).map((w) => w.replace(/(으로|에서|에게|까지|부터|이나|이랑|하고|으|로|은|는|이|가|을|를|의|에|도|만)$/, "")).filter((w) => w.length >= 2 && !SEARCH_GENERIC.has(w));
+  const out: string[] = [];
+  for (const w of words) for (const k of SEARCH_SYNONYMS[w] ?? [w]) if (!out.includes(k)) out.push(k);
+  return (out.length ? out : SEARCH_DEFAULT_KW).slice(0, 8);
 }
 
 export function buildSearchPoliciesTool(regionSido: string | null) {
   return tool(
     async ({ query, topK }: { query: string; topK?: number }) => {
-      const keywords = extractKeywords(query);
-      const kwOr = keywords.map((k) => `search_text.ilike.%${k}%`).join(",");
-      let q = supabaseAdmin()
-        .from("policies")
-        .select("policy_id, title, provider, region_sidos, is_national, apply_url, search_text")
-        .or(kwOr);
-      if (regionSido) q = q.or(`is_national.eq.true,region_sidos.cs.{"${regionSido}"}`);
-      const { data } = await q.limit(topK ?? 5);
-      return JSON.stringify(data ?? []);
+      const db = supabaseAdmin();
+      const kws = searchKeywords(query);
+      const today = new Date().toISOString().slice(0, 10);
+      const openOr = `end_date.is.null,end_date.gte.${today},always_open.eq.true`;
+      const COLS = "policy_id, title, provider, region_sidos, is_national, apply_url, search_text, end_date, always_open";
+      type Row = { policy_id: string; title: string; provider: string | null; region_sidos: string[] | null; is_national: boolean | null; apply_url: string | null; search_text: string | null; end_date: string | null; always_open: boolean | null };
+      // 키워드별로 거주지·전국 풀을 따로 조회 → 한 키워드가 후보를 독식하지 않게
+      const pools: Promise<{ data: Row[] | null }>[] = [];
+      for (const k of kws) {
+        if (regionSido) pools.push(db.from("policies").select(COLS).contains("region_sidos", [regionSido]).eq("is_national", false).ilike("search_text", `%${k}%`).or(openOr).limit(20) as unknown as Promise<{ data: Row[] | null }>);
+        pools.push(db.from("policies").select(COLS).eq("is_national", true).ilike("search_text", `%${k}%`).or(openOr).limit(15) as unknown as Promise<{ data: Row[] | null }>);
+      }
+      const seen = new Set<string>();
+      const rows: Row[] = [];
+      for (const r of await Promise.all(pools)) for (const x of r.data ?? []) if (!seen.has(x.policy_id)) { seen.add(x.policy_id); rows.push(x); }
+      // 코드 점수화: 제목 일치 ×3 + 원문 키워드 수 + 거주지 정책 +1, 마감·중복 제거
+      const norm = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
+      const seenTitle = new Set<string>();
+      const ranked = rows
+        .map((r) => ({ r, sc: kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1) }))
+        .filter((x) => x.sc > 0)
+        .sort((a, b) => b.sc - a.sc)
+        .filter((x) => { const t = norm(x.r.title); if (seenTitle.has(t)) return false; seenTitle.add(t); return true; })
+        .slice(0, topK ?? 8)
+        .map(({ r }) => ({ policy_id: r.policy_id, title: r.title, provider: r.provider, region_sidos: r.region_sidos, is_national: r.is_national, apply_url: r.apply_url, end_date: r.end_date, always_open: r.always_open, search_text: (r.search_text ?? "").slice(0, 400) }));
+      return JSON.stringify({ keywords: kws, results: ranked });
     },
     {
       name: "search_policies",
       description:
-        "자유 텍스트 질의로 정책 후보를 키워드 검색합니다 (pgvector 도입 전까지의 임시 구현 — ilike 기반, " +
-        "검색추천_3단설계.md의 v1과 동일한 방식). 문장을 그대로 넘겨도 내부에서 단어 단위로 쪼개 검색합니다.",
+        "자유 텍스트 질의로 정책 후보를 검색합니다. 질의를 단어로 나눠 동의어를 보강하고, 거주지·전국 정책을 키워드별로 조회한 뒤 관련도 순으로 정렬합니다 (마감 지난 정책 제외). " +
+        "결과는 {keywords, results[]} 형태입니다.",
       schema: z.object({
-        query: z.string().describe("검색 질의 (문장 그대로 넘겨도 됨)"),
-        topK: z.number().optional().describe("최대 개수 (기본 5)"),
+        query: z.string().describe("검색 질의 (사용자 문장 그대로여도 됨)"),
+        topK: z.number().optional().describe("최대 개수 (기본 8)"),
       }),
     },
   );
