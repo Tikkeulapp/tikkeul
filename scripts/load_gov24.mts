@@ -5,6 +5,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { SIDO_CANONICAL, normalizeSido } from "../src/lib/region";
 
 if (existsSync(".env.local")) {
   for (const line of readFileSync(".env.local", "utf-8").split("\n")) {
@@ -18,19 +19,33 @@ const db = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_
   auth: { persistSession: false },
 });
 
-const SIDOS = [
-  "서울특별시", "부산광역시", "대구광역시", "인천광역시", "광주광역시", "대전광역시",
-  "울산광역시", "세종특별자치시", "경기도", "강원특별자치도", "강원도", "충청북도",
-  "충청남도", "전북특별자치도", "전라북도", "전라남도", "경상북도", "경상남도", "제주특별자치도",
+// "재단법인충남경제진흥원"처럼 지역명이 맨 앞이 아니거나 축약형("충남")으로만 나오는 기관명이
+// 실제로 흔해서(직접 확인: gov24:O00109000017 "구직자 면접수당 지원" 등 4건이 전부 이 패턴으로
+// is_national=true로 잘못 분류돼 있었음) — startsWith 대신 includes로, 축약형도 lib/region.ts의
+// normalizeSido로 정규화해서 잡는다. 토큰은 길이 내림차순으로 검사해 "전라남도"가 "전남"보다
+// 먼저 걸리는 식의 우연한 부분일치를 줄인다.
+const REGION_TOKENS = [
+  ...SIDO_CANONICAL,
+  "충남", "충북", "경북", "경남", "전북", "전남", "광주", "강원도", "강원", "제주", "세종",
+  "서울", "부산", "대구", "인천", "대전", "울산", "경기",
 ];
-const NORMALIZE: Record<string, string> = { 강원도: "강원특별자치도", 전라북도: "전북특별자치도" };
+const UNIQ_TOKENS = [...new Set(REGION_TOKENS)].sort((a, b) => b.length - a.length);
+
+// 이름에 지역명이 들어있지만 실제로는 전국 단위인 기관(직접 확인된 예외만) — 예:
+// "서울올림픽기념국민체육진흥공단"(KSPO)은 1988 서울올림픽 기념으로 이름에 "서울"이 들어갈
+// 뿐 스포츠산업 취업지원 등 전국 사업만 운영한다(해당 정책 4건 모두 지역 제한 문구 없음).
+const NATIONAL_EXCEPTIONS = ["서울올림픽기념국민체육진흥공단"];
 
 type Row = Record<string, unknown>;
 const str = (v: unknown) => (v == null ? "" : String(v).trim());
 
-function regionFromProvider(provider: string): { sidos: string[]; national: boolean } {
-  for (const s of SIDOS) {
-    if (provider.startsWith(s)) return { sidos: [NORMALIZE[s] ?? s], national: false };
+export function regionFromProvider(provider: string): { sidos: string[]; national: boolean } {
+  if (NATIONAL_EXCEPTIONS.some((ex) => provider.includes(ex))) return { sidos: [], national: true };
+  for (const token of UNIQ_TOKENS) {
+    if (provider.includes(token)) {
+      const canonical = normalizeSido(token);
+      if (canonical) return { sidos: [canonical], national: false };
+    }
   }
   return { sidos: [], national: true }; // 중앙부처·공단 등 → 전국
 }
