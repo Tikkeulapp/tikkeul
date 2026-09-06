@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       if (m && userGu && !m[1].startsWith(userGu)) sc -= 4;
       return sc;
     };
-    const normTitle = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집/g, "");
+    const normTitle = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
     const seenTitle = new Set<string>();
     const candidates: Cand[] = raw
       .map((c) => ({ c, sc: scoreOf(c) }))

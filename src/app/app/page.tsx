@@ -913,11 +913,19 @@ export default function AppPage() {
             <dl className="mt-4 flex flex-col gap-3 text-[15px]">
               <div>
                 <dt className="font-bold text-mute">지원대상</dt>
-                <dd className="mt-0.5">{detail.target ?? (detail.source === "db" ? "정책 원문·공식 페이지 참고" : "-")}</dd>
+                <dd className="mt-0.5">{detail.target ?? (detail.source === "db" ? (detail.reason ?? "아래 정책 원문·공식 페이지 참고") : "-")}</dd>
               </div>
               <div>
                 <dt className="font-bold text-mute">지원내용</dt>
-                <dd className="mt-0.5 whitespace-pre-line">{detail.content ?? "-"}</dd>
+                <dd className="mt-0.5 whitespace-pre-line">
+                  {detail.source === "db" && detail.content ? (
+                    <ul className="flex flex-col gap-1">
+                      {detail.content.split(" | ").map((seg) => seg.trim()).filter(Boolean).slice(0, 6).map((seg, i) => (
+                        <li key={i} className="rounded-[8px] bg-mint-soft/70 px-2.5 py-1.5 text-[14px]">{seg}</li>
+                      ))}
+                    </ul>
+                  ) : (detail.content ?? "-")}
+                </dd>
               </div>
               <div>
                 <dt className="font-bold text-mute">신청방법</dt>

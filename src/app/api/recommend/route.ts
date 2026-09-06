@@ -21,6 +21,16 @@ const COLS = "policy_id, source, title, provider, theme, region_sidos, is_nation
 const BASE_KW = ["취업", "구직", "면접", "자격증", "응시료", "구직활동", "취업지원", "정장", "직업훈련", "청년수당", "인턴", "일경험"];
 const STRONG = ["응시료", "면접", "정장", "수당", "구직활동", "취업지원", "청년", "미취업", "교통비", "월세"];
 
+/** 원문에서 지원 금액을 규칙으로 읽는다 (예: "월 50만 원", "최대 10만원", "500,000원"). 없으면 0 */
+export function parseAmountKrw(text: string | null | undefined): number {
+  if (!text) return 0;
+  const m1 = text.match(/(\d{1,3}(?:,\d{3})?|\d+)\s*만\s*원/);
+  if (m1) return Math.round(Number(m1[1].replace(/,/g, "")) * 10000);
+  const m2 = text.match(/(\d{1,3}(?:,\d{3}){1,2})\s*원/);
+  if (m2) return Number(m2[1].replace(/,/g, ""));
+  return 0;
+}
+
 const SYSTEM = `당신은 한국 취업준비생 정책 어시스턴트입니다. [사용자]와 [정책 후보](공공 API에서 수집한 실제 정책)를 보고,
 이 사용자가 지금 신청을 검토할 가치가 있는 정책을 관련도 순으로 최대 6개 골라 JSON 하나로 출력하세요:
 {"picks": [{"policy_id": "...", "score": 0~100, "reason": "왜 이 사용자에게 맞는지 1문장(존댓말)", "benefit_summary": "혜택 핵심 12자 내외", "amount_krw": 원문에 명시된 지원 금액(원, 숫자)이 있을 때만, 없으면 null, "amount_basis": "금액 근거 원문 구절 또는 null"}]}
@@ -79,7 +89,7 @@ export async function POST(request: Request) {
     if (/재직자|사업주|기업\s*지원|출산|임산부|결혼|농업|창업/.test(c.title)) sc -= 4;
     return sc;
   };
-  const norm = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집/g, "");
+  const norm = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
   const seenTitle = new Set<string>();
   const cands = raw
     .map((c) => ({ c, sc: scoreOf(c) }))
@@ -108,9 +118,11 @@ export async function POST(request: Request) {
 
   const recommendations = picks.map((p) => {
     const c = byId.get(p.policy_id)!;
-    const amount = typeof p.amount_krw === "number" && p.amount_krw > 0 && p.amount_krw < 100_000_000 ? Math.round(p.amount_krw) : 0;
+    const llmAmount = typeof p.amount_krw === "number" && p.amount_krw > 0 && p.amount_krw < 100_000_000 ? Math.round(p.amount_krw) : 0;
+    const parsed = llmAmount || parseAmountKrw(p.benefit_summary) || parseAmountKrw((c.search_text ?? "").slice(0, 400));
+    const amount = parsed > 0 && parsed < 100_000_000 ? parsed : 0;
     return {
-      id: c.policy_id, title: c.title, benefit: p.benefit_summary, amountMaxKrw: amount, amountBasis: p.amount_basis ?? null,
+      id: c.policy_id, title: c.title, benefit: p.benefit_summary, amountMaxKrw: amount, amountBasis: p.amount_basis ?? (amount ? "원문 금액 규칙 추출" : null),
       region: c.is_national ? "전국" : (c.region_sidos ?? []).join(", "), provider: c.provider, content: c.search_text?.slice(0, 600) ?? null,
       url: c.apply_url, source: "db" as const, sourceName: c.source, endDate: c.end_date, alwaysOpen: !!c.always_open, score: p.score, reason: p.reason,
     };
