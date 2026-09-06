@@ -10,7 +10,7 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase";
-import { classifyPolicyForUser, saveMatchResult, type Verdict } from "@/lib/policyMatch";
+import { classifyPolicyForUser, judgePolicy, saveMatchResult, type Verdict } from "@/lib/policyMatch";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 import { groqJson } from "@/lib/groq";
 import { tavilySearch } from "@/lib/tavily";
@@ -21,7 +21,7 @@ export type ProfileCtx = {
   financeRow: Record<string, unknown> | null;
 };
 
-export function buildFindPolicyTool() {
+export function buildFindPolicyTool(regionSido: string | null = null, regionSigungu: string | null = null) {
   return tool(
     async ({ titleQuery, referenceMatchId }: { titleQuery?: string | null; referenceMatchId?: string | null }) => {
       const db = supabaseAdmin();
@@ -44,12 +44,36 @@ export function buildFindPolicyTool() {
         const { data: rows } = await q.limit(1);
         if (rows && rows.length > 0) return JSON.stringify({ found: true, policy: rows[0] });
 
-        const { data: fallback } = await db
-          .from("policies")
-          .select("*")
-          .ilike("search_text", `%${titleQuery.replace(/[%,()]/g, "")}%`)
-          .limit(1);
-        if (fallback && fallback.length > 0) return JSON.stringify({ found: true, policy: fallback[0] });
+        // 폴백: "토익 시험 응시료"처럼 정책명이 아닌 서술이면 키워드(동의어 포함)로 원문을 검색.
+        // 거주지(시도) → 전국 범위를 먼저 보고, 사용자 시군구 정책을 우선·타 시군구 전용은 감점 (수원 사용자에게 관악구 정책이 잡히던 문제)
+        const kws = searchKeywords(titleQuery);
+        type Row = { title: string; provider?: string | null; search_text: string | null; is_national: boolean | null; region_sidos: string[] | null };
+        const inRegion = (r: Row) => !regionSido || r.is_national || (r.region_sidos ?? []).includes(regionSido);
+        let q2 = db.from("policies").select("*");
+        for (const k of kws.slice(0, 3)) q2 = q2.ilike("search_text", `%${k}%`);
+        const { data: andRows } = await q2.limit(10);
+        let pool: Row[] = ((andRows ?? []) as Row[]).filter(inRegion);
+        if (!pool.length) {
+          const orExpr = kws.map((k) => `search_text.ilike.%${k}%`).join(",");
+          let q3 = db.from("policies").select("*").or(orExpr);
+          if (regionSido) q3 = q3.or(`is_national.eq.true,region_sidos.cs.{"${regionSido}"}`);
+          const { data } = await q3.limit(60);
+          pool = (data ?? []) as Row[];
+        }
+        if (!pool.length && andRows?.length) pool = andRows as Row[];
+        if (pool.length) {
+          const gu = regionSigungu ? regionSigungu.replace(/(특례시|시|군|구)$/, "") : null;
+          const sc = (r: Row) => {
+            let v = kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length + (r.is_national ? 0 : 1);
+            const prov = r.provider ?? "";
+            if (gu && (prov.includes(gu) || r.title.includes(gu))) v += 5;
+            const m = prov.match(/(?:특별시|광역시|특별자치시|도|특별자치도)\s*([가-힣]+?)(?:특례시|시|군|구)(?=\s|$)/);
+            if (m && gu && !m[1].startsWith(gu)) v -= 4;
+            return v;
+          };
+          const best = [...pool].sort((a, b) => sc(b) - sc(a))[0];
+          return JSON.stringify({ found: true, policy: best, matched_by: "keywords", keywords: kws });
+        }
       }
       return JSON.stringify({ found: false });
     },
@@ -191,19 +215,38 @@ export function buildCheckEligibilityTool(ctx: ProfileCtx) {
     async ({ policyId }: { policyId: string }) => {
       const classified = await classifyPolicyForUser(policyId, ctx.profileRow, ctx.financeRow);
       if (!classified) {
-        return JSON.stringify({
-          status: "insufficient_info",
-          missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED],
-          checks: [],
-        });
+        // 구조화 자격조건(policy_eligibility)이 없는 정책(대부분) → 정책 원문 + 프로필로 LLM 1차 판정 (자세히보기의 AI 판정과 같은 경로)
+        const db = supabaseAdmin();
+        const { data: pol } = await db.from("policies").select("title, provider, region_sidos, is_national, search_text").eq("policy_id", policyId).maybeSingle();
+        const row = ctx.profileRow ?? {};
+        const birth = typeof row.birth_date === "string" ? row.birth_date : null;
+        const summary = {
+          나이: birth ? new Date().getFullYear() - Number(birth.slice(0, 4)) : null,
+          거주지: `${row.region_sido ?? ""} ${row.region_sigungu ?? ""}`.trim() || null, 학력: row.education_status ?? null,
+          취업상태: row.employment_status ?? null, 주거형태: row.housing_type ?? null, 가구중위소득구간: row.income_bracket ?? null,
+          월평균근로소득: ctx.financeRow?.monthly_work_income_krw ?? null, 수급중수당: ctx.financeRow?.receiving_benefits ?? null,
+        };
+        try {
+          const v = await judgePolicy({
+            profileSummary: summary, profileRow: null, financeRow: null, policyId: null,
+            policy: { title: pol?.title ?? policyId, region: pol?.is_national ? "전국" : (pol?.region_sidos ?? []).join(", "), target: (pol?.search_text ?? "").slice(0, 700), content: pol?.provider ?? undefined },
+          });
+          const status = v.eligibility === "LIKELY" ? "confirmed" : v.eligibility === "UNLIKELY" ? "excluded" : "insufficient_info";
+          return JSON.stringify({
+            status, checks: [], missingFields: v.missing_information ?? [], reasons: v.reasons ?? [], evidence_todo: v.evidence_todo ?? [], score: v.score,
+            basis: "llm_fallback", note: "이 정책은 구조화 자격조건이 아직 없어 정책 원문과 프로필을 대조한 AI 1차 판정입니다. 최종 자격은 공식 기관 확인.",
+          });
+        } catch {
+          return JSON.stringify({ status: "insufficient_info", missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED], checks: [] });
+        }
       }
       return JSON.stringify(classified.result);
     },
     {
       name: "check_eligibility_detail",
       description:
-        "이 정책의 eligibility_json 조건을 항목별로 규칙엔진이 확인한 결과를 읽기 전용으로 반환합니다. " +
-        "이 결과의 status(confirmed/excluded/insufficient_info)를 뒤집지 말고 그대로 인용해 설명하세요.",
+        "이 정책의 자격 조건을 확인합니다. 구조화 조건이 있으면 규칙엔진 항목별 결과를, 없으면(basis=llm_fallback) 정책 원문과 프로필을 대조한 AI 1차 판정(reasons·evidence_todo 포함)을 반환합니다. " +
+        "status(confirmed/excluded/insufficient_info)를 뒤집지 말고 그대로 인용하고, reasons가 있으면 그 근거를 사용자에게 풀어 설명하세요. 내부 필드명은 사용자에게 노출하지 마세요.",
       schema: z.object({ policyId: z.string() }),
     },
   );
