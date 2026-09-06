@@ -11,6 +11,9 @@ import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { classifyPolicyForUser, saveMatchResult, type Verdict } from "@/lib/policyMatch";
+import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
+import { groqJson } from "@/lib/groq";
+import { tavilySearch } from "@/lib/tavily";
 
 export type ProfileCtx = {
   userId: string;
@@ -123,6 +126,66 @@ export function buildSearchPoliciesTool(regionSido: string | null) {
   );
 }
 
+const WEB_EXTRACT_PROMPT = `다음 웹페이지 제목·요약에서 청년/취준생 지원정책 정보를 JSON으로 추출:
+{"is_policy": true|false, "title": "", "provider": "", "region_sido": "시도명 또는 null", "benefit": "혜택 요약", "target": "대상 요약"}
+정책 공고가 아니면 is_policy=false.`;
+
+/** DB 검색이 0건일 때만 쓰는 실시간 웹검색 폴백. src/app/api/cron/discover/route.ts의
+ * 웹검색(B경로)과 같은 안전 원칙 — go.kr/or.kr 도메인만, 결과는 policy_discovery_queue에도
+ * 큐잉해 나중에 검토·승격 가능하게 남김. 이 결과는 policies 테이블에 없으므로 절대
+ * save_match로 저장하면 안 된다(도구 설명·에이전트 프롬프트 양쪽에 명시). */
+export function buildWebSearchFallbackTool() {
+  return tool(
+    async ({ query }: { query: string }) => {
+      const results = await tavilySearch(query, { maxResults: 5 });
+      if (results.length === 0) return JSON.stringify([]);
+
+      const db = supabaseAdmin();
+      const items: { title: string; url: string; snippet: string; verified: false }[] = [];
+      for (const r of results) {
+        if (!r.title || !r.url) continue;
+        let extracted: unknown = null;
+        try {
+          extracted = await groqJson(WEB_EXTRACT_PROMPT, `제목: ${r.title}\n요약: ${r.content.slice(0, 600)}\nURL: ${r.url}`, 800);
+        } catch {
+          /* 추출 실패해도 원문 스니펫은 그대로 큐잉 */
+        }
+        // policy_discovery_queue.url의 유니크 인덱스가 부분 인덱스(where url is not null)라서
+        // .upsert({onConflict:"url"})가 "there is no unique or exclusion constraint matching
+        // the ON CONFLICT specification"(42P10)로 실패한다 — 직접 확인함. 스키마를 안 건드리고
+        // select-then-insert로 우회한다(discover 크론의 웹검색 경로에도 같은 문제가 있음, 별도 수정 필요).
+        const { data: existing } = await db
+          .from("policy_discovery_queue")
+          .select("id")
+          .eq("url", r.url)
+          .maybeSingle();
+        if (!existing) {
+          const { error: insertError } = await db.from("policy_discovery_queue").insert({
+            found_by: "web:tavily-livesearch",
+            trigger_context: query,
+            url: r.url,
+            title: r.title,
+            snippet: r.content.slice(0, 500),
+            extracted,
+            status: "new",
+          });
+          if (insertError) console.error("policy_discovery_queue 저장 실패:", insertError.message);
+        }
+        items.push({ title: r.title, url: r.url, snippet: r.content.slice(0, 300), verified: false });
+      }
+      return JSON.stringify(items);
+    },
+    {
+      name: "web_search_fallback",
+      description:
+        "search_policies가 0건일 때만 쓰는 실시간 웹검색. 결과는 미검증(policies 테이블에 없음)이므로 " +
+        "save_match를 절대 호출하지 말고, 최종 답변에서 반드시 '⚠️ 웹 검색 결과 — 미검증, 공식 사이트에서 " +
+        "꼭 확인하세요'라고 명시하세요.",
+      schema: z.object({ query: z.string().describe("검색할 질의") }),
+    },
+  );
+}
+
 export function buildCheckEligibilityTool(ctx: ProfileCtx) {
   return tool(
     async ({ policyId }: { policyId: string }) => {
@@ -130,7 +193,7 @@ export function buildCheckEligibilityTool(ctx: ProfileCtx) {
       if (!classified) {
         return JSON.stringify({
           status: "insufficient_info",
-          missingFields: ["eligibility_conditions_not_defined"],
+          missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED],
           checks: [],
         });
       }
@@ -168,7 +231,7 @@ export function buildBenefitInfoTool() {
 
 async function computeVerdictForSave(ctx: ProfileCtx, policyId: string) {
   const classified = await classifyPolicyForUser(policyId, ctx.profileRow, ctx.financeRow);
-  if (!classified) return { status: "insufficient_info" as const, missingFields: ["eligibility_conditions_not_defined"] };
+  if (!classified) return { status: "insufficient_info" as const, missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED] };
   return { status: classified.result.status, missingFields: classified.result.missingFields };
 }
 
