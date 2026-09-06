@@ -173,17 +173,16 @@ export default function AppPage() {
   // 거주지 변경(이사) 감지 결과 + 적용 상태
   type DeltaItem = { policy_id: string; title: string; provider: string | null; region: string; apply_url: string | null; score?: number; reason: string };
   type RegionChange = { field: string; from: string | null; to: string; effectiveFrom: string; opening: DeltaItem[]; closing: DeltaItem[]; openingTotal: number };
-  const [regionChange, setRegionChange] = useState<RegionChange | null>(null);
   const [applyingChange, setApplyingChange] = useState(false);
-  const [appliedChange, setAppliedChange] = useState<string | null>(null); // "2026-09-25부터 대전광역시"
   const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (기존 변경 이력)
 
-  // 일정 → AI 정책 매칭 결과
-  const [matching, setMatching] = useState(false);
-  const [matchFor, setMatchFor] = useState<string | null>(null);
-  const [matchRecs, setMatchRecs] = useState<
-    { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean }[] | null
-  >(null);
+  // 일정 → AI 정책 매칭 결과 — 일정(event_id)별로 보관해 하루에 여러 일정이어도 각각 확인·유지 (브라우저 저장)
+  type MatchRec = { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean };
+  type MatchEntry = { title: string; date: string; loading: boolean; recs: MatchRec[] | null; regionChange: RegionChange | null; applied: string | null; at: string };
+  const [matchMap, setMatchMap] = useState<Record<string, MatchEntry>>({});
+  const persistMatches = (userId: string, map: Record<string, MatchEntry>) => {
+    try { const clean: Record<string, MatchEntry> = {}; for (const [k, v] of Object.entries(map)) if (!v.loading) clean[k] = v; localStorage.setItem(`tikkeul.matches.${userId}`, JSON.stringify(clean)); } catch { /* 무시 */ }
+  };
 
   const demoRecs = useMemo(
     () => RECS[session?.personaId ?? "_default"] ?? RECS._default,
@@ -246,6 +245,7 @@ export default function AppPage() {
             setSession(s);
             setPersona(s.personaId ? (getPersona(s.personaId) ?? null) : null);
             try { const m = localStorage.getItem(`tikkeul.mymeta.${s.userId}`); if (m) setSavedMeta(JSON.parse(m)); } catch { /* 없음 */ }
+            try { const mm = localStorage.getItem(`tikkeul.matches.${s.userId}`); if (mm) setMatchMap(JSON.parse(mm)); } catch { /* 없음 */ }
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             void loadRecs(s);
             try {
@@ -344,15 +344,15 @@ export default function AppPage() {
   };
 
   /** 일정 매칭 카드에서 마이티끌로 담기 — 연결 일정·시험비(참고)·혜택 요약을 함께 기억 */
-  const saveFromMatch = (r: NonNullable<typeof matchRecs>[number]) => {
+  const saveFromMatch = (r: MatchRec, evTitle: string, evDate: string) => {
     if (!session) return;
-    const fee = examFeeFor(matchFor);
+    const fee = examFeeFor(evTitle);
     const examSupport = /응시료|시험|자격증|어학|검정/.test(`${r.title} ${r.benefit_summary}`);
     const amountKrw = fee && examSupport ? fee.feeKrw : 0;
     const rec: Rec = { id: r.policy_id, title: r.title, benefit: r.benefit_summary, amountMaxKrw: amountKrw, region: r.region, provider: r.provider, content: r.reason, url: r.apply_url, source: "db", endDate: r.end_date ?? null, alwaysOpen: !!r.always_open };
     setDbRecs((prev) => ({ ...prev, [r.policy_id]: rec }));
     setSavedMeta((prev) => {
-      const next = { ...prev, [r.policy_id]: { linkedEvent: matchFor ? { title: matchFor, date } : undefined, examName: fee?.name, examFeeKrw: fee?.feeKrw ?? null, amountKrw, benefit: r.benefit_summary } };
+      const next = { ...prev, [r.policy_id]: { linkedEvent: { title: evTitle, date: evDate }, examName: fee?.name, examFeeKrw: fee?.feeKrw ?? null, amountKrw, benefit: r.benefit_summary } };
       persistMeta(session.userId, next);
       return next;
     });
@@ -365,7 +365,7 @@ export default function AppPage() {
     if (!window.confirm(`'${ev.title}' 일정을 삭제할까요?`)) return;
     await fetch(`/api/events?eventId=${encodeURIComponent(ev.event_id)}&userId=${encodeURIComponent(session.userId)}`, { method: "DELETE" });
     await loadEvents(session.userId);
-    if (matchFor === ev.title) { setMatchRecs(null); setMatchFor(null); setRegionChange(null); }
+    setMatchMap((prev) => { const next = { ...prev }; delete next[ev.event_id]; persistMatches(session.userId, next); return next; });
   };
 
   const eventsByDate = useMemo(() => {
@@ -414,24 +414,21 @@ export default function AppPage() {
     }
   };
 
-  const applyRegionChange = async (effectiveFrom: string) => {
-    if (!session || !regionChange || applyingChange) return;
+  const applyRegionChange = async (effectiveFrom: string, rc: RegionChange, eventId: string, sourceEvent: string) => {
+    if (!session || applyingChange) return;
     setApplyingChange(true);
     try {
       const res = await fetch("/api/profile-change", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: session.userId, field: "region_sido", oldValue: regionChange.from,
-          newValue: regionChange.to, effectiveFrom, sourceEvent: matchFor,
-        }),
+        body: JSON.stringify({ userId: session.userId, field: "region_sido", oldValue: rc.from, newValue: rc.to, effectiveFrom, sourceEvent }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "적용 실패");
-      const label = `${effectiveFrom.slice(5).replace("-", "/")}부터 ${regionChange.to}`;
-      setAppliedChange(label);
+      const label = `${effectiveFrom.slice(5).replace("-", "/")}부터 ${rc.to}`;
+      setMatchMap((prev) => { const cur = prev[eventId]; if (!cur) return prev; const next = { ...prev, [eventId]: { ...cur, applied: label } }; persistMatches(session.userId, next); return next; });
       setProfileNote(label);
-      if (session) void loadRecs(session, true); // 거주지가 바뀌었으니 추천 탭을 새 지역 기준으로 다시
+      void loadRecs(session, true); // 거주지가 바뀌었으니 추천 탭을 새 지역 기준으로 다시
     } catch (e) {
       alert(`거주지 변경 적용 실패: ${e instanceof Error ? e.message : e}`);
     } finally {
@@ -483,6 +480,7 @@ export default function AppPage() {
     e.preventDefault();
     if (!session || !title.trim() || saving) return;
     const eventTitle = title.trim();
+    let newEventId: string | null = null;
     setSaving(true);
     setCalNotice(null);
     try {
@@ -492,39 +490,37 @@ export default function AppPage() {
         body: JSON.stringify({ userId: session.userId, date, title }),
       });
       if (!res.ok) throw new Error();
+      const json = await res.json();
+      newEventId = json.event?.event_id ?? null;
       setTitle("");
       await loadEvents(session.userId);
     } catch {
-      setCalNotice("일정 저장(DB)은 다음 단계에서 연결됩니다.");
+      setCalNotice("일정 저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
       setTimeout(() => setCalNotice(null), 4000);
     } finally {
       setSaving(false);
     }
-    // 저장 여부와 무관하게 AI 매칭 실행 — 일정에 혜택 붙이기
-    void matchEvent(eventTitle);
+    // 저장된 일정에 AI 매칭 실행 — 일정에 혜택 붙이기 (일정별로 결과 유지)
+    void matchEvent(eventTitle, newEventId ?? `tmp-${Date.now()}`, date);
   };
 
-  const matchEvent = async (eventTitle: string) => {
-    setMatching(true);
-    setMatchFor(eventTitle);
-    setMatchRecs(null);
-    setRegionChange(null);
-    setAppliedChange(null);
+  const matchEvent = async (eventTitle: string, eventId: string, eventDate: string) => {
+    const userId = session?.userId;
+    setMatchMap((prev) => ({ ...prev, [eventId]: { title: eventTitle, date: eventDate, loading: true, recs: prev[eventId]?.recs ?? null, regionChange: null, applied: null, at: new Date().toISOString() } }));
+    let entry: MatchEntry;
     try {
       const res = await fetch("/api/event-match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: session?.userId ?? null, personaId: session?.personaId ?? null, profileId: session?.profileId ?? null, title: eventTitle, date }),
+        body: JSON.stringify({ userId: userId ?? null, personaId: session?.personaId ?? null, profileId: session?.profileId ?? null, title: eventTitle, date: eventDate }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "매칭 실패");
-      setMatchRecs(json.recommendations ?? []);
-      if (json.regionChange) setRegionChange(json.regionChange);
+      entry = { title: eventTitle, date: eventDate, loading: false, recs: json.recommendations ?? [], regionChange: json.regionChange ?? null, applied: null, at: new Date().toISOString() };
     } catch {
-      setMatchRecs([]);
-    } finally {
-      setMatching(false);
+      entry = { title: eventTitle, date: eventDate, loading: false, recs: [], regionChange: null, applied: null, at: new Date().toISOString() };
     }
+    setMatchMap((prev) => { const next = { ...prev, [eventId]: entry }; if (userId) persistMatches(userId, next); return next; });
   };
 
   if (!loaded) return null;
@@ -873,16 +869,33 @@ export default function AppPage() {
               </form>
               {calNotice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14px] font-bold text-leaf-deep">🚧 {calNotice}</p>}
 
+              {/* 일정별 → AI가 찾은 혜택 (하루에 여러 일정이어도 각각 유지) */}
+              {(eventsByDate.get(date) ?? []).map((ev) => {
+                const m = matchMap[ev.event_id];
+                const rc = m?.regionChange ?? null;
+                if (!m) {
+                  return (
+                    <div key={"m-" + ev.event_id} className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-dashed border-line bg-card px-3.5 py-2.5">
+                      <p className="text-[14px] text-mute">💡 “{ev.title}” 일정에 붙는 혜택을 아직 찾지 않았어요.</p>
+                      <button onClick={() => matchEvent(ev.title, ev.event_id, ev.start_at)} className="rounded-full bg-leaf px-3.5 py-1.5 text-[13px] font-bold text-white transition hover:bg-[#333333]">AI로 찾기</button>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={"m-" + ev.event_id}>
               {/* 일정 → AI가 찾은 혜택 */}
-              {(matching || matchRecs) && matchFor && (
+              {(m.loading || m.recs) && (
                 <div className="mt-3 rounded-[14px] border border-line bg-card p-3.5">
-                  <p className="text-[14px] font-bold text-leaf-deep">
-                    💡 “{matchFor}” 일정에 붙는 혜택 {matching && "— AI가 전국 정책에서 찾는 중…"}
-                  </p>
-                  {!matching && matchRecs && matchRecs.length === 0 && (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[14px] font-bold text-leaf-deep">
+                      💡 “{ev.title}” 일정에 붙는 혜택 {m.loading && "— AI가 전국 정책에서 찾는 중…"}
+                    </p>
+                    {!m.loading && <button onClick={() => matchEvent(ev.title, ev.event_id, ev.start_at)} className="shrink-0 text-[12.5px] text-mute underline" title="AI로 다시 찾기">🔄 다시</button>}
+                  </div>
+                  {!m.loading && m.recs && m.recs.length === 0 && (
                     <p className="mt-1.5 text-[14px] text-mute">이 일정과 연결되는 정책을 찾지 못했어요.</p>
                   )}
-                  {!matching && matchRecs && matchRecs.map((r) => (
+                  {!m.loading && m.recs && m.recs.map((r) => (
                     <div key={r.policy_id} className="mt-2 rounded-[10px] bg-mint-soft/70 p-2.5">
                       <p className="text-[14.5px] font-bold leading-snug">{r.title}</p>
                       <p className="mt-0.5 text-[13px] text-mute">{r.provider} · {r.region} · 관련도 {r.score}점</p>
@@ -892,7 +905,7 @@ export default function AppPage() {
                         {savedIds.includes(r.policy_id) ? (
                           <span className="rounded-full bg-mint px-2.5 py-1 text-[12.5px] font-bold text-leaf-deep">✓ 마이티끌에 담김</span>
                         ) : (
-                          <button onClick={() => saveFromMatch(r)} className="rounded-full bg-leaf px-3 py-1 text-[12.5px] font-bold text-white transition hover:bg-[#333333]">+ 마이티끌에 담기</button>
+                          <button onClick={() => saveFromMatch(r, ev.title, ev.start_at)} className="rounded-full bg-leaf px-3 py-1 text-[12.5px] font-bold text-white transition hover:bg-[#333333]">+ 마이티끌에 담기</button>
                         )}
                         {r.end_date ? <span className="text-[12.5px] text-mute">마감 {fmtMD(r.end_date)}</span> : r.always_open ? <span className="text-[12.5px] text-mute">상시</span> : null}
                         {r.apply_url && (
@@ -905,33 +918,33 @@ export default function AppPage() {
               )}
 
               {/* 거주지 변경 감지 → 프로필 변경 제안 + 델타 리포트 */}
-              {!matching && regionChange && (
+              {!m.loading && rc && (
                 <div className="mt-3 rounded-[14px] border-2 border-leaf-deep bg-card p-4">
                   <p className="text-[15px] font-bold">
-                    🏠 거주지 변경 감지 — {regionChange.from ?? "미상"} → <span className="text-leaf-deep">{regionChange.to}</span>
+                    🏠 거주지 변경 감지 — {rc.from ?? "미상"} → <span className="text-leaf-deep">{rc.to}</span>
                   </p>
                   <p className="mt-1 text-[14px] text-mute">
-                    이사하면 받을 수 있는 정책이 통째로 바뀌어요. 프로필 거주지를 바꿀까요? 이후 추천·매칭이 {regionChange.to} 기준으로 전환됩니다.
+                    이사하면 받을 수 있는 정책이 통째로 바뀌어요. 프로필 거주지를 바꿀까요? 이후 추천·매칭이 {rc.to} 기준으로 전환됩니다.
                   </p>
-                  {appliedChange ? (
-                    <p className="mt-2 rounded-[10px] bg-[#2fbf5f] px-3 py-2 text-[14px] font-bold text-white">✓ 적용됨 — {appliedChange} 거주로 반영</p>
+                  {m.applied ? (
+                    <p className="mt-2 rounded-[10px] bg-[#2fbf5f] px-3 py-2 text-[14px] font-bold text-white">✓ 적용됨 — {m.applied} 거주로 반영</p>
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <button onClick={() => applyRegionChange(regionChange.effectiveFrom)} disabled={applyingChange}
+                      <button onClick={() => applyRegionChange(rc.effectiveFrom, rc, ev.event_id, ev.title)} disabled={applyingChange}
                         className="rounded-full bg-leaf px-4 py-2 text-[14px] font-bold text-white disabled:opacity-60">
-                        {regionChange.effectiveFrom.slice(5).replace("-", "/")}부터 적용
+                        {rc.effectiveFrom.slice(5).replace("-", "/")}부터 적용
                       </button>
-                      <button onClick={() => applyRegionChange(new Date().toISOString().slice(0, 10))} disabled={applyingChange}
+                      <button onClick={() => applyRegionChange(new Date().toISOString().slice(0, 10), rc, ev.event_id, ev.title)} disabled={applyingChange}
                         className="rounded-full border border-line px-4 py-2 text-[14px] font-bold disabled:opacity-60">
                         지금부터 적용
                       </button>
                     </div>
                   )}
 
-                  {regionChange.opening.length > 0 && (
+                  {rc.opening.length > 0 && (
                     <div className="mt-3">
-                      <p className="text-[14px] font-bold text-[#1f8f45]">🟢 {regionChange.to}로 가면 새로 열리는 혜택 ({regionChange.opening.length}건 · 지역 정책 {regionChange.openingTotal}건 중)</p>
-                      {regionChange.opening.map((o) => (
+                      <p className="text-[14px] font-bold text-[#1f8f45]">🟢 {rc.to}로 가면 새로 열리는 혜택 ({rc.opening.length}건 · 지역 정책 {rc.openingTotal}건 중)</p>
+                      {rc.opening.map((o) => (
                         <div key={o.policy_id} className="mt-1.5 rounded-[10px] bg-mint-soft/70 p-2.5">
                           <p className="text-[14.5px] font-bold leading-snug">{o.title} <span className="text-[12.5px] font-semibold text-mute">· {o.provider} · {o.score}점</span></p>
                           <p className="mt-0.5 text-[13.5px]">{o.reason}</p>
@@ -940,10 +953,10 @@ export default function AppPage() {
                       ))}
                     </div>
                   )}
-                  {regionChange.closing.length > 0 && (
+                  {rc.closing.length > 0 && (
                     <div className="mt-3">
-                      <p className="text-[14px] font-bold text-[#b23b3b]">🔴 {regionChange.from}을(를) 떠나면 사라지는 혜택 ({regionChange.closing.length}건)</p>
-                      {regionChange.closing.map((c) => (
+                      <p className="text-[14px] font-bold text-[#b23b3b]">🔴 {rc.from}을(를) 떠나면 사라지는 혜택 ({rc.closing.length}건)</p>
+                      {rc.closing.map((c) => (
                         <div key={c.policy_id} className="mt-1.5 rounded-[10px] bg-[#fbeaea] p-2.5">
                           <p className="text-[14.5px] font-bold leading-snug">{c.title} <span className="text-[12.5px] font-semibold text-mute">· {c.provider}</span></p>
                           <p className="mt-0.5 text-[13.5px]">{c.reason}</p>
@@ -954,6 +967,10 @@ export default function AppPage() {
                   )}
                 </div>
               )}
+
+                  </div>
+                );
+              })}
             </div>
           </section>
 

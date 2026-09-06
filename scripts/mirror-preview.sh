@@ -6,6 +6,8 @@ set -euo pipefail
 SRC="${1:?팀원 브랜치명 (예: feature/agent-architecture)}"
 DST="${2:?프리뷰 브랜치명 (예: preview/agent)}"
 cur=$(git branch --show-current)
+# 어떤 경로로 끝나도 원래 브랜치로 돌아온다 (실패 시 preview/*에 남아 이후 커밋이 잘못 들어가는 사고 방지)
+trap 'git merge --abort >/dev/null 2>&1 || true; git checkout -q "$cur" 2>/dev/null || true' EXIT
 git fetch -q origin
 git checkout -q -B "$DST" "origin/$SRC"
 if ! git merge --no-ff -q origin/main -m "merge: main → $SRC 프리뷰 미러"; then
@@ -18,4 +20,3 @@ if [ "$(git log -1 --format=%ae)" != "$(git config user.email)" ]; then
 fi
 git push -q -f -u origin "$DST"
 echo "✅ pushed $DST ($(git rev-parse --short HEAD)) → https://tikle-git-$(echo "$DST" | tr '/' '-')-cau-et.vercel.app"
-git checkout -q "$cur"
