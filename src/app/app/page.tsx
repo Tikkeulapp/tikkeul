@@ -248,6 +248,7 @@ export default function AppPage() {
   const saveProfileField = async (field: EditableField, value: string) => {
     if (!session || !value) return;
     setSavingField(field);
+    const wasNeeded = neededFields.has(field) && !!chatQuestion; // 방금 챗봇이 이 필드가 없어서 못 답한 상태였는지
     try {
       await fetch("/api/profile-change", {
         method: "POST",
@@ -256,6 +257,9 @@ export default function AppPage() {
       });
       await Promise.all([refreshProfileOverrides(session.userId), refreshDirectProfile(session)]);
       void loadRecs(session, true); // 자격 판정에 영향을 줄 수 있으니 추천도 새로 계산
+      // 채팅이 "이 정보가 없어서 판단 못 함"이라고 멈춰 있던 상태였다면, 옆에서 정보만 채우고
+      // 끝나는 게 아니라 방금 그 질문을 그대로 다시 물어봐서 대화가 이어지는 것처럼 답을 갱신한다.
+      if (wasNeeded) void sendChatMessage(chatQuestion!);
     } finally {
       setSavingField(null);
     }
@@ -587,11 +591,8 @@ export default function AppPage() {
     }
   };
 
-  const search = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim() || !session || chatLoading) return;
-    const message = query.trim();
-    setQuery("");
+  const sendChatMessage = async (message: string) => {
+    if (!message.trim() || !session || chatLoading) return;
     setChatQuestion(message);
     setChatLoading(true);
     setChatReply(null);
@@ -624,6 +625,14 @@ export default function AppPage() {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  const search = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!query.trim() || chatLoading) return;
+    const message = query.trim();
+    setQuery("");
+    await sendChatMessage(message);
   };
 
   const addEvent = async (e: React.FormEvent) => {
