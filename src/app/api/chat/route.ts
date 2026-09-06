@@ -7,7 +7,7 @@ import { resolveProfile } from "@/lib/profile";
 import { planTurn } from "@/agents/orchestrator";
 import { runPolicyCompare, runPolicyLookup, runPolicySearch } from "@/agents/policyAgent";
 import { runProfileAgent } from "@/agents/profileAgent";
-import type { ChatMessage } from "@/agents/state";
+import type { ChatMessage, Plan } from "@/agents/state";
 import type { ProfileCtx } from "@/agents/policyTools";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 import { classifyPolicyForUser } from "@/lib/policyMatch";
@@ -136,7 +136,16 @@ export async function POST(request: Request) {
 
     await db.from("chat_messages").insert({ user_id: userId, role: "user", content: message.trim() });
 
-    const plan = await planTurn(userId, messages);
+    // Groq 구조화 출력이 재시도(planTurn 내부 3회) 후에도 계속 파싱 실패하는 경우가 실제로
+    // 있다(직접 확인함 — 같은 발화가 온도를 올려 재시도해도 계속 실패) — 이때 500대 에러로
+    // 요청 전체를 죽이는 대신, 발화 자체를 검색 질의로 보는 최소 폴백 플랜으로 계속 진행한다.
+    let plan: Plan;
+    try {
+      plan = await planTurn(userId, messages);
+    } catch (e) {
+      console.error("planTurn 실패 — 검색 폴백 플랜 사용:", e instanceof Error ? e.message : e);
+      plan = { intents: ["policy_search"], policyMode: "search", policyQuery: message.trim(), referenceMatchId: null, compareTargets: null, reasoning: null };
+    }
     // Orchestrator(LLM)가 "이사했어" 같은 개인정보 변경 발화를 간헐적으로 놓친다(같은 문장도 실행마다 다름).
     // 거주지·학력·취업상태 변경을 뜻하는 표현이 있으면 profile_update 의도를 결정적으로 보장한다.
     const PROFILE_HINT = /이사|거주지|주소|살고\s*있|살아|살게|이주|전입|졸업했|졸업함|휴학|복학|취업했|입사|퇴사|재직|월세로|전세로|본가로|독립했/;
@@ -199,14 +208,29 @@ export async function POST(request: Request) {
     if (plan.intents.includes("policy_search")) {
       const ctx: ProfileCtx = { userId, profileRow: profile.profileRow, financeRow: profile.financeRow };
       const prior = plan.intents.includes("profile_update") ? reply : null; // 프로필 반영·이사 델타 답변은 유지
+      const FALLBACK_TEXT = "답변을 정리하는 중 문제가 생겼어요. 다시 한 번 말씀해 주시겠어요?";
+      const isEmptyReply = (s: string) => /답변을 정리하는 중 문제/.test(s);
+      // Policy Agent(ReAct)가 빈 답만 내는 게 아니라 아예 예외를 던지는 경우도 실제로 있다
+      // (Groq 구조화 출력/도구 호출 파싱 실패) — extractReply의 "빈 답" 처리는 예외까진 못 잡으므로
+      // 여기서 한 번 더 감싸 최대 2회(원 시도+재시도) 안에 실패하면 500대 에러 대신 안내문으로 대체.
+      const runWithRetry = async (fn: () => Promise<string>): Promise<string> => {
+        for (let i = 0; i < 2; i++) {
+          try {
+            const r = await fn();
+            if (!isEmptyReply(r)) return r;
+          } catch (e) {
+            console.error("Policy Agent 실행 실패:", e instanceof Error ? e.message : e);
+          }
+        }
+        return FALLBACK_TEXT;
+      };
       let policyReply: string;
       if (plan.policyMode === "compare") {
-        policyReply = await runPolicyCompare(ctx, messages, plan.compareTargets ?? []);
+        policyReply = await runWithRetry(() => runPolicyCompare(ctx, messages, plan.compareTargets ?? []));
       } else if (plan.policyMode === "lookup_and_check") {
-        policyReply = await runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId);
+        policyReply = await runWithRetry(() => runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId));
       } else {
-        policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery);
-        if (/답변을 정리하는 중 문제/.test(policyReply)) policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery); // 모델이 빈 답을 낸 경우 1회 재시도
+        policyReply = await runWithRetry(() => runPolicySearch(ctx, profile.sido, messages, plan.policyQuery));
       }
       if (skipPolicySearchIfEmpty && /찾지 못했/.test(policyReply)) policyReply = ""; // 델타가 이미 답이므로 빈 결과로 덮어쓰지 않음
       reply = [prior, policyReply].filter(Boolean).join("\n\n");

@@ -42,8 +42,8 @@ const SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Orchestrator Agent�
   (이 순서는 그래프가 처리하므로 당신은 intents만 정확히 뽑으면 됩니다).
 - 개인정보나 정책과 무관한 잡담이면 intents를 빈 리스트로 두세요.`;
 
-export function makeOrchestrator() {
-  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature: 0 });
+export function makeOrchestrator(temperature = 0) {
+  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature });
   return createReactAgent({
     llm,
     tools: [],
@@ -80,7 +80,6 @@ async function fetchActiveMatchesSummary(userId: string, limit = 5): Promise<str
  * 실패한다(groq.ts의 groqJson()이 이미 같은 이유로 재시도하는 것과 동일한 문제) —
  * 최대 2회까지 재시도한다. */
 export async function planTurn(userId: string, messages: ChatMessage[]): Promise<Plan> {
-  const agent = makeOrchestrator();
   const activeMatches = await fetchActiveMatchesSummary(userId);
   const turnMessages: ChatMessage[] = [
     ...messages,
@@ -90,12 +89,16 @@ export async function planTurn(userId: string, messages: ChatMessage[]): Promise
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
+      // temperature=0으로 그대로 재시도하면 같은 입력에 같은(깨진) 출력이 그대로 반복될 수 있다
+      // (직접 확인함 — 특정 발화가 3회 연속 output_parse_failed로 실패) — 재시도부터는 온도를
+      // 살짝 올려 같은 실패를 벗어날 여지를 준다.
+      const agent = makeOrchestrator(attempt === 0 ? 0 : 0.4);
       const result = await agent.invoke({ messages: turnMessages });
       return result.structuredResponse as Plan;
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
-      if (!/json_validate_failed|does not validate|missing properties|tool_use_failed|tool.*called/i.test(msg)) {
+      if (!/json_validate_failed|does not validate|missing properties|tool_use_failed|tool.*called|output_parse_failed|parsing failed/i.test(msg)) {
         throw e;
       }
     }
