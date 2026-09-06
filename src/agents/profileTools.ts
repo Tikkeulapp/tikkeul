@@ -60,6 +60,9 @@ export function buildProfileTools(userId: string, profileId: string) {
         const recorded: string[] = [];
         for (const [field, newValue] of Object.entries(cleaned)) {
           if (!TRACKED_FIELDS.has(field)) continue;
+          // 같은 값이 이미 최신 이력이면(예: chat route가 먼저 결정적으로 기록) 중복 기록하지 않는다
+          const { data: last } = await db.from("profile_changes").select("new_value").eq("user_id", userId).eq("field", field).order("created_at", { ascending: false }).limit(1).maybeSingle();
+          if (last?.new_value === String(newValue)) { recorded.push(field); continue; }
           await db.from("profile_changes").insert({
             user_id: userId, field, old_value: null, new_value: String(newValue),
             effective_from: today, source_event: "chat:profile_agent", status: "applied",
@@ -81,6 +84,8 @@ export function buildProfileTools(userId: string, profileId: string) {
       const today = new Date().toISOString().slice(0, 10);
       const trackedEntries = Object.entries(cleaned).filter(([k]) => TRACKED_FIELDS.has(k));
       for (const [field, newValue] of trackedEntries) {
+        const { data: last } = await db.from("profile_changes").select("new_value").eq("user_id", userId).eq("field", field).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (last?.new_value === String(newValue)) continue; // 중복 이력 방지
         await db.from("profile_changes").insert({
           user_id: userId,
           field,
