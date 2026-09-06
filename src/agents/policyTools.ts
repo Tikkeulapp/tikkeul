@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { classifyPolicyForUser, saveMatchResult, type Verdict } from "@/lib/policyMatch";
+import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 import { groqJson } from "@/lib/groq";
 import { tavilySearch } from "@/lib/tavily";
 
@@ -192,7 +193,7 @@ export function buildCheckEligibilityTool(ctx: ProfileCtx) {
       if (!classified) {
         return JSON.stringify({
           status: "insufficient_info",
-          missingFields: ["eligibility_conditions_not_defined"],
+          missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED],
           checks: [],
         });
       }
@@ -230,7 +231,7 @@ export function buildBenefitInfoTool() {
 
 async function computeVerdictForSave(ctx: ProfileCtx, policyId: string) {
   const classified = await classifyPolicyForUser(policyId, ctx.profileRow, ctx.financeRow);
-  if (!classified) return { status: "insufficient_info" as const, missingFields: ["eligibility_conditions_not_defined"] };
+  if (!classified) return { status: "insufficient_info" as const, missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED] };
   return { status: classified.result.status, missingFields: classified.result.missingFields };
 }
 

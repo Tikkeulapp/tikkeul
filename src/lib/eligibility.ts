@@ -32,6 +32,11 @@ export type EligibilityResult = {
   checks: ConditionCheck[];
 };
 
+/** classifyConditions가 conditions 자체를 못 받았을 때(정책에 자격조건이 아직 등록 안 됨) 쓰는
+ * sentinel — 실제 사용자 프로필 필드가 아니므로, 이 값을 profile_survey/finance 필드처럼 사용자에게
+ * 되묻는 downstream 소비자(Profile Agent 등)가 있으면 반드시 필터링해야 한다. */
+export const ELIGIBILITY_CONDITIONS_NOT_DEFINED = "eligibility_conditions_not_defined";
+
 /** profile_survey/finance의 소득·재산 구간은 텍스트 등급이라, 임계값 비교(<=, >=)를 하려면
  * 서수로 변환해야 한다. finance/의 스키마는 애초에 숫자였지만 여기선 실제 컬럼이 텍스트다. */
 const INCOME_BRACKET_RANK: Record<string, number> = {
@@ -129,7 +134,7 @@ export function classifyConditions(
   asOf: Date = new Date(),
 ): EligibilityResult {
   if (!conditions || conditions.length === 0) {
-    return { status: "insufficient_info", missingFields: ["eligibility_conditions_not_defined"], checks: [] };
+    return { status: "insufficient_info", missingFields: [ELIGIBILITY_CONDITIONS_NOT_DEFINED], checks: [] };
   }
 
   const checks = conditions.map((c) => evaluateCondition(c, profile, financial, asOf));
