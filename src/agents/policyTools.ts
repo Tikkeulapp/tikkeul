@@ -46,8 +46,22 @@ export function buildFindPolicyTool(regionSido: string | null = null, regionSigu
           // 같은 제목으로 실제 수집 데이터(ontong/gov24)와 큐레이션 데모 정책(curated, 구조화
           // 자격조건 있음)이 동시에 잡힐 수 있다(예: "국민취업지원제도"가 5건) — 그중 curated가
           // 있으면 그걸 우선한다. 그래야 매번 다른 정책이 잡혀 판정이 들쭉날쭉해지지 않는다.
-          const best = rows.find((r) => r.source === "curated") ?? rows[0];
-          return JSON.stringify({ found: true, policy: best });
+          const curated = rows.find((r) => r.source === "curated");
+          if (curated) return JSON.stringify({ found: true, policy: curated });
+          // curated가 없으면(대부분) — 같은 이름을 지자체마다 각자 등록해 여러 건인 경우가 흔하다
+          // (예: "청년내일저축계좌"가 지역별로 16건, 그중 하나는 region_sidos에 실존하지 않는
+          // 지명이 들어간 데이터 오류까지 있음, 직접 확인함). 정렬 없이 그냥 첫 건을 쓰면 사용자
+          // 거주지와 무관한(또는 깨진) 지역 한정 항목이 걸릴 수 있어 사용자 거주지 일치 → 전국
+          // 단위 순으로 우선한다.
+          const scored = rows
+            .map((r) => {
+              const regionSidos = (r as { region_sidos?: string[] | null }).region_sidos ?? null;
+              const isNational = !regionSidos || regionSidos.length === 0 || (r as { is_national?: boolean }).is_national === true;
+              const matchesRegion = !!regionSido && !!regionSidos?.includes(regionSido);
+              return { r, sc: (matchesRegion ? 5 : 0) + (isNational ? 2 : 0) };
+            })
+            .sort((a, b) => b.sc - a.sc);
+          return JSON.stringify({ found: true, policy: scored[0].r });
         }
 
         // 폴백: "토익 시험 응시료"처럼 정책명이 아닌 서술이면 키워드(동의어 포함)로 원문을 검색해 가장 관련 높은 1건
