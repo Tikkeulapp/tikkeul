@@ -207,6 +207,58 @@ export default function AppPage() {
     } catch { /* 이력 없음 */ }
   }, []);
 
+  // 우측 카드에서 학력/취업상태/소득·자산분위를 채팅 없이 바로 고를 수 있게 — 자격 판정에 필요한
+  // 정보를 안다면 굳이 말로 풀어 써야 할 이유가 없다. /api/profile-change가 이미 두 사용자 유형
+  // (페르소나=이력만, 직접입력=원본도) 모두에서 resolveProfile 오버레이로 반영되므로 그대로 재사용.
+  type EditableField = "education_status" | "employment_status" | "income_bracket" | "asset_bracket";
+  const EDUCATION_OPTIONS = ["재학", "휴학", "졸업유예", "졸업"];
+  const EMPLOYMENT_OPTIONS = ["미취업", "미취업_단기알바중", "재직중"];
+  const INCOME_OPTIONS = ["~60%", "60~100%", "100~150%", "150%~"];
+  const ASSET_OPTIONS = ["2억 미만", "2~4억", "4억 초과"];
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingField, setSavingField] = useState<EditableField | null>(null);
+
+  const currentFieldValue = (field: EditableField): string | null => {
+    if (persona) {
+      if (field === "education_status") return profileOverrides.education_status ?? persona.declared.education.status;
+      if (field === "employment_status") return profileOverrides.employment_status ?? persona.declared.employmentStatus;
+      if (field === "income_bracket") return profileOverrides.income_bracket ?? persona.declared.incomeBracket;
+      return profileOverrides.asset_bracket ?? persona.declared.assetBracket;
+    }
+    if (field === "education_status") return directProfile?.educationStatus ?? null;
+    if (field === "employment_status") return directProfile?.employmentStatus ?? null;
+    if (field === "income_bracket") return directProfile?.incomeBracket ?? null;
+    return directProfile?.assetBracket ?? null;
+  };
+
+  const saveProfileField = async (field: EditableField, value: string) => {
+    if (!session || !value) return;
+    setSavingField(field);
+    try {
+      await fetch("/api/profile-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: session.userId, field, oldValue: currentFieldValue(field), newValue: value, effectiveFrom: TODAY, sourceEvent: "profile_card_edit" }),
+      });
+      await Promise.all([refreshProfileOverrides(session.userId), refreshDirectProfile(session)]);
+      void loadRecs(session, true); // 자격 판정에 영향을 줄 수 있으니 추천도 새로 계산
+    } finally {
+      setSavingField(null);
+    }
+  };
+
+  const FieldSelect = ({ field, options }: { field: EditableField; options: string[] }) => (
+    <select
+      value={currentFieldValue(field) ?? ""}
+      disabled={savingField === field}
+      onChange={(e) => void saveProfileField(field, e.target.value)}
+      className="rounded border border-line bg-card px-1.5 py-0.5 text-[13px] disabled:opacity-50"
+    >
+      <option value="" disabled>선택</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+
   const resetProfileToDefault = async () => {
     if (!session || resettingProfile) return;
     if (!window.confirm("이 프로필의 모든 변경 이력을 지우고 초기 기본값으로 되돌릴까요?")) return;
@@ -1035,22 +1087,39 @@ export default function AppPage() {
               <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
                 <div className="flex items-center justify-between">
                   <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
-                  {persona && (
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={resetProfileToDefault}
-                      disabled={resettingProfile}
-                      className="text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink disabled:opacity-50"
-                      title="채팅으로 바뀐 내용을 모두 지우고 이 페르소나의 원래 기본값으로 되돌립니다"
+                      onClick={() => setEditingProfile((v) => !v)}
+                      className="text-[11.5px] font-semibold text-leaf-deep underline decoration-dotted hover:opacity-70"
+                      title="학력·취업상태·소득/자산분위를 채팅 없이 바로 선택합니다"
                     >
-                      ↺ 초기값으로 되돌리기
+                      {editingProfile ? "완료" : "✏️ 수정"}
                     </button>
-                  )}
+                    {persona && (
+                      <button
+                        onClick={resetProfileToDefault}
+                        disabled={resettingProfile}
+                        className="text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink disabled:opacity-50"
+                        title="채팅으로 바뀐 내용을 모두 지우고 이 페르소나의 원래 기본값으로 되돌립니다"
+                      >
+                        ↺ 초기화
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
                   <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{persona ? new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4)) : directProfile?.age ?? "-"}세</dd></div>
                   <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{persona ? `${profileOverrides.region_sido ?? persona.declared.region.sido} ${!profileOverrides.region_sido ? persona.declared.region.sigungu : ""}` : `${directProfile?.sido ?? ""} ${directProfile?.sigungu ?? ""}`.trim() || "-"}</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">학력</dt><dd className="font-semibold">{persona ? `${profileOverrides.education_status ?? persona.declared.education.status} · ${persona.declared.education.major}` : directProfile?.educationStatus ?? "-"}</dd></div>
-                  <div className="flex justify-between"><dt className="text-mute">취업상태</dt><dd className="font-semibold">{persona ? profileOverrides.employment_status ?? persona.declared.employmentStatus : directProfile?.employmentStatus ?? "-"}</dd></div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-mute">학력</dt>
+                    <dd className="font-semibold">
+                      {editingProfile ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} /> : persona ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}` : currentFieldValue("education_status") ?? "-"}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <dt className="text-mute">취업상태</dt>
+                    <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? "-"}</dd>
+                  </div>
                 </dl>
               </div>
             )}
@@ -1060,8 +1129,14 @@ export default function AppPage() {
               <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
                 {(persona || directProfile) && (
                   <>
-                    <div className="flex justify-between"><dt className="text-mute">소득분위</dt><dd className="font-semibold">{(persona ? profileOverrides.income_bracket ?? persona.declared.incomeBracket : directProfile?.incomeBracket) ?? "-"}</dd></div>
-                    <div className="flex justify-between"><dt className="text-mute">자산분위</dt><dd className="font-semibold">{(persona ? profileOverrides.asset_bracket ?? persona.declared.assetBracket : directProfile?.assetBracket) ?? "-"}</dd></div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">소득분위</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="income_bracket" options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? "-"}</dd>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">자산분위</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="asset_bracket" options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? "-"}</dd>
+                    </div>
                   </>
                 )}
                 <div className="flex justify-between"><dt className="text-mute">이번 달 담은 혜택</dt><dd className="font-semibold">{savedRecs.length}건</dd></div>
