@@ -118,13 +118,15 @@ export async function POST(request: Request) {
     };
     // 풀: (일정 지역) + 거주지(시도) + 전국 — 키워드별로 따로 조회해 특정 키워드(예: 응시료)가 다른 키워드에 밀리지 않게 한다
     type Res = { data: Cand[] | null; error: { message: string } | null };
+    const today = new Date().toISOString().slice(0, 10);
+    const openOr = `end_date.is.null,end_date.gte.${today},always_open.eq.true`; // 마감 지난 정책 제외
     const focus = [...new Set([...keywords.slice(0, 3), ...boost.slice(0, 3)])].map((k) => k.replace(/[%,()]/g, ""));
     const pools: Promise<Res>[] = [];
-    if (extracted.region_sido) pools.push(db.from("policies").select(COLS).contains("region_sidos", [extracted.region_sido]).or(kwOr).limit(60) as unknown as Promise<Res>);
+    if (extracted.region_sido) pools.push(db.from("policies").select(COLS).contains("region_sidos", [extracted.region_sido]).or(kwOr).or(openOr).limit(60) as unknown as Promise<Res>);
     for (const k of focus) {
       if (userSido && userSido !== extracted.region_sido)
-        pools.push(db.from("policies").select(COLS).contains("region_sidos", [userSido]).eq("is_national", false).ilike("search_text", `%${k}%`).limit(30) as unknown as Promise<Res>);
-      pools.push(db.from("policies").select(COLS).eq("is_national", true).ilike("search_text", `%${k}%`).limit(30) as unknown as Promise<Res>);
+        pools.push(db.from("policies").select(COLS).contains("region_sidos", [userSido]).eq("is_national", false).ilike("search_text", `%${k}%`).or(openOr).limit(30) as unknown as Promise<Res>);
+      pools.push(db.from("policies").select(COLS).eq("is_national", true).ilike("search_text", `%${k}%`).or(openOr).limit(30) as unknown as Promise<Res>);
     }
     for (const res of await Promise.all(pools)) {
       if (res.error) throw new Error(`정책 검색 실패: ${res.error.message}`);
@@ -143,7 +145,15 @@ export async function POST(request: Request) {
       if (m && userGu && !m[1].startsWith(userGu)) sc -= 4;
       return sc;
     };
-    const candidates: Cand[] = raw.map((c) => ({ c, sc: scoreOf(c) })).filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 25).map((x) => x.c);
+    const normTitle = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집/g, "");
+    const seenTitle = new Set<string>();
+    const candidates: Cand[] = raw
+      .map((c) => ({ c, sc: scoreOf(c) }))
+      .filter((x) => x.sc > 0)
+      .sort((a, b) => b.sc - a.sc)
+      .filter((x) => { const t = normTitle(x.c.title); if (seenTitle.has(t)) return false; seenTitle.add(t); return true; }) // 같은 정책 중복 제거
+      .slice(0, 25)
+      .map((x) => x.c);
 
     const compact = (list: Cand[]) => list.map((c) => ({
       policy_id: c.policy_id,

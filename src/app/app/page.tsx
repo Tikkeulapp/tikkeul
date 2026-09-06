@@ -35,6 +35,11 @@ type Rec = {
   provider?: string | null;
   endDate?: string | null;
   alwaysOpen?: boolean;
+  /** AI 추천(정책 DB) 항목의 관련도·이유·금액 근거 */
+  score?: number;
+  reason?: string;
+  amountBasis?: string | null;
+  sourceName?: string;
 };
 
 /** 마이티끌에 담을 때 함께 기억하는 맥락 (연결 일정·시험비·혜택 요약) — 브라우저 저장 */
@@ -112,6 +117,9 @@ export default function AppPage() {
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [dbRecs, setDbRecs] = useState<Record<string, Rec>>({}); // 정책 DB에서 담은 항목의 기본정보
+  const [aiRecs, setAiRecs] = useState<Rec[] | null>(null); // 추천 탭: 정책 DB에서 AI가 프로필 기준으로 고른 정책
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState<string | null>(null);
   const [savedMeta, setSavedMeta] = useState<Record<string, SavedMeta>>({});
   const fetchedRef = useRef<Set<string>>(new Set());
 
@@ -142,10 +150,36 @@ export default function AppPage() {
     { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean }[] | null
   >(null);
 
-  const recs = useMemo(
+  const demoRecs = useMemo(
     () => RECS[session?.personaId ?? "_default"] ?? RECS._default,
     [session?.personaId],
   );
+  const recs = aiRecs && aiRecs.length > 0 ? aiRecs : demoRecs;
+
+  /** 추천 탭: /api/recommend (하루 1회 브라우저 캐시). force=true면 다시 계산 */
+  const loadRecs = useCallback(async (s: Session, force = false) => {
+    const key = `tikkeul.airecs.${s.userId}`;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) { const c = JSON.parse(raw) as { date: string; recs: Rec[] }; if (c.date === TODAY && c.recs.length) { setAiRecs(c.recs); return; } }
+      } catch { /* 캐시 없음 */ }
+    }
+    setRecLoading(true); setRecError(null);
+    try {
+      const res = await fetch("/api/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: s.userId, personaId: s.personaId, profileId: s.profileId ?? null }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "추천 실패");
+      const list = (json.recommendations ?? []) as Rec[];
+      if (json.aiError && !list.length) throw new Error(json.aiError);
+      setAiRecs(list);
+      try { localStorage.setItem(key, JSON.stringify({ date: TODAY, recs: list })); } catch { /* 무시 */ }
+    } catch (e) {
+      setRecError(e instanceof Error ? e.message : "추천 실패");
+    } finally {
+      setRecLoading(false);
+    }
+  }, []);
 
   const loadEvents = useCallback(async (userId: string) => {
     const res = await fetch(`/api/events?userId=${encodeURIComponent(userId)}`);
@@ -178,6 +212,7 @@ export default function AppPage() {
             setPersona(s.personaId ? (getPersona(s.personaId) ?? null) : null);
             try { const m = localStorage.getItem(`tikkeul.mymeta.${s.userId}`); if (m) setSavedMeta(JSON.parse(m)); } catch { /* 없음 */ }
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
+            void loadRecs(s);
             try {
               const pc = await fetch(`/api/profile-change?userId=${encodeURIComponent(s.userId)}`).then((r) => r.json());
               const last = (pc.changes ?? []).filter((c: { field: string }) => c.field === "region_sido").pop();
@@ -190,7 +225,7 @@ export default function AppPage() {
       }
       setLoaded(true);
     })();
-  }, [loadEvents, loadSavedIds]);
+  }, [loadEvents, loadSavedIds, loadRecs]);
 
   /** 낙관적 업데이트 후 서버에 반영 — 실패해도 UI를 되돌리진 않는다(기존 localStorage 방식과
    * 동일하게 "일단 눈에 보이는 상태"를 우선하되, 다음 로드 때 서버 상태로 다시 맞춰진다). */
@@ -213,7 +248,7 @@ export default function AppPage() {
   });
   // 마이티끌에 담긴 DB 정책(데모 추천 목록에 없는 id)의 기본정보를 불러온다
   useEffect(() => {
-    const missing = savedIds.filter((id) => !recs.some((r) => r.id === id) && !dbRecs[id] && !fetchedRef.current.has(id));
+    const missing = savedIds.filter((id) => !recs.some((r) => r.id === id) && !demoRecs.some((r) => r.id === id) && !dbRecs[id] && !fetchedRef.current.has(id));
     if (!missing.length) return;
     missing.forEach((id) => fetchedRef.current.add(id));
     fetch(`/api/policies?ids=${encodeURIComponent(missing.join(","))}`)
@@ -223,12 +258,12 @@ export default function AppPage() {
         setDbRecs((prev) => { const next = { ...prev }; for (const p of rows) next[p.policy_id] = recFromRow(p); return next; });
       })
       .catch(() => {});
-  }, [savedIds, recs, dbRecs]);
+  }, [savedIds, recs, demoRecs, dbRecs]);
 
   const persistMeta = (userId: string, next: Record<string, SavedMeta>) => { try { localStorage.setItem(`tikkeul.mymeta.${userId}`, JSON.stringify(next)); } catch { /* 무시 */ } };
-  const savedRecs: Rec[] = savedIds.map((id) => recs.find((r) => r.id === id) ?? dbRecs[id]).filter((r): r is Rec => !!r);
+  const savedRecs: Rec[] = savedIds.map((id) => recs.find((r) => r.id === id) ?? demoRecs.find((r) => r.id === id) ?? dbRecs[id]).filter((r): r is Rec => !!r);
   const unsavedRecs = recs.filter((r) => !savedIds.includes(r.id));
-  const amountOf = (r: Rec) => (r.source === "db" ? savedMeta[r.id]?.amountKrw ?? 0 : r.amountMaxKrw);
+  const amountOf = (r: Rec) => (r.source === "db" ? savedMeta[r.id]?.amountKrw ?? r.amountMaxKrw ?? 0 : r.amountMaxKrw);
   const monthlySaving = savedRecs.reduce((s, r) => s + amountOf(r), 0);
 
   // 담은 정책의 마감일 → 달력 표시 + 3일 이내 임박 알림
@@ -567,14 +602,27 @@ export default function AppPage() {
               </button>
               {openTab === "rec" && (
                 <div className="flex flex-col gap-2 p-3">
-                  <p className="text-[13px] font-semibold text-mute">데모 추천 — AI 자동 매칭은 다음 단계</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-mute">
+                      {recLoading ? "AI가 정책 DB에서 내 프로필에 맞는 정책을 찾는 중…" : aiRecs && aiRecs.length > 0 ? "AI 추천 — 정책 DB에서 프로필(거주지·나이·상태) 기준 선별" : recError ? `AI 추천 실패(${recError}) — 기본 추천 표시` : "기본 추천"}
+                    </p>
+                    {session && !recLoading && (
+                      <button onClick={() => loadRecs(session, true)} className="shrink-0 text-[12.5px] font-bold text-leaf-deep underline" title="정책 DB에서 다시 선별">🔄 다시</button>
+                    )}
+                  </div>
                   {unsavedRecs.length === 0 && (
                     <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[14px] text-mute">전부 담았어요 👍</p>
                   )}
                   {unsavedRecs.map((r) => (
                     <div key={r.id} className="rounded-[12px] border border-line p-3">
                       <p className="text-[15px] font-bold leading-snug">{r.title}</p>
-                      <p className="mt-0.5 text-[13.5px] text-mute">{r.benefit} · {r.region}</p>
+                      <p className="mt-0.5 text-[13.5px] text-mute">{r.benefit} · {r.region}{typeof r.score === "number" ? ` · 관련도 ${r.score}` : ""}</p>
+                      {r.reason && <p className="mt-1 text-[13px] leading-snug text-ink/80">{r.reason}</p>}
+                      {(r.endDate || r.alwaysOpen) && (
+                        <p className={`mt-0.5 text-[12.5px] ${r.endDate && daysUntil(r.endDate) >= 0 && daysUntil(r.endDate) <= 3 ? "font-bold text-[#b45309]" : "text-mute"}`}>
+                          {r.endDate ? `⏰ 마감 ${fmtMD(r.endDate)}${daysUntil(r.endDate) >= 0 ? ` · D-${daysUntil(r.endDate)}` : ""}` : "상시 신청"}
+                        </p>
+                      )}
                       <div className="mt-2 flex items-center gap-2">
                         <button
                           onClick={() => addToMy(r.id)}
