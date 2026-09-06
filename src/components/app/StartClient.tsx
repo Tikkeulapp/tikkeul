@@ -302,17 +302,20 @@ function SignupForm({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [f, setF] = useState({
-    // ① 설문 정보
+    // ① 기본 정보
     name: "",
     birthDate: "",
     gender: "",
     sido: "서울특별시",
     sigungu: "",
     education: "졸업",
+    employmentStatus: "취업 준비 중",
     targetJob: "",
     household: "1인 가구",
+    householdSize: "1",
     housingType: "월세",
     incomeBracket: "모름",
+    assetBracket: "모름",
     military: "해당 없음",
     // ② 금융 정보 (본래 마이데이터로 자동 수집 — 데모에서는 직접 입력)
     monthlyIncomeMan: "", // 만원 단위
@@ -348,10 +351,13 @@ function SignupForm({ onBack }: { onBack: () => void }) {
       sido,
       sigungu,
       education: pick(["졸업", "졸업", "졸업유예", "휴학"]),
+      employmentStatus: pick(["취업 준비 중", "취업 준비 중", "이직 준비 중", "재취업 준비 중", "기타"]),
       targetJob: pick(["데이터 분석", "백엔드 개발", "마케팅", "품질관리", "UX 디자인"]),
       household,
+      householdSize: household === "부모님과 거주" ? String(ri(2, 4)) : "1",
       housingType: housing,
       incomeBracket: pick(["모름", "~60%", "60~100%", "100~150%"]),
+      assetBracket: pick(["모름", "2억 미만", "2~4억"]),
       military: pick(["해당 없음", "군필"]),
       monthlyIncomeMan: String(pick([0, 0, 30, 50, 80, 120])),
       assetsMan: String(ri(50, 1500)),
@@ -424,8 +430,8 @@ function SignupForm({ onBack }: { onBack: () => void }) {
       </div>
 
       <form onSubmit={submit} className="mt-6">
-        {/* ── ① 설문 정보 ── */}
-        <p className="text-[13px] font-bold text-leaf-deep">① 설문 정보</p>
+        {/* ── ① 기본 정보 ── */}
+        <p className="text-[13px] font-bold text-leaf-deep">① 기본 정보</p>
         <div className="mt-2 grid gap-4 rounded-[16px] border border-line bg-card p-4 sm:grid-cols-2">
           <div>
             <p className={label}>이름 (닉네임) *</p>
@@ -473,6 +479,15 @@ function SignupForm({ onBack }: { onBack: () => void }) {
             </select>
           </div>
           <div>
+            <p className={label}>취업 상태</p>
+            <select className={input} value={f.employmentStatus} onChange={set("employmentStatus")}>
+              <option>취업 준비 중</option>
+              <option>이직 준비 중</option>
+              <option>재취업 준비 중</option>
+              <option>기타</option>
+            </select>
+          </div>
+          <div>
             <p className={label}>목표 직무</p>
             <input className={input} value={f.targetJob} onChange={set("targetJob")} placeholder="예: 데이터 분석" />
           </div>
@@ -483,6 +498,10 @@ function SignupForm({ onBack }: { onBack: () => void }) {
               <option>부모님과 거주</option>
               <option>기타</option>
             </select>
+          </div>
+          <div>
+            <p className={label}>가구원 수</p>
+            <input className={input} type="number" min="1" value={f.householdSize} onChange={set("householdSize")} placeholder="예: 1" />
           </div>
           <div>
             <p className={label}>주거 형태</p>
@@ -501,6 +520,15 @@ function SignupForm({ onBack }: { onBack: () => void }) {
               <option value="60~100%">60~100%</option>
               <option value="100~150%">100~150%</option>
               <option value="150%~">150% 초과</option>
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <p className={label}>가구 자산 구간 (부동산·차량 등 — 모르면 &ldquo;모름&rdquo;)</p>
+            <select className={input} value={f.assetBracket} onChange={set("assetBracket")}>
+              <option>모름</option>
+              <option value="2억 미만">2억 미만</option>
+              <option value="2~4억">2~4억</option>
+              <option value="4억 초과">4억 초과</option>
             </select>
           </div>
         </div>

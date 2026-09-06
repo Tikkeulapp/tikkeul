@@ -38,11 +38,14 @@ export async function POST(request: Request) {
     region_sido: sido,
     region_sigungu: sigungu || null,
     education_status: (b.education as string) || null,
+    employment_status: (b.employmentStatus as string) || null,
     target_job: String(b.targetJob ?? "").trim() || null,
     living_with_parents:
       b.household === "부모님과 거주" ? true : b.household === "1인 가구" ? false : null,
+    household_size: Number.isFinite(Number(b.householdSize)) && String(b.householdSize ?? "").trim() !== "" ? Math.round(Number(b.householdSize)) : null,
     housing_type: (b.housingType as string) || null,
     income_bracket: b.incomeBracket === "모름" ? null : (b.incomeBracket as string) || null,
+    asset_bracket: b.assetBracket === "모름" ? null : (b.assetBracket as string) || null,
   };
   const surveyRes = await db.from("profile_survey").insert(survey);
   if (surveyRes.error) {

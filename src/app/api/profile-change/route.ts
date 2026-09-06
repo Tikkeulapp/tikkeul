@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
-const FIELDS = new Set(["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket"]);
+const FIELDS = new Set(["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"]);
 
 /** GET /api/profile-change?userId=… — 사용자의 프로필 변경 이력 */
 export async function GET(request: Request) {

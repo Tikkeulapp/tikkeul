@@ -176,12 +176,15 @@ export default function AppPage() {
   const [applyingChange, setApplyingChange] = useState(false);
   const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (거주지 변경 이력)
   // 우측 프로필 카드 실시간 반영 — 채팅으로 바뀐 학력/취업상태/소득·자산분위를 페르소나 기본값 위에 덮어씀
-  const OVERRIDE_FIELDS = ["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket"] as const;
+  const OVERRIDE_FIELDS = ["region_sido", "education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"] as const;
   const [profileOverrides, setProfileOverrides] = useState<Partial<Record<(typeof OVERRIDE_FIELDS)[number], string>>>({});
   const [resettingProfile, setResettingProfile] = useState(false);
+  // 방금 챗봇이 판정에 필요하다고 한 필드만 담아둔다 — 비어있는 필드를 무조건 다 보여주는 대신
+  // "지금 필요한 것"만 노출해 카드가 항상 빈칸투성이로 보이지 않게 한다.
+  const [neededFields, setNeededFields] = useState<Set<string>>(new Set());
 
   // "내 정보로 시작하기"(직접입력) 사용자 — 페르소나처럼 코드에 declared가 없어 DB에서 직접 가져와야 함
-  type DirectProfile = { name: string | null; age: number | null; sido: string | null; sigungu: string | null; educationStatus: string | null; employmentStatus: string | null; incomeBracket: string | null; assetBracket: string | null };
+  type DirectProfile = { name: string | null; age: number | null; sido: string | null; sigungu: string | null; educationStatus: string | null; employmentStatus: string | null; incomeBracket: string | null; assetBracket: string | null; housingType: string | null };
   const [directProfile, setDirectProfile] = useState<DirectProfile | null>(null);
   const refreshDirectProfile = useCallback(async (s: Session) => {
     if (s.personaId) return; // 페르소나는 persona.declared + profileOverrides로 이미 처리
@@ -210,11 +213,12 @@ export default function AppPage() {
   // 우측 카드에서 학력/취업상태/소득·자산분위를 채팅 없이 바로 고를 수 있게 — 자격 판정에 필요한
   // 정보를 안다면 굳이 말로 풀어 써야 할 이유가 없다. /api/profile-change가 이미 두 사용자 유형
   // (페르소나=이력만, 직접입력=원본도) 모두에서 resolveProfile 오버레이로 반영되므로 그대로 재사용.
-  type EditableField = "education_status" | "employment_status" | "income_bracket" | "asset_bracket";
+  type EditableField = "education_status" | "employment_status" | "income_bracket" | "asset_bracket" | "housing_type";
   const EDUCATION_OPTIONS = ["재학", "휴학", "졸업유예", "졸업"];
-  const EMPLOYMENT_OPTIONS = ["미취업", "미취업_단기알바중", "재직중"];
+  const EMPLOYMENT_OPTIONS = ["취업 준비 중", "이직 준비 중", "재취업 준비 중", "기타"];
   const INCOME_OPTIONS = ["~60%", "60~100%", "100~150%", "150%~"];
   const ASSET_OPTIONS = ["2억 미만", "2~4억", "4억 초과"];
+  const HOUSING_OPTIONS = ["본가", "월세", "전세"];
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingField, setSavingField] = useState<EditableField | null>(null);
 
@@ -223,11 +227,13 @@ export default function AppPage() {
       if (field === "education_status") return profileOverrides.education_status ?? persona.declared.education.status;
       if (field === "employment_status") return profileOverrides.employment_status ?? persona.declared.employmentStatus;
       if (field === "income_bracket") return profileOverrides.income_bracket ?? persona.declared.incomeBracket;
+      if (field === "housing_type") return profileOverrides.housing_type ?? persona.declared.household.housing;
       return profileOverrides.asset_bracket ?? persona.declared.assetBracket;
     }
     if (field === "education_status") return directProfile?.educationStatus ?? null;
     if (field === "employment_status") return directProfile?.employmentStatus ?? null;
     if (field === "income_bracket") return directProfile?.incomeBracket ?? null;
+    if (field === "housing_type") return directProfile?.housingType ?? null;
     return directProfile?.assetBracket ?? null;
   };
 
@@ -247,9 +253,10 @@ export default function AppPage() {
     }
   };
 
-  // 정책 판정에 흔히 쓰이는 4개 필드가 비어 있으면 "채워주세요" 표시가 필요함 — 챗봇이 방금
-  // 뭘 물어봤는지 파싱해 맞추는 대신, 비어 있으면 언제나 눈에 띄게 해서 먼저 채우도록 유도한다.
   const isFieldMissing = (field: EditableField) => !currentFieldValue(field);
+  // 값이 없는 필드는 기본적으로 숨긴다 — 방금 챗봇이 그 필드를 물어봤을 때만("neededFields")
+  // 눈에 띄게 드러낸다. 수정 모드에서는 사용자가 뭐든 채울 수 있어야 하니 전부 보여준다.
+  const shouldShowField = (field: EditableField) => editingProfile || !!currentFieldValue(field) || neededFields.has(field);
 
   const FieldSelect = ({ field, options }: { field: EditableField; options: string[] }) => (
     <select
@@ -563,6 +570,7 @@ export default function AppPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "요청 실패");
       setChatReply(json.reply);
+      setNeededFields(new Set(Array.isArray(json.missingFields) ? json.missingFields : []));
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
       // 채팅으로 프로필(거주지 등)이 바뀌었으면 헤더 배지와 추천 탭을 새 프로필 기준으로 갱신
@@ -1077,9 +1085,9 @@ export default function AppPage() {
             </div>
           </section>
 
-          {/* 우측: 프로필 요약 — 얼굴 사진 + 기본 정보 + 금융 정보 */}
+          {/* 우측: 프로필 요약 — 얼굴 사진 + 기본/금융 정보(한 박스) + 혜택·티끌(각각 박스) */}
           <aside className="flex flex-col gap-3">
-            <div className="rounded-2xl border border-line bg-card p-4 text-center shadow-lift">
+            <div className="rounded-[18px] border border-line bg-card p-4 text-center">
               <img
                 src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
                 alt={`${displayName} 프로필 사진`}
@@ -1094,14 +1102,14 @@ export default function AppPage() {
             </div>
 
             {(persona || directProfile) && (
-              <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
+              <div className="rounded-[18px] border border-line bg-card p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
+                  <p className="text-[12.5px] font-bold text-mute">기본 정보 · 금융 정보</p>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setEditingProfile((v) => !v)}
                       className="text-[11.5px] font-semibold text-leaf-deep underline decoration-dotted hover:opacity-70"
-                      title="학력·취업상태·소득/자산분위를 채팅 없이 바로 선택합니다"
+                      title="학력·취업상태·주거형태·소득/자산분위를 채팅 없이 바로 선택합니다"
                     >
                       {editingProfile ? "완료" : "✏️ 수정"}
                     </button>
@@ -1120,50 +1128,59 @@ export default function AppPage() {
                 <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
                   <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{persona ? new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4)) : directProfile?.age ?? "-"}세</dd></div>
                   <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{persona ? `${profileOverrides.region_sido ?? persona.declared.region.sido} ${!profileOverrides.region_sido ? persona.declared.region.sigungu : ""}` : `${directProfile?.sido ?? ""} ${directProfile?.sigungu ?? ""}`.trim() || "-"}</dd></div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-mute">학력</dt>
-                    <dd className="font-semibold">
-                      {editingProfile
-                        ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} />
-                        : persona
-                          ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}`
-                          : currentFieldValue("education_status") ?? <MissingBadge />}
-                    </dd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <dt className="text-mute">취업상태</dt>
-                    <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? <MissingBadge />}</dd>
-                  </div>
-                </dl>
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
-              <p className="text-[12.5px] font-bold text-mute">금융 정보</p>
-              <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
-                {(persona || directProfile) && (
-                  <>
+                  {shouldShowField("education_status") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">학력</dt>
+                      <dd className="font-semibold">
+                        {editingProfile
+                          ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} />
+                          : persona
+                            ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}`
+                            : currentFieldValue("education_status") ?? <MissingBadge />}
+                      </dd>
+                    </div>
+                  )}
+                  {shouldShowField("employment_status") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">취업상태</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? <MissingBadge />}</dd>
+                    </div>
+                  )}
+                  {shouldShowField("housing_type") && (
+                    <div className="flex items-center justify-between">
+                      <dt className="text-mute">가구형태</dt>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="housing_type" options={HOUSING_OPTIONS} /> : currentFieldValue("housing_type") ?? <MissingBadge />}</dd>
+                    </div>
+                  )}
+                  {shouldShowField("income_bracket") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">소득분위</dt>
                       <dd className="font-semibold">{editingProfile ? <FieldSelect field="income_bracket" options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? <MissingBadge />}</dd>
                     </div>
+                  )}
+                  {shouldShowField("asset_bracket") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">자산분위</dt>
                       <dd className="font-semibold">{editingProfile ? <FieldSelect field="asset_bracket" options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? <MissingBadge />}</dd>
                     </div>
-                  </>
-                )}
-                <div className="flex justify-between"><dt className="text-mute">이번 달 담은 혜택</dt><dd className="font-semibold">{savedRecs.length}건</dd></div>
-                <div className="mt-1 flex items-center justify-between rounded-[10px] bg-mint px-2.5 py-1.5">
-                  <dt className="text-[13px] font-bold text-leaf-deep">이번 달 아낄 티끌</dt>
-                  <dd className="text-[15px] font-bold text-leaf-deep">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</dd>
-                </div>
-              </dl>
+                  )}
+                </dl>
+              </div>
+            )}
+
+            <div className="rounded-[18px] border border-line bg-card p-4">
+              <p className="text-[12.5px] font-bold text-mute">이번 달 담은 혜택</p>
+              <p className="mt-1 text-[26px] font-bold leading-none text-leaf-deep">{savedRecs.length}<span className="text-[15px] font-bold">건</span></p>
+            </div>
+
+            <div className="rounded-[18px] border border-line bg-card p-4">
+              <p className="text-[12.5px] font-bold text-mute">이번 달 아낄 티끌</p>
+              <p className="mt-1 text-[26px] font-bold leading-none text-leaf-deep">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
             </div>
 
             <Link
               href="/app/simulate"
-              className="block w-full rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
+              className="block w-full rounded-[18px] border border-line bg-card p-3 text-left transition hover:border-ink"
             >
               <p className="text-[12.5px] font-bold text-mute">취업 후엔?</p>
               <p className="mt-0.5 text-[15px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>

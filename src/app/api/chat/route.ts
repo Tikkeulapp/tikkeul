@@ -10,6 +10,7 @@ import { runProfileAgent } from "@/agents/profileAgent";
 import type { ChatMessage } from "@/agents/state";
 import type { ProfileCtx } from "@/agents/policyTools";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
+import { classifyPolicyForUser } from "@/lib/policyMatch";
 
 const HISTORY_LIMIT = 12;
 
@@ -189,6 +190,12 @@ export async function POST(request: Request) {
       profile = await resolveProfile({ userId, personaId, profileId });
     }
 
+    // 대시보드 우측 프로필 카드가 "지금 이 필드가 필요합니다"를 보여줄 때 쓸 신호 — 규칙엔진이
+    // 실제 profile_survey 컬럼명으로 낸 missing_information만 채택한다(LLM 폴백의 자연어 설명이나
+    // eligibility_conditions_not_defined sentinel은 카드가 다룰 수 있는 형태가 아니라 걸러진다).
+    const DISPLAYABLE_FIELDS = new Set(["education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"]);
+    let missingFields: string[] = [];
+
     if (plan.intents.includes("policy_search")) {
       const ctx: ProfileCtx = { userId, profileRow: profile.profileRow, financeRow: profile.financeRow };
       const prior = plan.intents.includes("profile_update") ? reply : null; // 프로필 반영·이사 델타 답변은 유지
@@ -203,11 +210,26 @@ export async function POST(request: Request) {
       }
       if (skipPolicySearchIfEmpty && /찾지 못했/.test(policyReply)) policyReply = ""; // 델타가 이미 답이므로 빈 결과로 덮어쓰지 않음
       reply = [prior, policyReply].filter(Boolean).join("\n\n");
+
+      // user_policy_matches.missing_information에 기대고 싶었지만, 에이전트(LLM)가 매턴
+      // save_lookup_result를 성실히 호출한다는 보장이 없어(직접 확인함 — insufficient_info인데
+      // 저장을 건너뛴 경우가 있었음) 신호가 자주 비어버렸다. 대신 구조화 조건이 있는 curated
+      // 정책들에 대해 규칙엔진을 여기서 직접 다시 돌려 결정적으로 계산한다 — 에이전트의 도구
+      // 호출 여부와 무관하게 항상 정확하다.
+      const { data: curated } = await db.from("policies").select("policy_id").eq("source", "curated");
+      const missingSet = new Set<string>();
+      for (const p of curated ?? []) {
+        const classified = await classifyPolicyForUser(p.policy_id, profile.profileRow, profile.financeRow);
+        if (classified?.result.status === "insufficient_info") {
+          for (const f of classified.result.missingFields) if (DISPLAYABLE_FIELDS.has(f)) missingSet.add(f);
+        }
+      }
+      missingFields = [...missingSet];
     }
 
     await db.from("chat_messages").insert({ user_id: userId, role: "assistant", content: reply });
 
-    return NextResponse.json({ reply, plan });
+    return NextResponse.json({ reply, plan, missingFields });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "채팅 처리 실패" }, { status: 502 });
   }

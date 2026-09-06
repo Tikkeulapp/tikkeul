@@ -124,6 +124,8 @@ export async function resolveProfile(opts: {
           if (profileRow) profileRow = { ...profileRow, income_bracket: c.new_value };
         } else if (c.field === "asset_bracket") {
           if (profileRow) profileRow = { ...profileRow, asset_bracket: c.new_value };
+        } else if (c.field === "housing_type") {
+          if (profileRow) profileRow = { ...profileRow, housing_type: c.new_value };
         }
       } else {
         pending.push(c);

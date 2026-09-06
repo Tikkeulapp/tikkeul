@@ -49,7 +49,7 @@ const SEEDS: Seed[] = [
     apply_url: "https://www.jungnang.go.kr",
     conditions: [
       { field: "region_sigungu", source_table: "profile_survey", operator: "=", value: "중랑구" },
-      { field: "employment_status", source_table: "profile_survey", operator: "in", value: ["미취업", "미취업_단기알바중"] },
+      { field: "employment_status", source_table: "profile_survey", operator: "in", value: ["취업 준비 중", "재취업 준비 중"] },
       { field: "age", source_table: "profile_survey", operator: "<=", value: 39 },
     ],
     eligibility_text: "중랑구 거주 미취업 청년(만 19~39세) 대상, 어학·자격증 응시료 연 최대 10만 원 실비 지원.",
@@ -65,7 +65,7 @@ const SEEDS: Seed[] = [
     conditions: [
       { field: "region_sido", source_table: "profile_survey", operator: "=", value: "서울특별시" },
       { field: "education_status", source_table: "profile_survey", operator: "=", value: "졸업" },
-      { field: "employment_status", source_table: "profile_survey", operator: "in", value: ["미취업", "미취업_단기알바중"] },
+      { field: "employment_status", source_table: "profile_survey", operator: "in", value: ["취업 준비 중", "재취업 준비 중"] },
       { field: "age", source_table: "profile_survey", operator: "<=", value: 34 },
       { field: "income_bracket", source_table: "profile_survey", operator: "<=", value: 3 },
     ],

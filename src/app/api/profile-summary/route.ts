@@ -24,5 +24,6 @@ export async function GET(request: Request) {
     employmentStatus: (row.employment_status as string | undefined) ?? null,
     incomeBracket: (row.income_bracket as string | undefined) ?? null,
     assetBracket: (row.asset_bracket as string | undefined) ?? null,
+    housingType: (row.housing_type as string | undefined) ?? null,
   });
 }
