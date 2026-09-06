@@ -957,25 +957,54 @@ export default function AppPage() {
             </div>
           </section>
 
-          {/* 우측: 요약 위젯 (원 2개) */}
-          <aside className="flex flex-row gap-4 lg:flex-col">
-            <div className="grid aspect-square w-full max-w-[220px] place-items-center rounded-full bg-[#2fbf5f] p-4 text-center text-white shadow-lift">
-              <div>
-                <p className="text-[13px] font-bold leading-tight opacity-90">이번 달<br />아낄 티끌</p>
-                <p className="mt-1 text-[19px] font-bold leading-tight">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
-                <p className="mt-0.5 text-[11.5px] opacity-75">담은 정책 예상액</p>
-              </div>
+          {/* 우측: 프로필 요약 — 얼굴 사진 + 기본 정보 + 금융 정보 */}
+          <aside className="flex flex-col gap-3">
+            <div className="rounded-2xl border border-line bg-card p-4 text-center shadow-lift">
+              <img
+                src={persona ? `/avatars/${persona.id}.png` : "/avatars/default.svg"}
+                alt={`${displayName} 프로필 사진`}
+                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-leaf-deep/20"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = "/avatars/default.svg";
+                }}
+              />
+              <p className="mt-2 text-[15px] font-bold">{persona ? `${persona.emoji} ${persona.name}` : displayName}</p>
+              {persona && <p className="text-[12px] text-mute">{persona.tagline}</p>}
             </div>
-            <div className="grid aspect-square w-full max-w-[220px] place-items-center rounded-full bg-[#7ddf9a] p-4 text-center text-leaf-deep shadow-lift">
-              <div>
-                <p className="text-[13px] font-bold leading-tight">이번 달<br />담은 혜택</p>
-                <p className="mt-1 text-[24px] font-bold leading-none">{savedRecs.length}건</p>
-                <p className="mt-0.5 text-[11.5px] opacity-75">마이티끌 기준</p>
+
+            {persona && (
+              <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
+                <p className="text-[12.5px] font-bold text-mute">기본 정보</p>
+                <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
+                  <div className="flex justify-between"><dt className="text-mute">나이</dt><dd className="font-semibold">{new Date().getFullYear() - Number(persona.declared.birthDate.slice(0, 4))}세</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">거주지</dt><dd className="font-semibold">{profileNote ? profileNote.split("부터 ")[1] : `${persona.declared.region.sido} ${persona.declared.region.sigungu}`}</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">학력</dt><dd className="font-semibold">{persona.declared.education.status} · {persona.declared.education.major}</dd></div>
+                  <div className="flex justify-between"><dt className="text-mute">취업상태</dt><dd className="font-semibold">{persona.declared.employmentStatus}</dd></div>
+                </dl>
               </div>
+            )}
+
+            <div className="rounded-2xl border border-line bg-card p-4 shadow-lift">
+              <p className="text-[12.5px] font-bold text-mute">금융 정보</p>
+              <dl className="mt-2 flex flex-col gap-1.5 text-[13.5px]">
+                {persona && (
+                  <>
+                    <div className="flex justify-between"><dt className="text-mute">소득분위</dt><dd className="font-semibold">{persona.declared.incomeBracket ?? "-"}</dd></div>
+                    <div className="flex justify-between"><dt className="text-mute">자산분위</dt><dd className="font-semibold">{persona.declared.assetBracket ?? "-"}</dd></div>
+                  </>
+                )}
+                <div className="flex justify-between"><dt className="text-mute">이번 달 담은 혜택</dt><dd className="font-semibold">{savedRecs.length}건</dd></div>
+                <div className="mt-1 flex items-center justify-between rounded-[10px] bg-mint px-2.5 py-1.5">
+                  <dt className="text-[13px] font-bold text-leaf-deep">이번 달 아낄 티끌</dt>
+                  <dd className="text-[15px] font-bold text-leaf-deep">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</dd>
+                </div>
+              </dl>
             </div>
+
             <Link
               href="/app/simulate"
-              className="block w-full max-w-[220px] rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
+              className="block w-full rounded-2xl border border-line bg-card p-3 text-left shadow-lift transition hover:border-ink"
             >
               <p className="text-[12.5px] font-bold text-mute">취업 후엔?</p>
               <p className="mt-0.5 text-[15px] font-bold leading-snug">🎯 취업 후<br />시뮬레이션</p>
