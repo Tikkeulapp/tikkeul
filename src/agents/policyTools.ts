@@ -43,12 +43,23 @@ export function buildFindPolicyTool() {
         const { data: rows } = await q.limit(1);
         if (rows && rows.length > 0) return JSON.stringify({ found: true, policy: rows[0] });
 
-        const { data: fallback } = await db
-          .from("policies")
-          .select("*")
-          .ilike("search_text", `%${titleQuery.replace(/[%,()]/g, "")}%`)
-          .limit(1);
-        if (fallback && fallback.length > 0) return JSON.stringify({ found: true, policy: fallback[0] });
+        // 폴백: "토익 시험 응시료"처럼 정책명이 아닌 서술이면 키워드(동의어 포함)로 원문을 검색해 가장 관련 높은 1건
+        const kws = searchKeywords(titleQuery);
+        let q2 = db.from("policies").select("*");
+        for (const k of kws.slice(0, 3)) q2 = q2.ilike("search_text", `%${k}%`);
+        const { data: andRows } = await q2.limit(5);
+        const pool = andRows && andRows.length ? andRows : (await (async () => {
+          const orExpr = kws.map((k) => `search_text.ilike.%${k}%`).join(",");
+          const { data } = await db.from("policies").select("*").or(orExpr).limit(40);
+          return data ?? [];
+        })());
+        if (pool.length) {
+          const best = [...pool].sort((a, b) => {
+            const sc = (r: { title: string; search_text: string | null }) => kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length;
+            return sc(b) - sc(a);
+          })[0];
+          return JSON.stringify({ found: true, policy: best, matched_by: "keywords", keywords: kws });
+        }
       }
       return JSON.stringify({ found: false });
     },
