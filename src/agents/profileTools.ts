@@ -30,7 +30,7 @@ const ProfileFieldsSchema = z.object({
   military_served: z.boolean().nullable().optional(),
 });
 
-export function buildProfileTools(userId: string, profileId: string) {
+export function buildProfileTools(userId: string, profileId: string, deferUntil: string | null = null) {
   const getProfile = tool(
     async () => {
       const db = supabaseAdmin();
@@ -56,7 +56,7 @@ export function buildProfileTools(userId: string, profileId: string) {
       // 페르소나(minji/junho/seoyeon)는 데모 공용 행이므로 절대 수정하지 않는다.
       // 대신 이 사용자에게만 적용되는 profile_changes 이력으로 남긴다 (resolveProfile이 반영).
       if (isPersonaId(profileId)) {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = deferUntil ?? new Date().toISOString().slice(0, 10);
         const recorded: string[] = [];
         for (const [field, newValue] of Object.entries(cleaned)) {
           if (!TRACKED_FIELDS.has(field)) continue;
@@ -76,12 +76,15 @@ export function buildProfileTools(userId: string, profileId: string) {
           note: "데모 페르소나의 기본 정보는 고정되어 있어 직접 수정하지 않았습니다. 거주지·학력·취업상태 변경은 이 사용자에게만 적용되는 변경 이력으로 기록했습니다.",
         });
       }
-      const { error } = await db.from("profile_survey").update(cleaned).eq("id", profileId);
-      if (error) return JSON.stringify({ error: error.message });
+      // 미래 시점 변경("다음주에 이사")이면 원본은 그대로 두고 예정 이력만 남긴다 — resolveProfile이 그 날부터 적용
+      if (!deferUntil) {
+        const { error } = await db.from("profile_survey").update(cleaned).eq("id", profileId);
+        if (error) return JSON.stringify({ error: error.message });
+      }
 
       // region_sido/education_status/employment_status는 profile_changes에도 남긴다 (감사로그 겸
       // 이사 델타 리포트 등 기존 기능이 참조하는 이력).
-      const today = new Date().toISOString().slice(0, 10);
+      const today = deferUntil ?? new Date().toISOString().slice(0, 10);
       const trackedEntries = Object.entries(cleaned).filter(([k]) => TRACKED_FIELDS.has(k));
       for (const [field, newValue] of trackedEntries) {
         const { data: last } = await db.from("profile_changes").select("new_value").eq("user_id", userId).eq("field", field).order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -96,7 +99,7 @@ export function buildProfileTools(userId: string, profileId: string) {
           status: "applied",
         });
       }
-      return JSON.stringify({ updated: cleaned });
+      return JSON.stringify(deferUntil ? { scheduled: cleaned, effective_from: deferUntil, note: `${deferUntil}부터 적용되도록 예약했습니다(그 전까지는 현재 정보 유지)` } : { updated: cleaned });
     },
     {
       name: "update_profile",
