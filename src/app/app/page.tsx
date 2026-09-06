@@ -427,6 +427,14 @@ export default function AppPage() {
       setChatReply(json.reply);
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
+      // 채팅으로 프로필(거주지 등)이 바뀌었으면 헤더 배지와 추천 탭을 새 프로필 기준으로 갱신
+      if (session && Array.isArray(json.plan?.intents) && json.plan.intents.includes("profile_update")) {
+        void loadRecs(session, true);
+        fetch(`/api/profile-change?userId=${encodeURIComponent(session.userId)}`).then((r) => r.json()).then((pc) => {
+          const last = (pc.changes ?? []).filter((c: { field: string }) => c.field === "region_sido").pop();
+          if (last) setProfileNote(`${last.effective_from.slice(5).replace("-", "/")}부터 ${last.new_value}`);
+        }).catch(() => {});
+      }
     } catch (e) {
       setNotice(`AI 응답에 실패했어요: ${e instanceof Error ? e.message : e}`);
       setTimeout(() => setNotice(null), 4000);
