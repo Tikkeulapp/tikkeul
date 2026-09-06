@@ -93,6 +93,23 @@ export async function GET(request: Request) {
     return known;
   };
 
+  /** policy_discovery_queue.url의 유니크 인덱스가 부분 인덱스(where url is not null)라서
+   * .upsert({onConflict:"url"})가 "no unique or exclusion constraint matching the ON CONFLICT
+   * specification"(42P10)로 조용히 실패한다 — 직접 재현·확인함. select-then-insert로 우회.
+   * url이 없는 행은 (부분 인덱스가 애초에 중복을 안 막으므로) 중복 체크 없이 바로 넣는다. */
+  const queueDiscovery = async (rows: { url: string | null }[]) => {
+    const urls = [...new Set(rows.map((r) => r.url).filter((u): u is string => !!u?.trim()))];
+    const existing = new Set<string>();
+    for (let i = 0; i < urls.length; i += 200) {
+      const { data } = await db.from("policy_discovery_queue").select("url").in("url", urls.slice(i, i + 200));
+      for (const r of data ?? []) if (r.url) existing.add(r.url);
+    }
+    const toInsert = rows.filter((r) => !r.url?.trim() || !existing.has(r.url));
+    if (toInsert.length === 0) return;
+    const { error } = await db.from("policy_discovery_queue").insert(toInsert);
+    if (error) console.error("policy_discovery_queue insert 실패:", error.message);
+  };
+
   // ── A-1. 온통청년 최신 250건 ──
   try {
     const key = process.env.ONTONG_YOUTH_API_KEY;
@@ -110,9 +127,8 @@ export async function GET(request: Request) {
     report.ontong_checked = rows.length;
     if (fresh.length) {
       await db.from("policies").upsert(fresh);
-      await db.from("policy_discovery_queue").upsert(
+      await queueDiscovery(
         fresh.map((r) => ({ found_by: "api:ontong", title: r.title, url: r.apply_url, status: "merged", candidate_policy_id: r.policy_id, reviewed_at: new Date().toISOString() })),
-        { onConflict: "url", ignoreDuplicates: true },
       );
     }
     report.ontong_new = fresh.length;
@@ -139,9 +155,8 @@ export async function GET(request: Request) {
     report.gov24_checked = rows.length;
     if (fresh.length) {
       await db.from("policies").upsert(fresh);
-      await db.from("policy_discovery_queue").upsert(
+      await queueDiscovery(
         fresh.map((r) => ({ found_by: "api:gov24", title: r.title, url: r.apply_url, status: "merged", candidate_policy_id: r.policy_id, reviewed_at: new Date().toISOString() })),
-        { onConflict: "url", ignoreDuplicates: true },
       );
     }
     report.gov24_new = fresh.length;
@@ -177,9 +192,11 @@ export async function GET(request: Request) {
               `제목: ${title}\n요약: ${str(r.content).slice(0, 600)}\nURL: ${str(r.url)}`, 800,
             );
           } catch { /* 추출 실패 시 원문만 저장 */ }
-          const { error } = await db.from("policy_discovery_queue").upsert(
-            { found_by: "web:tavily", trigger_context: q, url: str(r.url), title, snippet: str(r.content).slice(0, 500), extracted, status: "new" },
-            { onConflict: "url", ignoreDuplicates: true },
+          const url = str(r.url);
+          const { data: dup } = url ? await db.from("policy_discovery_queue").select("id").eq("url", url).maybeSingle() : { data: null };
+          if (dup) continue;
+          const { error } = await db.from("policy_discovery_queue").insert(
+            { found_by: "web:tavily", trigger_context: q, url, title, snippet: str(r.content).slice(0, 500), extracted, status: "new" },
           );
           if (!error) queued++;
         }
