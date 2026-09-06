@@ -45,6 +45,40 @@ type Rec = {
 /** 마이티끌에 담을 때 함께 기억하는 맥락 (연결 일정·시험비·혜택 요약) — 브라우저 저장 */
 type SavedMeta = { linkedEvent?: { title: string; date: string }; examName?: string; examFeeKrw?: number | null; amountKrw?: number; benefit?: string };
 type DbPolicyRow = { policy_id: string; source: string; title: string; provider: string | null; theme: string | null; region_sidos: string[] | null; is_national: boolean | null; end_date: string | null; always_open: boolean | null; apply_url: string | null; income_condition: string | null; search_text: string | null };
+
+/** 챗봇 답변용 초경량 마크다운: **굵게**, [텍스트](url), "- " 불릿, 표(| a | b |)는 행으로. 그 외는 그대로 */
+function renderChatMarkdown(text: string) {
+  const inline = (line: string, key: string) => {
+    const parts: React.ReactNode[] = [];
+    const re = /\*\*(.+?)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|`([^`]+)`/g;
+    let last = 0; let m: RegExpExecArray | null; let i = 0;
+    while ((m = re.exec(line))) {
+      if (m.index > last) parts.push(line.slice(last, m.index));
+      if (m[1]) parts.push(<b key={`${key}-b${i}`} className="text-leaf-deep">{m[1]}</b>);
+      else if (m[2]) parts.push(<a key={`${key}-a${i}`} href={m[3]} target="_blank" rel="noreferrer" className="font-bold underline">{m[2]} ↗</a>);
+      else if (m[4]) parts.push(<code key={`${key}-c${i}`} className="rounded bg-mint-soft px-1 text-[13px]">{m[4]}</code>);
+      last = m.index + m[0].length; i++;
+    }
+    if (last < line.length) parts.push(line.slice(last));
+    return parts;
+  };
+  const lines = text.split("\n");
+  return lines.map((raw, idx) => {
+    const line = raw.trimEnd();
+    if (!line.trim()) return <div key={idx} className="h-2" />;
+    if (/^\|?\s*-{3,}/.test(line.replace(/\|/g, "").trim()) && line.includes("|")) return null; // 표 구분선
+    if (line.trim().startsWith("|")) {
+      const cells = line.split("|").map((c) => c.trim()).filter((c, i, a) => !(i === 0 && c === "") && !(i === a.length - 1 && c === ""));
+      return <div key={idx} className="flex flex-wrap gap-x-3 gap-y-0.5 rounded bg-mint-soft/60 px-2 py-1 text-[13.5px]">{cells.map((c, ci) => <span key={ci}>{inline(c, `${idx}-${ci}`)}</span>)}</div>;
+    }
+    const bullet = line.match(/^\s*(?:[-•*]|\d+\.)\s+(.*)$/);
+    if (bullet) return <div key={idx} className="flex gap-2 pl-1"><span className="text-mute">•</span><span>{inline(bullet[1], String(idx))}</span></div>;
+    const h = line.match(/^#{1,4}\s+(.*)$/);
+    if (h) return <p key={idx} className="mt-1 font-bold">{inline(h[1], String(idx))}</p>;
+    return <p key={idx}>{inline(line, String(idx))}</p>;
+  });
+}
+
 const fmtMD = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
 
 type Verdict = {
@@ -545,7 +579,8 @@ export default function AppPage() {
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
         {chatReply && (
           <div className="mt-2 whitespace-pre-wrap rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
-            🤖 {chatReply}
+            <span className="mr-1">🤖</span>
+            <div className="inline-block w-[calc(100%-1.75rem)] align-top">{renderChatMarkdown(chatReply)}</div>
           </div>
         )}
 
