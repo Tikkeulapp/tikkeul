@@ -145,6 +145,7 @@ export default function AppPage() {
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [chatReply, setChatReply] = useState<string | null>(null);
+  const [chatQuestion, setChatQuestion] = useState<string | null>(null); // 방금 물어본 질문 (답변 위에 유지)
   const [chatLoading, setChatLoading] = useState(false);
 
   // 사이드바: 아코디언 (하나만 열림)
@@ -443,6 +444,7 @@ export default function AppPage() {
     if (!query.trim() || !session || chatLoading) return;
     const message = query.trim();
     setQuery("");
+    setChatQuestion(message);
     setChatLoading(true);
     setChatReply(null);
     try {
@@ -577,10 +579,25 @@ export default function AppPage() {
           </button>
         </form>
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
-        {chatReply && (
-          <div className="mt-2 whitespace-pre-wrap rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
-            <span className="mr-1">🤖</span>
-            <div className="inline-block w-[calc(100%-1.75rem)] align-top">{renderChatMarkdown(chatReply)}</div>
+        {chatQuestion && (
+          <div className="mt-2 rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
+            <div className="flex items-start gap-2">
+              <span>🙋</span>
+              <p className="flex-1 font-semibold">{chatQuestion}</p>
+              {!chatLoading && (
+                <button onClick={() => { setChatQuestion(null); setChatReply(null); }} className="text-[13px] text-mute underline" aria-label="대화 닫기">닫기</button>
+              )}
+            </div>
+            <div className="mt-2 flex items-start gap-2 border-t border-line pt-2">
+              <span>🤖</span>
+              {chatLoading ? (
+                <p className="text-mute">생각 중… 프로필과 정책 DB를 대조하고 있어요 (5~20초)</p>
+              ) : chatReply ? (
+                <div className="min-w-0 flex-1 whitespace-pre-wrap">{renderChatMarkdown(chatReply)}</div>
+              ) : (
+                <p className="text-mute">답변을 받지 못했어요. 다시 시도해 주세요.</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -805,7 +822,34 @@ export default function AppPage() {
                     <button onClick={() => deleteEvent(ev)} className="grid h-6 w-6 place-items-center rounded-full text-[14px] text-mute transition hover:bg-line hover:text-ink" aria-label="일정 삭제" title="일정 삭제">✕</button>
                   </div>
                 ))}
-                {(eventsByDate.get(date) ?? []).length === 0 && (
+                {(examDeadlinesByDate.get(date) ?? []).map((x) => (
+                  <div key={"exdl-" + x.ev.event_id} className="rounded-[10px] border border-[#f6c453] bg-[#fff7e0] px-3 py-2.5 text-[14px]">
+                    <p className="font-bold text-[#b45309]">📝 {x.info.name} {x.match?.session?.round ?? ""} 정기접수 마감일</p>
+                    <ul className="mt-1 flex flex-col gap-0.5 text-[13.5px]">
+                      <li>· 시험일 <b>{x.match?.session ? fmtMD(x.match.session.examDate) : fmtMD(x.ev.start_at)}</b>{x.match?.kind === "nearest" ? ` (내 일정 ${fmtMD(x.ev.start_at)} — 같은 날 회차가 없어 가까운 공식 회차 기준)` : ` — 내 일정 "${x.ev.title}"`}</li>
+                      {x.match?.session?.regStart && <li>· 정기접수 {fmtMD(x.match.session.regStart)} ~ <b>{fmtMD(x.match.session.regEnd)}</b></li>}
+                      {x.match?.session?.lateRegEnd && <li>· 특별·추가접수 마감 {fmtMD(x.match.session.lateRegEnd)} (추가 요금·취소좌석 등 조건은 공식 안내 확인)</li>}
+                      {x.match?.session?.resultDate && <li>· 성적 발표 {fmtMD(x.match.session.resultDate)}</li>}
+                      <li>· 응시료 {x.info.feeKrw.toLocaleString("ko-KR")}원{x.info.note ? ` (${x.info.note})` : ""} · {x.info.org}</li>
+                      {x.match?.session?.note && <li>· {x.match.session.note}</li>}
+                    </ul>
+                    <p className="mt-1.5 text-[12.5px] text-mute">
+                      출처: {x.match?.schedule.sourceLabel ?? x.info.org} (확인일 {x.match?.schedule.checkedAt ?? "-"}) ·{" "}
+                      <a href={x.match?.schedule.source ?? x.info.scheduleUrl} target="_blank" rel="noreferrer" className="font-bold underline">공식 일정·접수 페이지 ↗</a>
+                    </p>
+                  </div>
+                ))}
+                {(deadlinesByDate.get(date) ?? []).map((r) => (
+                  <div key={"pdl-" + r.id} className="rounded-[10px] border border-[#f6c453] bg-[#fff7e0] px-3 py-2.5 text-[14px]">
+                    <p className="font-bold text-[#b45309]">⏰ 담은 정책 신청 마감일 — {r.title}</p>
+                    <p className="mt-1 text-[13.5px]">{savedMeta[r.id]?.benefit ?? r.benefit}{r.provider ? ` · ${r.provider}` : ""} · 마감 {fmtMD(r.endDate!)}{daysUntil(r.endDate!) >= 0 ? ` (D-${daysUntil(r.endDate!)})` : " (마감됨)"}</p>
+                    <div className="mt-1.5 flex gap-3 text-[13px]">
+                      <button onClick={() => openDetail(r)} className="font-bold text-leaf-deep underline">자세히보기</button>
+                      {r.url && <a href={r.url} target="_blank" rel="noreferrer" className="font-bold underline">신청 페이지 ↗</a>}
+                    </div>
+                  </div>
+                ))}
+                {(eventsByDate.get(date) ?? []).length === 0 && !(examDeadlinesByDate.get(date)?.length || deadlinesByDate.get(date)?.length) && (
                   <p className="text-[14px] text-mute">이 날짜에 일정이 없어요.</p>
                 )}
               </div>
