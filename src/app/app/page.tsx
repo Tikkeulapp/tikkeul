@@ -145,9 +145,13 @@ export default function AppPage() {
   // 검색바 (AI 채팅 — /api/chat)
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const [chatReply, setChatReply] = useState<string | null>(null);
-  const [chatQuestion, setChatQuestion] = useState<string | null>(null); // 방금 물어본 질문 (답변 위에 유지)
+  // 질문 하나로 끝나지 않고 답변 아래에서 바로 추가 질문을 이어갈 수 있게 — 매번 위 검색창을
+  // 다시 눌러야 했던 걸 실제 채팅처럼 스레드로 유지한다. reply가 null이면 아직 응답 대기 중.
+  type ChatTurn = { question: string; reply: string | null };
+  const [chatThread, setChatThread] = useState<ChatTurn[]>([]);
+  const [followUp, setFollowUp] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const chatQuestion = chatThread.length > 0 ? chatThread[chatThread.length - 1].question : null; // 최신 질문 (프로필 카드 자동 이어붙이기용)
 
   // 사이드바: 아코디언 (하나만 열림)
   const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
@@ -593,9 +597,8 @@ export default function AppPage() {
 
   const sendChatMessage = async (message: string) => {
     if (!message.trim() || !session || chatLoading) return;
-    setChatQuestion(message);
+    setChatThread((prev) => [...prev, { question: message, reply: null }]);
     setChatLoading(true);
-    setChatReply(null);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -609,7 +612,7 @@ export default function AppPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "요청 실패");
-      setChatReply(json.reply);
+      setChatThread((prev) => prev.map((t, i) => (i === prev.length - 1 ? { ...t, reply: json.reply } : t)));
       setNeededFields(new Set(Array.isArray(json.missingFields) ? json.missingFields : []));
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
@@ -741,25 +744,58 @@ export default function AppPage() {
         </form>
         </div>
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
-        {chatQuestion && (
+        {chatThread.length > 0 && (
           <div className="mt-2 rounded-[10px] border border-line bg-white px-3 py-2.5 text-[14.5px] leading-relaxed text-ink">
-            <div className="flex items-start gap-2">
-              <span>🙋</span>
-              <p className="flex-1 font-semibold">{chatQuestion}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-bold text-mute">대화</p>
               {!chatLoading && (
-                <button onClick={() => { setChatQuestion(null); setChatReply(null); }} className="text-[13px] text-mute underline" aria-label="대화 닫기">닫기</button>
+                <button onClick={() => { setChatThread([]); setFollowUp(""); }} className="text-[13px] text-mute underline" aria-label="대화 닫기">닫기</button>
               )}
             </div>
-            <div className="mt-2 flex items-start gap-2 border-t border-line pt-2">
-              <span>🤖</span>
-              {chatLoading ? (
-                <p className="text-mute">생각 중… 프로필과 정책 DB를 대조하고 있어요 (5~20초)</p>
-              ) : chatReply ? (
-                <div className="min-w-0 flex-1 whitespace-pre-wrap">{renderChatMarkdown(chatReply)}</div>
-              ) : (
-                <p className="text-mute">답변을 받지 못했어요. 다시 시도해 주세요.</p>
-              )}
+            <div className="mt-1.5 flex max-h-[420px] flex-col gap-3 overflow-y-auto">
+              {chatThread.map((turn, i) => {
+                const isLast = i === chatThread.length - 1;
+                return (
+                  <div key={i} className={i > 0 ? "border-t border-line pt-3" : ""}>
+                    <div className="flex items-start gap-2">
+                      <span>🙋</span>
+                      <p className="flex-1 font-semibold">{turn.question}</p>
+                    </div>
+                    <div className="mt-2 flex items-start gap-2">
+                      <span>🤖</span>
+                      {turn.reply ? (
+                        <div className="min-w-0 flex-1 whitespace-pre-wrap">{renderChatMarkdown(turn.reply)}</div>
+                      ) : isLast && chatLoading ? (
+                        <p className="text-mute">생각 중… 프로필과 정책 DB를 대조하고 있어요 (5~20초)</p>
+                      ) : (
+                        <p className="text-mute">답변을 받지 못했어요. 다시 시도해 주세요.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {/* 답변 아래에서 바로 추가 질문 — 매번 위 검색창을 다시 누를 필요 없이 이어서 물어봄 */}
+            <form
+              onSubmit={(e) => { e.preventDefault(); const m = followUp.trim(); if (!m) return; setFollowUp(""); void sendChatMessage(m); }}
+              className="mt-3 flex items-center gap-2 border-t border-line pt-2.5"
+            >
+              <input
+                value={followUp}
+                onChange={(e) => setFollowUp(e.target.value)}
+                placeholder="추가로 물어보기 — 예: 신청 방법 알려줘"
+                disabled={chatLoading}
+                className="min-w-0 flex-1 rounded-[8px] border border-line bg-card px-3 py-1.5 text-[14px] outline-none focus:border-ink disabled:opacity-60"
+                aria-label="추가 질문"
+              />
+              <button
+                type="submit"
+                disabled={chatLoading || !followUp.trim()}
+                className="shrink-0 rounded-[8px] bg-leaf px-3.5 py-1.5 text-[13.5px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-50"
+              >
+                {chatLoading ? "…" : "전송"}
+              </button>
+            </form>
           </div>
         )}
 
