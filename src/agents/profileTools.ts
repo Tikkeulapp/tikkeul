@@ -9,6 +9,9 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
 import { supabaseAdmin } from "@/lib/supabase";
+import { PERSONAS } from "@/data/personas";
+
+const isPersonaId = (id: string) => PERSONAS.some((p) => p.id === id);
 
 const TRACKED_FIELDS = new Set(["region_sido", "education_status", "employment_status"]);
 
@@ -27,7 +30,7 @@ const ProfileFieldsSchema = z.object({
   military_served: z.boolean().nullable().optional(),
 });
 
-export function buildProfileTools(userId: string, profileId: string) {
+export function buildProfileTools(userId: string, profileId: string, deferUntil: string | null = null) {
   const getProfile = tool(
     async () => {
       const db = supabaseAdmin();
@@ -50,14 +53,42 @@ export function buildProfileTools(userId: string, profileId: string) {
       if (Object.keys(cleaned).length === 0) return JSON.stringify({ updated: {} });
 
       const db = supabaseAdmin();
-      const { error } = await db.from("profile_survey").update(cleaned).eq("id", profileId);
-      if (error) return JSON.stringify({ error: error.message });
+      // 페르소나(minji/junho/seoyeon)는 데모 공용 행이므로 절대 수정하지 않는다.
+      // 대신 이 사용자에게만 적용되는 profile_changes 이력으로 남긴다 (resolveProfile이 반영).
+      if (isPersonaId(profileId)) {
+        const today = deferUntil ?? new Date().toISOString().slice(0, 10);
+        const recorded: string[] = [];
+        for (const [field, newValue] of Object.entries(cleaned)) {
+          if (!TRACKED_FIELDS.has(field)) continue;
+          // 같은 값이 이미 최신 이력이면(예: chat route가 먼저 결정적으로 기록) 중복 기록하지 않는다
+          const { data: last } = await db.from("profile_changes").select("new_value").eq("user_id", userId).eq("field", field).order("created_at", { ascending: false }).limit(1).maybeSingle();
+          if (last?.new_value === String(newValue)) { recorded.push(field); continue; }
+          await db.from("profile_changes").insert({
+            user_id: userId, field, old_value: null, new_value: String(newValue),
+            effective_from: today, source_event: "chat:profile_agent", status: "applied",
+          });
+          recorded.push(field);
+        }
+        return JSON.stringify({
+          updated: {},
+          persona_locked: true,
+          recorded_as_profile_change: recorded,
+          note: "데모 페르소나의 기본 정보는 고정되어 있어 직접 수정하지 않았습니다. 거주지·학력·취업상태 변경은 이 사용자에게만 적용되는 변경 이력으로 기록했습니다.",
+        });
+      }
+      // 미래 시점 변경("다음주에 이사")이면 원본은 그대로 두고 예정 이력만 남긴다 — resolveProfile이 그 날부터 적용
+      if (!deferUntil) {
+        const { error } = await db.from("profile_survey").update(cleaned).eq("id", profileId);
+        if (error) return JSON.stringify({ error: error.message });
+      }
 
       // region_sido/education_status/employment_status는 profile_changes에도 남긴다 (감사로그 겸
       // 이사 델타 리포트 등 기존 기능이 참조하는 이력).
-      const today = new Date().toISOString().slice(0, 10);
+      const today = deferUntil ?? new Date().toISOString().slice(0, 10);
       const trackedEntries = Object.entries(cleaned).filter(([k]) => TRACKED_FIELDS.has(k));
       for (const [field, newValue] of trackedEntries) {
+        const { data: last } = await db.from("profile_changes").select("new_value").eq("user_id", userId).eq("field", field).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (last?.new_value === String(newValue)) continue; // 중복 이력 방지
         await db.from("profile_changes").insert({
           user_id: userId,
           field,
@@ -68,7 +99,7 @@ export function buildProfileTools(userId: string, profileId: string) {
           status: "applied",
         });
       }
-      return JSON.stringify({ updated: cleaned });
+      return JSON.stringify(deferUntil ? { scheduled: cleaned, effective_from: deferUntil, note: `${deferUntil}부터 적용되도록 예약했습니다(그 전까지는 현재 정보 유지)` } : { updated: cleaned });
     },
     {
       name: "update_profile",

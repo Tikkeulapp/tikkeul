@@ -24,11 +24,12 @@ export async function runProfileAgent(
   profileRowId: string,
   messages: ChatMessage[],
   missingFields: string[],
+  deferUntil: string | null = null,
 ): Promise<string> {
   const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature: 0 });
   const agent = createReactAgent({
     llm,
-    tools: buildProfileTools(userId, profileRowId),
+    tools: buildProfileTools(userId, profileRowId, deferUntil),
     prompt: SYSTEM_PROMPT,
   });
   const turnMessages = [...messages];

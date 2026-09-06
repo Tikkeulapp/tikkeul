@@ -5,50 +5,62 @@ import { useState } from "react";
 const FEATURES = [
   {
     key: "match",
-    label: "맞춤 정책 매칭 · 마이티끌",
-    small: "전국 정책에서 내 것만 골라 관리",
+    label: "일정에 붙는 정책 매칭",
+    small: "면접·시험·이사를 적으면 혜택이 따라옵니다",
     preview: {
-      title: "맞춤 정책 매칭",
-      stat: "2,750",
+      title: "일정 → 정책 매칭",
+      stat: "4,475",
       unit: "개 정책에서",
-      copy: "내 프로필과 일정을 전국 청년·취준 정책과 대조해 <b>받을 수 있는 것만</b> 추천하고, 마이티끌에 담아 신청·증빙까지 관리합니다.",
-      insight: "“SKT 면접”을 적으면 면접수당·정장대여가 절약액과 함께 붙습니다.",
+      copy: "면접·시험·이사 일정을 적으면 AI가 전국 정책 중 <b>그 일정에 붙는 혜택</b>만 골라 이유와 함께 보여줍니다. 이사를 적으면 새 거주지에서 열리는 혜택과 사라지는 혜택까지 알려드립니다.",
+      insight: "“대전 이사”를 적으면 대전 월세지원과 함께 거주지 변경 제안이 뜹니다.",
+    },
+  },
+  {
+    key: "profile",
+    label: "마이데이터로 내 상황 이해",
+    small: "소득·월세·수급·소비 습관을 코드로 읽습니다",
+    preview: {
+      title: "내 상황 이해",
+      stat: "15",
+      unit: "가지 금융 피처",
+      copy: "계좌·카드·대출 마이데이터에서 <b>월 소득, 월세, 받고 있는 수당, 소비 습관</b>을 규칙 코드로 계산합니다. 설문은 마이데이터로 알 수 없는 것만 묻습니다.",
+      insight: "숫자는 코드가 계산하고, AI는 판단과 설명만 합니다.",
+    },
+  },
+  {
+    key: "judge",
+    label: "AI 자격 판정 · 마이티끌",
+    small: "받을 수 있는지, 무엇을 챙길지, 언제 마감인지",
+    preview: {
+      title: "자격 판정과 마이티끌",
+      stat: "3",
+      unit: "단계 판정",
+      copy: "<b>신청 가능성 높음 / 추가 확인 필요 / 요건 미충족</b>으로 판정하고 근거와 미리 챙길 증빙을 알려줍니다. 담은 정책은 마감일·연결 일정·예상 절약액으로 관리합니다.",
+      insight: "마감 3일 전이면 캘린더 위에 알림이 뜹니다.",
     },
   },
   {
     key: "chat",
-    label: "AI 채팅 상담",
-    small: "정책이 궁금하면 그냥 물어보세요",
+    label: "AI 챗봇",
+    small: "이게 뭐예요? 저한테 맞아요? 둘 중 뭐가 나아요?",
     preview: {
-      title: "AI 채팅 상담",
-      stat: "즉시",
-      unit: "답변",
-      copy: "“국민취업지원제도에 대해 알려줘” — 복잡한 제도를 내 상황에 맞춰 풀어서 설명합니다.",
-      insight: "답변에는 공식 출처 링크가 함께 붙습니다.",
+      title: "AI 챗봇",
+      stat: "3",
+      unit: "가지 질문",
+      copy: "“이게 뭐예요?” “저한테 맞아요?” “둘 중 뭐가 나아요?” — <b>정보 제공·매칭·비교</b> 세 종류의 질문에 정책 DB를 근거로 답합니다.",
+      insight: "DB에 없는 정책은 없다고 말합니다. 지어내지 않습니다.",
     },
   },
   {
-    key: "calendar",
-    label: "머니캘린더",
-    small: "일정 관리가 곧 혜택 관리",
+    key: "sim",
+    label: "취업 후 시뮬레이션",
+    small: "연봉·목표를 넣으면 돈의 흐름과 열리는 제도",
     preview: {
-      title: "머니캘린더",
-      stat: "1",
-      unit: "개의 캘린더",
-      copy: "면접·시험 일정 옆에 <b>정책 신청 마감일</b>이 함께 표시됩니다. 일정 관리가 곧 혜택 관리가 됩니다.",
-      insight: "예산 조기마감 사업은 먼저 알려드립니다.",
-    },
-  },
-  {
-    key: "report",
-    label: "절약 리포트",
-    small: "이번 주·이번 달 아낀 티끌 합계",
-    preview: {
-      title: "절약 리포트",
-      stat: "140,000",
-      unit: "원 / 이번 달",
-      copy: "“이번 달 예정된 취준 비용 31만 원 중 <b>14만 원</b>은 지원받을 수 있어요.” — 숫자로 확인합니다.",
-      insight: "티끌이 쌓이는 걸 보면 취준이 덜 무섭습니다.",
+      title: "취업 후 시뮬레이션",
+      stat: "3",
+      unit: "가지 시나리오",
+      copy: "기업 구분·연봉·목표(목돈·내집·결혼)를 넣으면 세후 실수령, 한 달 흐름, 목표 도달 시점을 <b>보수·기본·공격</b> 세 시나리오로 계산하고 취업 후 열리는 정책·금융 제도를 찾아줍니다.",
+      insight: "중소기업이면 청년 소득세 감면까지 반영해 계산합니다.",
     },
   },
 ] as const;
@@ -58,10 +70,10 @@ export function Features() {
   const current = FEATURES.find((f) => f.key === active)!;
 
   return (
-    <section id="features" className="bg-[#c5b0f4] py-24">
+    <section id="features" className="bg-leaf-deep py-24 text-white">
       <div className="mx-auto w-full max-w-6xl px-5">
         <div className="max-w-xl">
-          <p className="text-[13px] font-semibold tracking-widest text-leaf">
+          <p className="text-[13px] font-semibold tracking-widest text-[#7ddf9a]">
             YOUR JOB-HUNT CO-PILOT
           </p>
           <h2 className="mt-3 text-3xl font-light leading-tight sm:text-[44px] sm:leading-[1.1]">
@@ -80,33 +92,33 @@ export function Features() {
                 onClick={() => setActive(f.key)}
                 className={`flex items-center gap-4 rounded-[12px] border p-5 text-left transition ${
                   active === f.key
-                    ? "border-leaf bg-card"
-                    : "border-line bg-card/60 hover:bg-card"
+                    ? "border-white bg-card text-ink"
+                    : "border-white/15 bg-white/5 text-white hover:bg-white/10"
                 }`}
               >
                 <span
                   className={`text-sm font-semibold ${
-                    active === f.key ? "text-leaf" : "text-mute"
+                    active === f.key ? "text-[#1b8f47]" : "text-white/60"
                   }`}
                 >
                   0{i + 1}
                 </span>
                 <span>
                   <strong className="block text-[15px] font-semibold">{f.label}</strong>
-                  <small className="text-[13px] text-mute">{f.small}</small>
+                  <small className={`text-[13px] ${active === f.key ? "text-mute" : "text-white/65"}`}>{f.small}</small>
                 </span>
               </button>
             ))}
           </div>
 
           {/* 미리보기 */}
-          <div className="rounded-[24px] border border-line bg-card p-8">
+          <div className="rounded-[24px] border border-line bg-card p-8 text-ink">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-leaf-deep">{current.preview.title}</span>
               <small className="text-[12px] font-bold text-mute">미리보기</small>
             </div>
             <p className="mt-6">
-              <strong className="text-[56px] font-bold tracking-[-0.02em] text-leaf">
+              <strong className="text-[56px] font-bold tracking-[-0.02em] text-[#1b8f47]">
                 {current.preview.stat}
               </strong>
               <span className="ml-1.5 font-bold text-mute">{current.preview.unit}</span>

@@ -16,7 +16,7 @@ const STEPS = [
   {
     step: "02",
     title: "AI가 전국 정책과 대조하고",
-    body: "전국 2,750여 개 청년·취준 정책과 내 조건을 대조합니다. 면접 일정을 적으면 면접수당이, 시험을 적으면 응시료 지원이 붙습니다.",
+    body: "전국 4,400여 개 청년·취준 정책과 내 조건을 대조합니다. 면접 일정을 적으면 면접수당이, 시험을 적으면 응시료 지원이, 이사를 적으면 새 지역 혜택이 붙습니다.",
     visual: (
       <div className="grid h-full place-items-center">
         <div className="relative grid h-24 w-24 place-items-center rounded-full border-2 border-dashed border-leaf/40">
@@ -33,7 +33,7 @@ const STEPS = [
   {
     step: "03",
     title: "혜택·증빙·마감을 챙깁니다",
-    body: "추천 정책은 마이티끌에 담아 관리하고, 예상 절약액·증빙 서류·신청 마감일까지 놓치기 전에 알려드립니다.",
+    body: "추천 정책은 마이티끌에 담아 관리하고, 예상 절약액·증빙 서류·신청 마감일까지 알려드립니다. 궁금한 건 챗봇에, 취업 뒤 계획은 시뮬레이션으로 이어집니다.",
     visual: (
       <div className="flex h-full flex-col justify-center gap-2 text-[12.5px] font-bold">
         <span className="w-fit rounded-full bg-mint px-3 py-1.5 text-leaf-deep">
