@@ -707,7 +707,11 @@ export default function AppPage() {
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
-        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border-2 border-ink/15 bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4">
+        <form
+          onSubmit={search}
+          className="flex items-center gap-2 rounded-[16px] border-2 bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4"
+          style={{ borderImage: "linear-gradient(to right, #dceeb1, #c5b0f4) 1" }}
+        >
           <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
@@ -1132,18 +1136,18 @@ export default function AppPage() {
 
           {/* 우측: 프로필 요약 — 얼굴 사진 + 기본/금융 정보(한 박스) + 혜택·티끌(각각 박스) */}
           <aside className="flex flex-col gap-3">
-            <div className="rounded-[18px] border border-line bg-leaf-deep p-4 text-center text-white">
+            <div className="rounded-[18px] border border-line bg-card p-4 text-center">
               <img
                 src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
                 alt={`${displayName} 프로필 사진`}
-                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-white/30"
+                className="mx-auto h-24 w-24 rounded-full object-cover ring-2 ring-leaf-deep/20"
                 onError={(e) => {
                   e.currentTarget.onerror = null;
                   e.currentTarget.src = "/avatars/default.svg";
                 }}
               />
               <p className="mt-2 text-[15px] font-bold">{persona ? `${persona.emoji} ${persona.name}` : displayName}</p>
-              {persona && <p className="text-[12px] text-white/70">{persona.tagline}</p>}
+              {persona && <p className="text-[12px] text-mute">{persona.tagline}</p>}
             </div>
 
             {(persona || directProfile) && (
