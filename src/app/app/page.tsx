@@ -10,6 +10,7 @@ import { examFeeFor } from "@/data/exam_fees";
 import { findExamSession } from "@/data/exam_schedules";
 import { SIDO_CANONICAL } from "@/lib/region";
 import { EmploymentToggle } from "@/components/app/EmploymentToggle";
+import { OnboardingTour, restartOnboardingTour } from "@/components/app/OnboardingTour";
 
 type CalendarEvent = {
   event_id: string;
@@ -705,6 +706,7 @@ export default function AppPage() {
 
   return (
     <main className="min-h-screen bg-paper">
+      <OnboardingTour />
       <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
@@ -716,7 +718,8 @@ export default function AppPage() {
           <EmploymentToggle />
           <span>
             {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
-            <Link href="/app/start" className="underline">프로필 변경</Link>
+            <Link href="/app/start" className="underline">프로필 변경</Link> ·{" "}
+            <button onClick={restartOnboardingTour} className="underline">가이드 다시보기</button>
           </span>
         </span>
       </header>
@@ -725,7 +728,7 @@ export default function AppPage() {
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
         {/* border-image는 border-radius를 무시해 모서리가 각지게 보이는 문제가 있어(직접 확인함),
             바깥 링을 그라데이션 배경으로 만들고 안쪽에 패딩만큼 띄워 "그라데이션 테두리"처럼 보이게 함 */}
-        <div className="rounded-[18px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-[2px] shadow-md">
+        <div id="tour-search" className="rounded-[18px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-[2px] shadow-md">
         <form
           onSubmit={search}
           className="flex items-center gap-2 rounded-[16px] bg-gradient-to-r from-[#dceeb1] to-[#c5b0f4] p-2 pl-4"
@@ -808,13 +811,13 @@ export default function AppPage() {
           {/* 좌측: 마이티끌 / 추천 아코디언 */}
           <aside className="flex flex-col gap-2">
             {/* 이번 달 아낄 티끌 — 캘린더 선택 날짜와 동일한 그린(bg-mint) */}
-            <div className="rounded-[18px] border border-line bg-mint p-4 text-center text-ink">
+            <div id="tour-saving" className="rounded-[18px] border border-line bg-mint p-4 text-center text-ink">
               <p className="text-[12.5px] font-bold opacity-80">이번 달 아낄 티끌</p>
               <p className="mt-1 text-[34px] font-bold leading-none">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
             </div>
 
             {/* 마이티끌 */}
-            <section className="overflow-hidden rounded-[18px] border border-line bg-card">
+            <section id="tour-mytikkeul" className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
                 onClick={() => setOpenTab("my")}
                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "my" ? "bg-leaf-deep text-white" : ""}`}
@@ -911,7 +914,7 @@ export default function AppPage() {
           </aside>
 
           {/* 중앙: 일정 등록 — 노션식 월 달력 */}
-          <section className="rounded-[18px] border border-line bg-card p-5">
+          <section id="tour-calendar" className="rounded-[18px] border border-line bg-card p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">일정 등록</h2>
               <div className="flex items-center gap-2 text-[15.5px] font-bold">
@@ -1187,7 +1190,7 @@ export default function AppPage() {
           </section>
 
           {/* 우측: 프로필 요약 — 얼굴 사진 + 기본/금융 정보(한 박스) + 혜택·티끌(각각 박스) */}
-          <aside className="flex flex-col gap-3">
+          <aside id="tour-profile" className="flex flex-col gap-3">
             <div className="rounded-[18px] border border-line bg-card p-4 text-center">
               <img
                 src={persona ? `/avatars/${persona.id}.png` : "/avatars/random.png"}
