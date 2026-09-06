@@ -20,7 +20,7 @@ export type ProfileCtx = {
   financeRow: Record<string, unknown> | null;
 };
 
-export function buildFindPolicyTool() {
+export function buildFindPolicyTool(regionSido: string | null = null) {
   return tool(
     async ({ titleQuery, referenceMatchId }: { titleQuery?: string | null; referenceMatchId?: string | null }) => {
       const db = supabaseAdmin();
@@ -54,7 +54,10 @@ export function buildFindPolicyTool() {
           return data ?? [];
         })());
         if (pool.length) {
-          const best = [...pool].sort((a, b) => {
+          // 사용자 거주지 정책 또는 전국 정책을 우선 (다른 지역 전용 정책이 1순위로 잡히지 않게)
+          const regional = regionSido ? pool.filter((r: { is_national: boolean | null; region_sidos: string[] | null }) => r.is_national || (r.region_sidos ?? []).includes(regionSido)) : pool;
+          const scored = regional.length ? regional : pool;
+          const best = [...scored].sort((a, b) => {
             const sc = (r: { title: string; search_text: string | null }) => kws.filter((k) => r.title.includes(k)).length * 3 + kws.filter((k) => (r.search_text ?? "").includes(k)).length;
             return sc(b) - sc(a);
           })[0];

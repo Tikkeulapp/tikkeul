@@ -190,6 +190,11 @@ export async function POST(request: Request) {
         policyReply = await runPolicyCompare(ctx, messages, plan.compareTargets ?? []);
       } else if (plan.policyMode === "lookup_and_check") {
         policyReply = await runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId);
+        // 정책명이 아닌 서술("토익 시험 응시료")을 정책명으로 오인해 못 찾은 경우 → 키워드 검색으로 재시도
+        if (/찾을 수 없|찾지 못했|존재하는지 확인/.test(policyReply)) {
+          const searched = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery ?? message.trim());
+          if (!/찾지 못했|답변을 정리하는 중 문제/.test(searched)) policyReply = searched;
+        }
       } else {
         policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery);
         if (/답변을 정리하는 중 문제/.test(policyReply)) policyReply = await runPolicySearch(ctx, profile.sido, messages, plan.policyQuery); // 모델이 빈 답을 낸 경우 1회 재시도

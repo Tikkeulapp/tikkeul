@@ -123,7 +123,7 @@ export async function runPolicyLookup(
   const agent = createReactAgent({
     llm: makeLlm(),
     tools: [
-      buildFindPolicyTool(),
+      buildFindPolicyTool(regionSido),
       buildSearchPoliciesTool(regionSido),
       buildCheckEligibilityTool(ctx),
       buildBenefitInfoTool(),
