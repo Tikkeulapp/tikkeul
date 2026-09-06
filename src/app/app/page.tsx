@@ -707,7 +707,7 @@ export default function AppPage() {
 
       <div className="mx-auto w-full max-w-[1600px] px-5 pb-16">
         {/* ── 상단 검색바: 모르는 거 물어보기 ───────────── */}
-        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-gradient-to-r from-leaf-deep to-[#2fbf5f] p-2 pl-4">
+        <form onSubmit={search} className="flex items-center gap-2 rounded-[16px] border border-line bg-gradient-to-r from-leaf-deep/60 to-[#2fbf5f]/60 p-2 pl-4">
           <span className="text-[16.5px]">🔍</span>
           <input
             value={query}
@@ -751,9 +751,9 @@ export default function AppPage() {
         <div className="mt-4 grid gap-4 lg:grid-cols-[340px_1fr_220px]">
           {/* 좌측: 마이티끌 / 추천 아코디언 */}
           <aside className="flex flex-col gap-2">
-            {/* 이번 달 아낄 티끌 */}
-            <div className="rounded-[18px] border border-line bg-[#2fbf5f] p-4 text-white">
-              <p className="text-[12.5px] font-bold opacity-90">이번 달 아낄 티끌</p>
+            {/* 이번 달 아낄 티끌 — 캘린더 선택 날짜와 동일한 그린(bg-mint) */}
+            <div className="rounded-[18px] border border-line bg-mint p-4 text-center text-ink">
+              <p className="text-[12.5px] font-bold opacity-80">이번 달 아낄 티끌</p>
               <p className="mt-1 text-[34px] font-bold leading-none">{monthlySaving > 0 ? formatKrw(monthlySaving) : "0원"}</p>
             </div>
 
