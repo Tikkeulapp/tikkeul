@@ -143,6 +143,8 @@ export async function POST(request: Request) {
       // 다른 시·군·구 전용(소관기관이 특정 시군구인데 사용자 시군구가 아님)은 감점
       const m = (c.provider ?? "").match(/(?:특별시|광역시|특별자치시|도|특별자치도)\s*([가-힣]+?)(?:특례시|시|군|구)(?=\s|$)/);
       if (m && userGu && !m[1].startsWith(userGu)) sc -= 4;
+      // 취준생과 무관한 대상(다문화·이주여성·임산부·출산·노인·장애·종량제 등)은 후보에서 밀어낸다
+      if (/다문화|이주여성|임산부|출산|영유아|노인|장애|종량제|기초생활|자활|농업|어업/.test(c.title)) sc -= 8;
       return sc;
     };
     const normTitle = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
