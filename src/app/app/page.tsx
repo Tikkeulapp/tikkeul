@@ -156,7 +156,13 @@ export default function AppPage() {
   const chatQuestion = chatThread.length > 0 ? chatThread[chatThread.length - 1].question : null; // 최신 질문 (프로필 카드 자동 이어붙이기용)
 
   // 사이드바: 아코디언 (하나만 열림)
-  const [openTab, setOpenTab] = useState<"my" | "rec">("rec");
+  const [openTab, setOpenTab] = useState<"my" | "rec" | "jobs">("rec");
+  // 채용 탭: 공공기관 채용공고에서 프로필(직무·지역) 기준 AI 선별 + 마감 임박(D-7)
+  type JobRec = { id: string; title: string; company: string | null; region: string; ncs: string; career: string | null; education: string | null; hireTypes: string; deadline: string | null; dday: number | null; url: string | null; score: number; reason: string };
+  const [jobRecs, setJobRecs] = useState<JobRec[] | null>(null);
+  const [jobUrgent, setJobUrgent] = useState<JobRec[]>([]);
+  const [jobLoading, setJobLoading] = useState(false);
+  const [jobError, setJobError] = useState<string | null>(null);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [dbRecs, setDbRecs] = useState<Record<string, Rec>>({}); // 정책 DB에서 담은 항목의 기본정보
   const [aiRecs, setAiRecs] = useState<Rec[] | null>(null); // 추천 탭: 정책 DB에서 AI가 프로필 기준으로 고른 정책
@@ -385,6 +391,36 @@ export default function AppPage() {
     }
   }, []);
 
+  /** 채용공고 추천 — 정책 추천과 같은 하루 캐시. 이사 적용 등 프로필 변경 시 force로 재계산. */
+  const loadJobs = useCallback(async (s: Session, force = false) => {
+    const key = `tikkeul.jobrecs.${s.userId}`;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const c = JSON.parse(raw) as { date: string; recs: JobRec[]; urgent: JobRec[] };
+          if (c.date === TODAY && c.recs.length) { setJobRecs(c.recs); setJobUrgent(c.urgent ?? []); return; }
+        }
+      } catch { /* 캐시 없음 */ }
+    }
+    setJobLoading(true); setJobError(null);
+    try {
+      const res = await fetch("/api/jobs/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: s.userId, personaId: s.personaId, profileId: s.profileId ?? null }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "채용 추천 실패");
+      const list = (json.recommendations ?? []) as JobRec[];
+      const urgent = (json.urgent ?? []) as JobRec[];
+      setJobRecs(list); setJobUrgent(urgent);
+      try { localStorage.setItem(key, JSON.stringify({ date: TODAY, recs: list, urgent })); } catch { /* 무시 */ }
+    } catch (e) {
+      setJobError(e instanceof Error ? e.message : "채용 추천 실패");
+      setJobRecs([]);
+    } finally {
+      setJobLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const loadEvents = useCallback(async (userId: string) => {
     const res = await fetch(`/api/events?userId=${encodeURIComponent(userId)}`);
     const json = await res.json();
@@ -419,6 +455,7 @@ export default function AppPage() {
             try { setAlarmDismissed(localStorage.getItem(`tikkeul.alarmDismissed.${s.userId}`) === TODAY); } catch { /* 없음 */ }
             await Promise.all([loadEvents(s.userId), loadSavedIds(s.userId)]);
             void loadRecs(s);
+            void loadJobs(s);
             void refreshProfileOverrides(s.userId);
             void refreshDirectProfile(s);
           }
@@ -598,6 +635,7 @@ export default function AppPage() {
       void refreshProfileOverrides(session.userId);
       void refreshDirectProfile(session);
       void loadRecs(session, true); // 거주지가 바뀌었으니 추천 탭을 새 지역 기준으로 다시
+      void loadJobs(session, true); // 채용공고도 새 지역 기준으로 다시
     } catch (e) {
       alert(`거주지 변경 적용 실패: ${e instanceof Error ? e.message : e}`);
     } finally {
@@ -916,6 +954,61 @@ export default function AppPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </section>
+
+            {/* 채용 — 공공기관 채용공고에서 프로필(직무·지역) 기준 선별, 마감 임박 강조 */}
+            <section className="overflow-hidden rounded-[18px] border border-line bg-card">
+              <button
+                onClick={() => setOpenTab("jobs")}
+                className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "jobs" ? "bg-leaf-deep text-white" : ""}`}
+              >
+                채용 공고
+                <span className="text-[13.5px]">{jobRecs?.length ?? 0}건 {openTab === "jobs" ? "▾" : "▸"}</span>
+              </button>
+              {openTab === "jobs" && (
+                <div className="flex flex-col gap-2 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-mute">
+                      {jobLoading ? "AI가 공공기관 채용공고에서 내 직무·지역에 맞는 공고를 찾는 중…" : jobError ? `채용 추천 실패(${jobError})` : jobRecs && jobRecs.length > 0 ? "AI 추천 — 공공기관 채용공고에서 프로필(직무·지역) 기준 선별" : "추천할 공고가 아직 없어요"}
+                    </p>
+                    {session && !jobLoading && (
+                      <button onClick={() => loadJobs(session, true)} className="shrink-0 text-[12.5px] font-bold text-leaf-deep underline" title="채용공고에서 다시 선별">🔄 다시</button>
+                    )}
+                  </div>
+                  {jobUrgent.length > 0 && (
+                    <div className="rounded-[10px] border border-[#f2b8b5] bg-[#fdecec] px-3 py-2">
+                      <p className="text-[13px] font-bold text-[#c0392b]">⏰ 마감 임박</p>
+                      {jobUrgent.map((j) => (
+                        <p key={"u-" + j.id} className="mt-0.5 truncate text-[13px] text-ink" title={j.title}>
+                          <b className="text-[#c0392b]">{j.dday === 0 ? "오늘" : `D-${j.dday}`}</b> · {j.title}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {jobRecs && jobRecs.length === 0 && !jobLoading && (
+                    <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[14px] text-mute">조건에 맞는 접수 중 공고가 없어요. [채용]에서 조건을 바꿔 검색해 보세요.</p>
+                  )}
+                  {(jobRecs ?? []).map((j) => (
+                    <div key={j.id} className="rounded-[12px] border border-line p-3">
+                      <p className="text-[13px] font-bold text-leaf-deep">{j.company ?? "기관 미상"}</p>
+                      <p className="text-[15px] font-bold leading-snug">{j.title}</p>
+                      <p className="mt-0.5 text-[13.5px] text-mute">{j.region || "전국"}{j.ncs ? ` · ${j.ncs}` : ""}{j.career ? ` · ${j.career}` : ""} · 관련도 {j.score}</p>
+                      {j.reason && <p className="mt-1 text-[13px] leading-snug text-ink/80">{j.reason}</p>}
+                      {j.deadline && (
+                        <p className={`mt-0.5 text-[12.5px] ${j.dday !== null && j.dday <= 7 ? "font-bold text-[#c0392b]" : "text-mute"}`}>
+                          ⏰ 접수 마감 {j.deadline.slice(5).replace("-", "/")}{j.dday !== null ? ` · ${j.dday === 0 ? "오늘 마감" : `D-${j.dday}`}` : ""}
+                        </p>
+                      )}
+                      {j.url && (
+                        <a href={j.url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-[13px] font-bold text-leaf-deep underline">공고 원문 ↗</a>
+                      )}
+                    </div>
+                  ))}
+                  <Link href="/app/jobs" className="rounded-[10px] bg-mint px-3 py-2.5 text-center text-[14px] font-bold text-leaf-deep transition hover:opacity-80">
+                    조건 바꿔 전체 공고 검색 →
+                  </Link>
                 </div>
               )}
             </section>

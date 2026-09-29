@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-/** 상단 우측 "취업전/취업후" 토글 — 취업전은 메인 홈(캘린더), 취업후는 금융 온보딩 시뮬레이션. */
+/** 상단 우측 "취업전/채용/취업후" 토글 — 취업전은 메인 홈(캘린더), 채용은 공고 검색, 취업후는 시뮬레이션. */
 export function EmploymentToggle() {
   const pathname = usePathname();
   const isAfter = pathname?.startsWith("/app/simulate");
+  const isJobs = pathname?.startsWith("/app/jobs");
 
   const tab = (active: boolean) =>
     `rounded-full px-3 py-1 text-[12.5px] font-bold transition ${
@@ -15,7 +16,8 @@ export function EmploymentToggle() {
 
   return (
     <div id="tour-toggle" className="flex items-center rounded-full border border-line bg-card p-0.5">
-      <Link href="/app" className={tab(!isAfter)}>취업전</Link>
+      <Link href="/app" className={tab(!isAfter && !isJobs)}>취업전</Link>
+      <Link href="/app/jobs" className={tab(!!isJobs)}>채용</Link>
       <Link href="/app/simulate" className={tab(!!isAfter)}>취업후</Link>
     </div>
   );
