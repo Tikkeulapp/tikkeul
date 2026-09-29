@@ -14,12 +14,12 @@ import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, N
 
 export const maxDuration = 60;
 
-const COLS = "job_id, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, headcount, deadline, detail_url, search_text";
+const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, deadline, detail_url, search_text";
 
 type Row = {
-  job_id: string; title: string; company: string | null; region_names: string[]; region_sidos: string[]; is_national: boolean;
+  job_id: string; source: string; title: string; company: string | null; region_names: string[]; region_sidos: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null;
-  headcount: number | null; deadline: string | null; detail_url: string | null; search_text: string | null;
+  salary_text: string | null; headcount: number | null; deadline: string | null; detail_url: string | null; search_text: string | null;
 };
 
 const SYSTEM = `당신은 한국 취업준비생 채용공고 추천 어시스턴트입니다. [사용자]와 [공고 후보](공공기관 채용정보 API에서 수집한 실제 공고)를 보고,
@@ -49,13 +49,14 @@ export async function POST(request: Request) {
 
   // 후보 풀: 직무분야별 (거주지+전국) / 마감 전만
   type Res = { data: Row[] | null; error: { message: string } | null };
+  const openOr = `deadline.is.null,deadline.gte.${today}`; // 상시·채용시 마감 포함
   const pools: Promise<Res>[] = ncs.map((code) => {
-    let q = db.from("job_postings").select(COLS).gte("deadline", today).contains("ncs_codes", [code]).order("deadline", { ascending: true }).limit(60);
+    let q = db.from("job_postings").select(COLS).or(openOr).contains("ncs_codes", [code]).order("deadline", { ascending: true }).limit(60);
     if (prof.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${prof.sido}}`);
     return q as unknown as Promise<Res>;
   });
   // 직무 무관, 거주 지역 공고도 소량 (지역 밀착 공고 커버)
-  if (prof.sido) pools.push(db.from("job_postings").select(COLS).gte("deadline", today).contains("region_sidos", [prof.sido]).order("deadline", { ascending: true }).limit(30) as unknown as Promise<Res>);
+  if (prof.sido) pools.push(db.from("job_postings").select(COLS).or(openOr).contains("region_sidos", [prof.sido]).order("deadline", { ascending: true }).limit(30) as unknown as Promise<Res>);
 
   const seen = new Set<string>();
   const raw: Row[] = [];
@@ -85,10 +86,10 @@ export async function POST(request: Request) {
   const byId = new Map(cands.map((x) => [x.r.job_id, x]));
 
   const toRec = (r: Row, score: number, reason: string) => ({
-    id: r.job_id, title: r.title, company: r.company,
+    id: r.job_id, source: r.source, title: r.title, company: r.company,
     region: r.is_national && r.region_sidos.length === 0 ? "전국" : r.region_names.join("·"),
     ncs: r.ncs_names.slice(0, 2).join("·"), career: r.career, education: r.education, hireTypes: r.hire_types.join("·"),
-    deadline: r.deadline, dday: dday(r.deadline), url: r.detail_url, score, reason,
+    salary: r.salary_text, deadline: r.deadline, dday: dday(r.deadline), url: r.detail_url, score, reason,
   });
 
   let recommendations: ReturnType<typeof toRec>[] = [];
@@ -96,8 +97,8 @@ export async function POST(request: Request) {
   if (cands.length > 0) {
     try {
       const listForLlm = cands.map(({ r }) => ({
-        job_id: r.job_id, 제목: r.title, 기관: r.company, 지역: r.region_names.join(","),
-        직무분야: r.ncs_names.join(","), 채용구분: r.career, 학력: r.education, 마감: r.deadline,
+        job_id: r.job_id, 제목: r.title, 회사: r.company, 구분: r.source === "pubinst" ? "공공기관" : "민간", 지역: r.region_names.join(","),
+        직무분야: r.ncs_names.join(","), 채용구분: r.career, 학력: r.education, 급여: r.salary_text, 마감: r.deadline ?? "상시",
       }));
       const userMsg = `[사용자]\n${JSON.stringify({ 목표직무: targetJob || "미상", 직무분야추정: ncs.map((c) => NCS_NAME_BY_CODE.get(c)), 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 나이: prof.age, 학력: education })}\n\n[공고 후보]\n${JSON.stringify(listForLlm)}`;
       let out = await groqJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);

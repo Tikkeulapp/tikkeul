@@ -63,6 +63,18 @@ export function ncsCodesForTargetJob(targetJob: string | null | undefined): stri
   return out.length ? out.slice(0, 3) : ["02"];
 }
 
+/** 채용공고의 직무 카테고리 원문(예: 사람인 "IT개발·데이터", "마케팅·홍보·조사")을 NCS 코드로 정규화.
+ *  소스마다 분류 체계가 달라서, 전 소스를 NCS 24종 하나로 통일해 검색·추천 필터를 공유한다. */
+export function ncsCodesForCategoryText(categoryText: string | null | undefined): string[] {
+  const t = (categoryText ?? "").trim();
+  if (!t) return [];
+  const out: string[] = [];
+  for (const rule of TARGET_JOB_RULES) {
+    if (rule.re.test(t)) for (const c of rule.codes.slice(0, 1)) if (!out.includes(c)) out.push(c);
+  }
+  return out.slice(0, 3);
+}
+
 /** 학력 요건 텍스트(acbgCondNmLst)가 사용자의 학력으로 지원 가능한지 — 보수적으로 판단. */
 export function educationSatisfied(requirementText: string | null | undefined, userEducation: string | null | undefined): boolean | null {
   const req = (requirementText ?? "").replace(/\s/g, "");

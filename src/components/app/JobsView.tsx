@@ -12,8 +12,8 @@ import { SIDO_CANONICAL } from "@/lib/region";
 import type { SimSession } from "@/components/app/SimulateView";
 
 type Job = {
-  job_id: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
-  ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null;
+  job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
+  ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
   headcount: number | null; pbanc_begin: string | null; deadline: string | null; detail_url: string | null; dday: number | null;
 };
 
@@ -28,7 +28,7 @@ const CAREERS = [
 ];
 
 function DdayBadge({ d }: { d: number | null }) {
-  if (d === null) return null;
+  if (d === null) return <span className="rounded-full bg-paper px-2 py-0.5 text-[12.5px] font-bold text-mute">상시</span>;
   const urgent = d <= 7;
   return (
     <span className={`rounded-full px-2 py-0.5 text-[12.5px] font-bold ${urgent ? "bg-[#fde8e8] text-[#c0392b]" : "bg-mint text-leaf-deep"}`}>
@@ -153,7 +153,10 @@ export function JobsView({ session }: { session: SimSession }) {
               {jobs.map((j) => (
                 <li key={j.job_id} className="flex flex-col rounded-[14px] border border-line bg-card p-4">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-[13.5px] font-bold text-leaf-deep">{j.company ?? "기관 미상"}</p>
+                    <p className="min-w-0 truncate text-[13.5px] font-bold text-leaf-deep">
+                      <span className={`mr-1.5 rounded px-1.5 py-0.5 text-[11.5px] ${j.source === "pubinst" ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{j.source === "pubinst" ? "공공기관" : "민간"}</span>
+                      {j.company ?? "기업 미상"}
+                    </p>
                     <DdayBadge d={j.dday} />
                   </div>
                   <p className="mt-1 text-[16px] font-bold leading-snug">{j.title}</p>
@@ -165,16 +168,19 @@ export function JobsView({ session }: { session: SimSession }) {
                   <p className="text-[13.5px] text-mute">
                     {j.career && <>{j.career}</>}
                     {j.education && <> · {j.education}</>}
+                    {j.salary_text && <> · {j.salary_text}</>}
                     {j.headcount ? <> · {j.headcount}명</> : null}
                   </p>
                   <div className="mt-2 flex items-center justify-between border-t border-line pt-2 text-[13.5px]">
-                    <span className="text-mute">접수 {j.pbanc_begin?.slice(5).replace("-", "/")} ~ <b className="text-ink">{j.deadline?.slice(5).replace("-", "/")}</b></span>
+                    <span className="text-mute">
+                      {j.deadline ? <>접수 {j.pbanc_begin?.slice(5).replace("-", "/")} ~ <b className="text-ink">{j.deadline.slice(5).replace("-", "/")}</b></> : "상시·채용 시 마감"}
+                    </span>
                     {j.detail_url && <a href={j.detail_url} target="_blank" rel="noreferrer" className="font-bold underline">공고 원문 ↗</a>}
                   </div>
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[12.5px] text-mute">출처: 기획재정부 공공기관 채용정보(잡알리오) 공공데이터 API — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
+            <p className="mt-3 text-[12.5px] text-mute">출처: 사람인 오픈API(민간) · 기획재정부 공공기관 채용정보 잡알리오(공공) — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
           </>
         )}
       </section>

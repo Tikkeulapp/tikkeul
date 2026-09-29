@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { careerOpenToNewcomer, dday } from "@/data/ncs";
 
-const COLS = "job_id, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, headcount, pbanc_begin, deadline, detail_url";
+const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url";
 
 export async function POST(request: Request) {
   let body: { sido?: string | null; ncs?: string | null; education?: string | null; career?: string | null; keyword?: string | null };
@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   const db = supabaseAdmin();
   const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 
-  let q = db.from("job_postings").select(COLS).gte("deadline", today).order("deadline", { ascending: true }).limit(300);
+  // 상시·채용시 마감(deadline null)도 포함, 마감 임박순(상시는 뒤로)
+  let q = db.from("job_postings").select(COLS).or(`deadline.is.null,deadline.gte.${today}`).order("deadline", { ascending: true }).limit(300);
   if (body.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${body.sido}}`);
   if (body.ncs) q = q.contains("ncs_codes", [body.ncs]);
   if (body.keyword?.trim()) q = q.ilike("search_text", `%${body.keyword.trim()}%`);

@@ -158,7 +158,7 @@ export default function AppPage() {
   // 사이드바: 아코디언 (하나만 열림)
   const [openTab, setOpenTab] = useState<"my" | "rec" | "jobs">("rec");
   // 채용 탭: 공공기관 채용공고에서 프로필(직무·지역) 기준 AI 선별 + 마감 임박(D-7)
-  type JobRec = { id: string; title: string; company: string | null; region: string; ncs: string; career: string | null; education: string | null; hireTypes: string; deadline: string | null; dday: number | null; url: string | null; score: number; reason: string };
+  type JobRec = { id: string; source: string; title: string; company: string | null; region: string; ncs: string; career: string | null; education: string | null; hireTypes: string; salary: string | null; deadline: string | null; dday: number | null; url: string | null; score: number; reason: string };
   const [jobRecs, setJobRecs] = useState<JobRec[] | null>(null);
   const [jobUrgent, setJobUrgent] = useState<JobRec[]>([]);
   const [jobLoading, setJobLoading] = useState(false);
@@ -992,15 +992,16 @@ export default function AppPage() {
                   )}
                   {(jobRecs ?? []).map((j) => (
                     <div key={j.id} className="rounded-[12px] border border-line p-3">
-                      <p className="text-[13px] font-bold text-leaf-deep">{j.company ?? "기관 미상"}</p>
+                      <p className="truncate text-[13px] font-bold text-leaf-deep">
+                        <span className={`mr-1 rounded px-1 py-0.5 text-[11px] ${j.source === "pubinst" ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{j.source === "pubinst" ? "공공" : "민간"}</span>
+                        {j.company ?? "기업 미상"}
+                      </p>
                       <p className="text-[15px] font-bold leading-snug">{j.title}</p>
-                      <p className="mt-0.5 text-[13.5px] text-mute">{j.region || "전국"}{j.ncs ? ` · ${j.ncs}` : ""}{j.career ? ` · ${j.career}` : ""} · 관련도 {j.score}</p>
+                      <p className="mt-0.5 text-[13.5px] text-mute">{j.region || "전국"}{j.ncs ? ` · ${j.ncs}` : ""}{j.career ? ` · ${j.career}` : ""}{j.salary ? ` · ${j.salary}` : ""} · 관련도 {j.score}</p>
                       {j.reason && <p className="mt-1 text-[13px] leading-snug text-ink/80">{j.reason}</p>}
-                      {j.deadline && (
-                        <p className={`mt-0.5 text-[12.5px] ${j.dday !== null && j.dday <= 7 ? "font-bold text-[#c0392b]" : "text-mute"}`}>
-                          ⏰ 접수 마감 {j.deadline.slice(5).replace("-", "/")}{j.dday !== null ? ` · ${j.dday === 0 ? "오늘 마감" : `D-${j.dday}`}` : ""}
-                        </p>
-                      )}
+                      <p className={`mt-0.5 text-[12.5px] ${j.dday !== null && j.dday <= 7 ? "font-bold text-[#c0392b]" : "text-mute"}`}>
+                        {j.deadline ? `⏰ 접수 마감 ${j.deadline.slice(5).replace("-", "/")}${j.dday !== null ? ` · ${j.dday === 0 ? "오늘 마감" : `D-${j.dday}`}` : ""}` : "⏰ 상시·채용 시 마감"}
+                      </p>
                       {j.url && (
                         <a href={j.url} target="_blank" rel="noreferrer" className="mt-1.5 inline-block text-[13px] font-bold text-leaf-deep underline">공고 원문 ↗</a>
                       )}
