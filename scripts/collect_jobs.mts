@@ -148,7 +148,8 @@ async function collectPubinst(): Promise<Row[]> {
       if (!sn || !title) continue;
       const regionNames = list(it.workRgnNmLst);
       const sidos = [...new Set(regionNames.map((r) => normalizeSido(r)).filter((x): x is string => !!x))];
-      const ncsCodes = list(it.ncsCdLst).map((c) => c.padStart(2, "0"));
+      // 잡알리오 ncsCdLst는 "R600011"처럼 끝 2자리가 NCS 대분류 번호
+      const ncsCodes = [...new Set(list(it.ncsCdLst).map((c) => c.match(/(\d{2})\s*$/)?.[1]).filter((x): x is string => !!x))];
       const ncsNames = list(it.ncsCdNmLst).length ? list(it.ncsCdNmLst) : ncsCodes.map((c) => NCS_NAME_BY_CODE.get(c) ?? c);
       const company = s(it.instNm);
       const education = list(it.acbgCondNmLst).join(", ") || null;

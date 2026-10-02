@@ -28,13 +28,15 @@ export const NCS_CATEGORIES: { code: string; name: string }[] = [
   { code: "22", name: "인쇄·목재·가구·공예" },
   { code: "23", name: "환경·에너지·안전" },
   { code: "24", name: "농림어업" },
+  { code: "25", name: "연구" }, // 잡알리오 확장 분류 (연구직 — 출연연·연구기관 공고의 핵심)
 ];
 
 export const NCS_NAME_BY_CODE = new Map(NCS_CATEGORIES.map((c) => [c.code, c.name]));
 
 /** 목표 직무 자유 텍스트 → NCS 코드 후보. 앞에 올수록 주력 분야. */
 const TARGET_JOB_RULES: { re: RegExp; codes: string[] }[] = [
-  { re: /데이터|분석|통계|AI|인공지능|머신러닝|개발|프로그래|소프트웨어|백엔드|프론트|엔지니어|IT|정보보안|보안|네트워크|전산/i, codes: ["20", "02"] },
+  { re: /데이터|분석|통계|AI|인공지능|머신러닝|개발|프로그래|소프트웨어|백엔드|프론트|엔지니어|IT|정보보안|보안|네트워크|전산/i, codes: ["20", "02", "25"] },
+  { re: /연구|R&D|석사|박사|랩|사이언티스트/i, codes: ["25", "04"] },
   { re: /디자인|UX|UI|콘텐츠|영상|방송|미디어|출판|편집/i, codes: ["08", "20"] },
   { re: /마케팅|영업|세일즈|판매|MD/i, codes: ["10", "02"] },
   { re: /금융|은행|보험|증권|투자|여신|심사/i, codes: ["03", "02"] },
