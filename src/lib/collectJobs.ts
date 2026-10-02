@@ -19,7 +19,7 @@ export type JobRow = {
   region_names: string[]; region_sidos: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[];
   career: string | null; education: string | null; salary_text: string | null; headcount: number | null;
-  pbanc_begin: string | null; deadline: string | null; detail_url: string | null; search_text: string; collected_at: string;
+  pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; search_text: string; collected_at: string;
 };
 
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : typeof v === "number" ? String(v) : null);
@@ -34,6 +34,13 @@ const tsToYmd = (v: unknown): string | null => {
   const n = Number(s(v));
   if (!n) return null;
   return new Date((n < 1e12 ? n * 1000 : n) + 9 * 3600000).toISOString().slice(0, 10);
+};
+/** 타임스탬프에서 마감 시각(HH:MM, KST). 자정(00:00)은 시간 정보가 없는 것으로 보고 null. */
+const tsToHm = (v: unknown): string | null => {
+  const n = Number(s(v));
+  if (!n) return null;
+  const hm = new Date((n < 1e12 ? n * 1000 : n) + 9 * 3600000).toISOString().slice(11, 16);
+  return hm === "00:00" ? null : hm;
 };
 export const todayKst = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 
@@ -87,6 +94,7 @@ async function collectSaramin(now: string, log: (m: string) => void): Promise<Jo
         headcount: null,
         pbanc_begin: tsToYmd(it["posting-timestamp"]),
         deadline: isOpenEnd ? null : (tsToYmd(it["expiration-timestamp"]) ?? ymd(it["expiration-date"])),
+        deadline_time: isOpenEnd ? null : tsToHm(it["expiration-timestamp"]), // 사람인은 마감 시각 제공
         detail_url: s(it.url),
         search_text: [title, s(companyDetail?.name), mid, jobCode, industry, s(it.keyword)?.slice(0, 300)].filter(Boolean).join(" | "),
         collected_at: now,
@@ -148,6 +156,7 @@ async function collectPubinst(now: string, log: (m: string) => void): Promise<Jo
         headcount: Number(s(it.recrutNope)) || null,
         pbanc_begin: ymd(it.pbancBgngYmd),
         deadline: ymd(it.pbancEndYmd),
+        deadline_time: null, // 잡알리오 API는 마감 '시각'을 제공하지 않음 — 원문 확인 필요
         detail_url: s(it.srcUrl) ?? `https://job.alio.go.kr/recruitview.do?idx=${sn}`,
         search_text: [title, s(it.instNm), ncsNames.join(" "), s(it.recrutSeNm), education, s(it.aplyQlfcCn)?.slice(0, 400), s(it.prefCondCn)?.slice(0, 200)].filter(Boolean).join(" | "),
         collected_at: now,
@@ -181,9 +190,17 @@ export async function refreshJobPostings(db: SupabaseClient, log: (m: string) =>
   const collected: Record<string, number> = {};
   for (const r of rows) collected[r.source] = (collected[r.source] ?? 0) + 1;
 
+  // deadline_time 컬럼이 아직 없는 DB(ALTER 전)면 해당 필드를 빼고 재시도 — 수집이 멈추지 않게
+  let stripTime = false;
   for (let i = 0; i < rows.length; i += 500) {
-    const chunk = rows.slice(i, i + 500);
-    const { error } = await db.from("job_postings").upsert(chunk, { onConflict: "job_id" });
+    let chunk: Record<string, unknown>[] = rows.slice(i, i + 500);
+    if (stripTime) chunk = chunk.map(({ deadline_time: _t, ...rest }) => rest);
+    let { error } = await db.from("job_postings").upsert(chunk, { onConflict: "job_id" });
+    if (error && /deadline_time/.test(error.message) && !stripTime) {
+      stripTime = true;
+      log("deadline_time 컬럼 없음 — 시각 없이 저장 (scripts/sql_job_postings.sql의 ALTER 실행 필요)");
+      ({ error } = await db.from("job_postings").upsert(chunk.map(({ deadline_time: _t, ...rest }) => rest), { onConflict: "job_id" }));
+    }
     if (error) throw new Error(`upsert 실패 (${i}): ${error.message}`);
   }
 

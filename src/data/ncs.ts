@@ -101,6 +101,33 @@ export function careerOpenToNewcomer(recruitTypeText: string | null | undefined)
   return !/^경력(직)?$/.test(t); // "경력" 단독 표기만 제외
 }
 
+/** 검색 키워드 동의어 확장 — "agent"처럼 표기가 다른 같은 개념(AI·인공지능·에이전트)을 함께 찾는다.
+ *  글자 그대로 일치만 보던 검색의 한계 보완. 사전은 코드가 관리(LLM 추측 없음). */
+const KW_SYNONYMS: [RegExp, string[]][] = [
+  [/^(ai|에이아이|인공지능|agent|에이전트|생성형|llm|머신러닝|딥러닝)$/i, ["AI", "인공지능", "에이전트", "생성형", "머신러닝"]],
+  [/^(데이터|data|빅데이터|통계)$/i, ["데이터", "빅데이터", "통계", "전산"]],
+  [/^(개발|developer|sw|소프트웨어|프로그래밍|코딩|백엔드|프론트)$/i, ["개발", "소프트웨어", "전산", "정보시스템", "정보화"]],
+  [/^(디자인|ux|ui|design)$/i, ["디자인", "UX", "UI", "콘텐츠"]],
+  [/^(행정|사무|총무)$/i, ["행정", "사무", "일반직"]],
+  [/^(연구|r&d|연구원)$/i, ["연구", "연구원", "R&D"]],
+  [/^(보안|시큐리티|security)$/i, ["보안", "정보보호"]],
+  [/^(마케팅|홍보)$/i, ["마케팅", "홍보", "광고"]],
+];
+
+/** 키워드를 검색어 목록으로 확장. PostgREST or() 구문에 안전하게 특수문자는 제거. */
+export function expandKeyword(raw: string | null | undefined): string[] {
+  const kw = (raw ?? "").trim();
+  if (!kw) return [];
+  const out = new Set<string>();
+  for (const tok of kw.split(/\s+/).slice(0, 3)) {
+    const clean = tok.replace(/[,%()*"'\\]/g, "");
+    if (!clean) continue;
+    out.add(clean);
+    for (const [re, syns] of KW_SYNONYMS) if (re.test(clean)) for (const s of syns) out.add(s);
+  }
+  return [...out].slice(0, 8);
+}
+
 /** D-day 계산 (마감일 당일 = D-0, KST 기준). 마감이 없으면 null. */
 export function dday(deadline: string | null | undefined): number | null {
   if (!deadline) return null;

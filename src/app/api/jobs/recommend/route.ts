@@ -14,12 +14,12 @@ import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, N
 
 export const maxDuration = 60;
 
-const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, deadline, detail_url, search_text";
+const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url, search_text";
 
 type Row = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; region_sidos: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null;
-  salary_text: string | null; headcount: number | null; deadline: string | null; detail_url: string | null; search_text: string | null;
+  salary_text: string | null; headcount: number | null; pbanc_begin: string | null; deadline: string | null; deadline_time?: string | null; detail_url: string | null; search_text: string | null;
 };
 
 const SYSTEM = `당신은 한국 취업준비생 채용공고 추천 어시스턴트입니다. [사용자]와 [공고 후보](공공기관 채용정보 API에서 수집한 실제 공고)를 보고,
@@ -49,14 +49,18 @@ export async function POST(request: Request) {
 
   // 후보 풀: 직무분야별 (거주지+전국) / 마감 전만
   type Res = { data: Row[] | null; error: { message: string } | null };
+  // deadline_time 컬럼이 없는 DB(ALTER 전) 호환
+  const probe = await db.from("job_postings").select("deadline_time").limit(1);
+  const cols = probe.error ? COLS : COLS + ", deadline_time";
+
   const openOr = `deadline.is.null,deadline.gte.${today}`; // 상시·채용시 마감 포함
   const pools: Promise<Res>[] = ncs.map((code) => {
-    let q = db.from("job_postings").select(COLS).or(openOr).contains("ncs_codes", [code]).order("deadline", { ascending: true }).limit(60);
+    let q = db.from("job_postings").select(cols).or(openOr).contains("ncs_codes", [code]).order("deadline", { ascending: true }).limit(60);
     if (prof.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${prof.sido}}`);
     return q as unknown as Promise<Res>;
   });
   // 직무 무관, 거주 지역 공고도 소량 (지역 밀착 공고 커버)
-  if (prof.sido) pools.push(db.from("job_postings").select(COLS).or(openOr).contains("region_sidos", [prof.sido]).order("deadline", { ascending: true }).limit(30) as unknown as Promise<Res>);
+  if (prof.sido) pools.push(db.from("job_postings").select(cols).or(openOr).contains("region_sidos", [prof.sido]).order("deadline", { ascending: true }).limit(30) as unknown as Promise<Res>);
 
   const seen = new Set<string>();
   const raw: Row[] = [];
@@ -89,7 +93,8 @@ export async function POST(request: Request) {
     id: r.job_id, source: r.source, title: r.title, company: r.company,
     region: r.is_national && r.region_sidos.length === 0 ? "전국" : r.region_names.join("·"),
     ncs: r.ncs_names.slice(0, 2).join("·"), career: r.career, education: r.education, hireTypes: r.hire_types.join("·"),
-    salary: r.salary_text, deadline: r.deadline, dday: dday(r.deadline), url: r.detail_url, score, reason,
+    salary: r.salary_text, deadline: r.deadline, deadlineTime: r.deadline_time ?? null,
+    pbancBegin: r.pbanc_begin, dday: dday(r.deadline), url: r.detail_url, score, reason,
   });
 
   let recommendations: ReturnType<typeof toRec>[] = [];

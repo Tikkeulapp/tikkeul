@@ -13,9 +13,11 @@ import type { SimSession } from "@/components/app/SimulateView";
 
 type Job = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
-  ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
-  headcount: number | null; pbanc_begin: string | null; deadline: string | null; detail_url: string | null; dday: number | null;
+  ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
+  headcount: number | null; pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
 };
+
+const TODAY_KST = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 
 const EDUCATIONS = [
   { value: "", label: "전체" },
@@ -51,6 +53,10 @@ export function JobsView({ session }: { session: SimSession }) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appliedNcs, setAppliedNcs] = useState(defaultNcs); // 마지막 검색에 쓴 직무분야 (일치 항목 우선 표시용)
+  const [usedKeywords, setUsedKeywords] = useState<string[]>([]); // 동의어 확장된 검색어 (빈 결과 안내용)
+  const [calSaved, setCalSaved] = useState<Set<string>>(new Set()); // 캘린더에 담은 공고
+  const [calBusy, setCalBusy] = useState<string | null>(null);
 
   const search = useCallback(async (params: { sido: string; ncs: string; education: string; career: string; keyword: string }) => {
     setLoading(true);
@@ -68,6 +74,8 @@ export function JobsView({ session }: { session: SimSession }) {
       if (!res.ok) throw new Error(json.error ?? "검색 실패");
       setJobs(json.jobs ?? []);
       setTotal(json.total ?? 0);
+      setAppliedNcs(params.ncs);
+      setUsedKeywords(json.keywords ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setJobs([]);
@@ -85,6 +93,39 @@ export function JobsView({ session }: { session: SimSession }) {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     void search({ sido, ncs, education, career, keyword });
+  };
+
+  /** 직무분야 표시: 검색에 쓴 분야와 일치하는 항목을 맨 앞으로 (대형 공채는 분야가 5개+라 잘리면 안 맞아 보임) */
+  const orderedNcs = (j: Job): { names: string[]; matchedFirst: boolean; more: number } => {
+    let names = j.ncs_names;
+    let matchedFirst = false;
+    const i = appliedNcs ? j.ncs_codes.indexOf(appliedNcs) : -1;
+    if (i > 0) names = [j.ncs_names[i], ...j.ncs_names.filter((_, k) => k !== i)];
+    if (i >= 0) matchedFirst = true;
+    return { names: names.slice(0, 3), matchedFirst, more: Math.max(0, names.length - 3) };
+  };
+
+  /** 공고의 접수 시작일·마감일을 내 캘린더 일정으로 등록 (시작일은 미래일 때만) */
+  const addToCalendar = async (j: Job) => {
+    if (!j.deadline || calBusy) return;
+    setCalBusy(j.job_id);
+    try {
+      const post = (date: string, label: string) =>
+        fetch("/api/events", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: session.userId, date, title: `📋 [${label}] ${(j.company ? j.company + " — " : "") + j.title}`.slice(0, 90) }),
+        });
+      const reqs = [post(j.deadline, `공고마감${j.deadline_time ? ` ${j.deadline_time}` : ""}`)];
+      if (j.pbanc_begin && j.pbanc_begin > TODAY_KST()) reqs.push(post(j.pbanc_begin, "접수시작"));
+      const results = await Promise.all(reqs);
+      if (results.some((r) => !r.ok)) throw new Error("등록 실패");
+      setCalSaved((prev) => new Set(prev).add(j.job_id));
+    } catch {
+      setError("캘린더 등록에 실패했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setCalBusy(null);
+    }
   };
 
   const label = "text-[13px] font-bold text-mute";
@@ -142,12 +183,16 @@ export function JobsView({ session }: { session: SimSession }) {
         ) : jobs.length === 0 ? (
           <div className="rounded-[18px] border border-line bg-card p-6">
             <p className="text-[15.5px] font-bold">조건에 맞는 접수 중 공고가 없어요.</p>
+            {usedKeywords.length > 1 && (
+              <p className="mt-1 text-[14px] text-mute">키워드는 동의어까지 넓혀 찾았어요: {usedKeywords.join(" · ")}</p>
+            )}
             <p className="mt-1 text-[14px] text-mute">지역을 &ldquo;전국 전체&rdquo;로 넓히거나 직무 분야·학력 조건을 풀어보세요.</p>
           </div>
         ) : (
           <>
             <p className="mb-2 text-[14px] text-mute">
               접수 중 공고 <b className="text-ink">{total}건</b> · 마감 임박순 {total > jobs.length ? `(상위 ${jobs.length}건 표시)` : ""}
+              {usedKeywords.length > 1 && <> · 키워드 확장: {usedKeywords.join("·")}</>}
             </p>
             <ul className="grid gap-3 xl:grid-cols-2">
               {jobs.map((j) => (
@@ -162,7 +207,9 @@ export function JobsView({ session }: { session: SimSession }) {
                   <p className="mt-1 text-[16px] font-bold leading-snug">{j.title}</p>
                   <p className="mt-1.5 text-[13.5px] text-mute">
                     {(j.is_national && j.region_names.length === 0 ? "전국" : j.region_names.join("·")) || "지역 미상"}
-                    {j.ncs_names.length > 0 && <> · {j.ncs_names.slice(0, 2).join("·")}</>}
+                    {(() => { const o = orderedNcs(j); return o.names.length > 0 && (
+                      <> · {o.matchedFirst ? <b className="text-leaf-deep">✓ {o.names[0]}</b> : o.names[0]}{o.names.slice(1).map((n) => <span key={n}> · {n}</span>)}{o.more > 0 && <span> 외 {o.more}분야</span>}</>
+                    ); })()}
                     {j.hire_types.length > 0 && <> · {j.hire_types.slice(0, 2).join("·")}</>}
                   </p>
                   <p className="text-[13.5px] text-mute">
@@ -171,11 +218,23 @@ export function JobsView({ session }: { session: SimSession }) {
                     {j.salary_text && <> · {j.salary_text}</>}
                     {j.headcount ? <> · {j.headcount}명</> : null}
                   </p>
-                  <div className="mt-2 flex items-center justify-between border-t border-line pt-2 text-[13.5px]">
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-line pt-2 text-[13.5px]">
                     <span className="text-mute">
-                      {j.deadline ? <>접수 {j.pbanc_begin?.slice(5).replace("-", "/")} ~ <b className="text-ink">{j.deadline.slice(5).replace("-", "/")}</b></> : "상시·채용 시 마감"}
+                      {j.deadline ? (
+                        <>접수 {j.pbanc_begin?.slice(5).replace("-", "/")} ~ <b className="text-ink">{j.deadline.slice(5).replace("-", "/")}{j.deadline_time ? ` ${j.deadline_time}` : ""}</b>
+                        {!j.deadline_time && <span title="이 소스는 마감 시각을 제공하지 않아요 — 당일 마감 시각은 공고 원문에서 확인"> (시각은 원문 확인)</span>}</>
+                      ) : "상시·채용 시 마감"}
                     </span>
-                    {j.detail_url && <a href={j.detail_url} target="_blank" rel="noreferrer" className="font-bold underline">공고 원문 ↗</a>}
+                    <span className="flex items-center gap-3">
+                      {j.deadline && (
+                        calSaved.has(j.job_id)
+                          ? <span className="font-bold text-leaf-deep">✓ 캘린더에 담김</span>
+                          : <button onClick={() => void addToCalendar(j)} disabled={calBusy === j.job_id} className="font-bold text-leaf-deep underline disabled:opacity-50">
+                              {calBusy === j.job_id ? "담는 중…" : "📅 캘린더에 담기"}
+                            </button>
+                      )}
+                      {j.detail_url && <a href={j.detail_url} target="_blank" rel="noreferrer" className="font-bold underline">공고 원문 ↗</a>}
+                    </span>
                   </div>
                 </li>
               ))}
