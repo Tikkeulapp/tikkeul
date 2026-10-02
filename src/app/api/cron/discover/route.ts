@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { groqJson } from "@/lib/groq";
+import { refreshJobPostings } from "@/lib/collectJobs";
+
+export const maxDuration = 60;
 
 /**
  * GET /api/cron/discover — 신규 정책 발견 (Vercel Cron 일 1회 / 수동 호출 가능)
@@ -209,5 +212,13 @@ export async function GET(request: Request) {
 
   const { count } = await db.from("policies").select("*", { count: "exact", head: true });
   report.policies_total = count;
+
+  // ── 채용공고 최신화 (Hobby 플랜 크론 2개 제한 → 별도 크론 대신 여기에 합류) ──
+  try {
+    report.jobs = await refreshJobPostings(db);
+  } catch (e) {
+    report.jobs_error = e instanceof Error ? e.message : String(e);
+  }
+
   return NextResponse.json(report);
 }
