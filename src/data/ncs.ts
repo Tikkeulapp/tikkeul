@@ -35,16 +35,16 @@ export const NCS_NAME_BY_CODE = new Map(NCS_CATEGORIES.map((c) => [c.code, c.nam
 
 /** 목표 직무 자유 텍스트 → NCS 코드 후보. 앞에 올수록 주력 분야. */
 const TARGET_JOB_RULES: { re: RegExp; codes: string[] }[] = [
-  { re: /데이터|분석|통계|AI|인공지능|머신러닝|개발|프로그래|소프트웨어|백엔드|프론트|엔지니어|IT|정보보안|보안|네트워크|전산/i, codes: ["20", "02", "25"] },
-  { re: /연구|R&D|석사|박사|랩|사이언티스트/i, codes: ["25", "04"] },
-  { re: /디자인|UX|UI|콘텐츠|영상|방송|미디어|출판|편집/i, codes: ["08", "20"] },
-  { re: /마케팅|영업|세일즈|판매|MD/i, codes: ["10", "02"] },
-  { re: /금융|은행|보험|증권|투자|여신|심사/i, codes: ["03", "02"] },
+  { re: /데이터|분석|통계|AI|인공지능|머신러닝|개발|프로그래|소프트웨어|백엔드|프론트|엔지니어|IT|정보보안|보안|네트워크|전산|data|software|developer|engineer|backend|frontend|machine ?learning|security|devops|infra|platform|server|android|ios|ml/i, codes: ["20", "02", "25"] },
+  { re: /연구|R&D|석사|박사|랩|사이언티스트|research|scientist/i, codes: ["25", "04"] },
+  { re: /디자인|UX|UI|콘텐츠|영상|방송|미디어|출판|편집|design|brand|graphic/i, codes: ["08", "20"] },
+  { re: /마케팅|영업|세일즈|판매|MD|marketing|sales|growth|business ?development/i, codes: ["10", "02"] },
+  { re: /금융|은행|보험|증권|투자|여신|심사|finance|fintech|payment/i, codes: ["03", "02"] },
   { re: /품질|생산|공정|제조|설비|기계/i, codes: ["15", "19", "23"] },
   { re: /전기|전자|반도체|회로/i, codes: ["19", "15"] },
   { re: /화학|소재|재료/i, codes: ["17", "16"] },
   { re: /건설|토목|건축|시공|도시/i, codes: ["14"] },
-  { re: /교육|강사|연구|조교/i, codes: ["04"] },
+  { re: /교육|강사|조교/i, codes: ["04"] },
   { re: /간호|보건|의료|병원|약무/i, codes: ["06"] },
   { re: /복지|사회복지|상담/i, codes: ["07"] },
   { re: /법률|법무|경찰|소방|안전관리/i, codes: ["05", "23"] },

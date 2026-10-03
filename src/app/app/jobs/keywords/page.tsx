@@ -190,7 +190,7 @@ export default function KeywordJobsPage() {
           ) : visible.length === 0 ? (
             <div className="rounded-[18px] border border-line bg-card p-6">
               <p className="text-[15.5px] font-bold">켜진 키워드로 걸린 접수 중 공고가 없어요.</p>
-              <p className="mt-1 text-[14px] text-mute">현재는 공공기관 공고 기준이라 민간 업종 키워드는 결과가 적을 수 있어요. 민간 소스(워크넷·사람인) 연동 시 함께 검색됩니다.</p>
+              <p className="mt-1 text-[14px] text-mute">공공기관(잡알리오) + 민간(네이버·카카오·쿠팡·당근 등 기업 공식 채널) 공고에서 찾았어요. 키워드를 바꾸거나 수를 줄여 보세요.</p>
             </div>
           ) : (
             <>

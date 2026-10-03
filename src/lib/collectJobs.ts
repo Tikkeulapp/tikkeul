@@ -168,6 +168,165 @@ async function collectPubinst(now: string, log: (m: string) => void): Promise<Jo
   return rows;
 }
 
+/* ── 3. 기업 공식 채용 채널 (company) — 승인·키 불필요한 공개 API들 ─────────
+ * Greenhouse 공개 보드 API(기업이 외부 게시용으로 제공), 카카오·네이버 공식 채용 JSON.
+ * 플랫폼(사람인 등) 크롤링과 달리 약관 문제가 없는 공개 채널만 쓴다.
+ * 메타(제목·마감·근무지)만 저장하고 상세는 원문 링크로 연결한다. */
+
+const GH_ORGS: { slug: string; name: string }[] = [
+  { slug: "daangn", name: "당근" },
+  { slug: "coupang", name: "쿠팡" },
+  { slug: "krafton", name: "크래프톤" },
+  { slug: "sendbird", name: "센드버드" },
+];
+
+/** 근무지 문자열(영/한)을 표준 시도로 — 확실한 것만 매핑, 모르면 빈 배열(지역 미상). */
+function sidosFromLocationText(loc: string): { names: string[]; sidos: string[] } {
+  const t = loc.trim();
+  if (!t) return { names: [], sidos: [] };
+  const lower = t.toLowerCase();
+  const sidos = new Set<string>();
+  if (/seoul|서울/.test(lower)) sidos.add("서울특별시");
+  if (/pangyo|판교|seongnam|성남|bundang|분당|gyeonggi|경기/.test(lower)) sidos.add("경기도");
+  if (/busan|부산/.test(lower)) sidos.add("부산광역시");
+  if (/daejeon|대전/.test(lower)) sidos.add("대전광역시");
+  if (/chuncheon|춘천|gangwon|강원/.test(lower)) sidos.add("강원특별자치도");
+  const n = normalizeSido(t);
+  if (n) sidos.add(n);
+  return { names: [t.slice(0, 40)], sidos: [...sidos] };
+}
+
+async function collectCompany(now: string, log: (m: string) => void): Promise<JobRow[]> {
+  const rows: JobRow[] = [];
+  const results = await Promise.allSettled([
+    // (a) Greenhouse 공개 보드
+    ...GH_ORGS.map(async (org) => {
+      const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${org.slug}/jobs`);
+      if (!res.ok) throw new Error(`greenhouse ${org.slug} ${res.status}`);
+      const json = await res.json();
+      const jobs: Record<string, unknown>[] = json.jobs ?? [];
+      let kept = 0;
+      for (const j of jobs) {
+        const title = s(j.title);
+        const id = s(j.id);
+        if (!title || !id) continue;
+        const loc = s((j.location as Record<string, unknown> | undefined)?.name) ?? "";
+        // 해외 전용 공고 제외 (국내 지명·Korea 표기가 전혀 없으면 스킵)
+        if (loc && !/korea|seoul|pangyo|bundang|seongnam|busan|daejeon|서울|판교|성남|분당|부산|대전|remote/i.test(loc)) continue;
+        const { names, sidos } = sidosFromLocationText(loc);
+        kept++;
+        rows.push({
+          job_id: `company:gh:${org.slug}:${id}`,
+          source: "company",
+          title,
+          company: org.name,
+          region_names: names,
+          region_sidos: sidos,
+          is_national: sidos.length === 0,
+          ncs_codes: ncsCodesForCategoryText(title),
+          ncs_names: [],
+          hire_types: [],
+          career: null,
+          education: null,
+          salary_text: null,
+          headcount: null,
+          pbanc_begin: ymd(s(j.first_published)?.slice(0, 10)),
+          deadline: ymd(s(j.application_deadline)?.slice(0, 10)), // 없으면 상시
+          deadline_time: null,
+          detail_url: s(j.absolute_url),
+          search_text: [title, org.name, loc].filter(Boolean).join(" | "),
+          collected_at: now,
+        });
+      }
+      log(`company/${org.name}: ${kept}건`);
+    }),
+    // (b) 카카오 공식 채용 API (기술 직군, 페이지네이션)
+    (async () => {
+      let kept = 0;
+      for (let p = 1; p <= 10; p++) {
+        const res = await fetch(`https://careers.kakao.com/public/api/job-list?skillSet=&part=TECHNOLOGY&company=ALL&keyword=&employeeType=&page=${p}`, { headers: { Accept: "application/json" } });
+        if (!res.ok) throw new Error(`kakao ${res.status}`);
+        const json = await res.json();
+        const jobs: Record<string, unknown>[] = json.jobList ?? [];
+        for (const j of jobs) {
+          const title = s(j.jobOfferTitle);
+          const id = s(j.realId);
+          if (!title || !id) continue;
+          const loc = s(j.locationName) ?? "";
+          const { names, sidos } = sidosFromLocationText(loc);
+          kept++;
+          rows.push({
+            job_id: `company:kakao:${id}`,
+            source: "company",
+            title,
+            company: s(j.companyName) ?? "카카오",
+            region_names: names,
+            region_sidos: sidos,
+            is_national: sidos.length === 0,
+            ncs_codes: ncsCodesForCategoryText([title, s(j.jobPartName)].filter(Boolean).join(" ")),
+            ncs_names: [s(j.jobPartName)].filter((x): x is string => !!x),
+            hire_types: [s(j.employeeTypeName)].filter((x): x is string => !!x),
+            career: s(j.jobTypeName),
+            education: null,
+            salary_text: null,
+            headcount: Number(s(j.recruitCount)) || null,
+            pbanc_begin: ymd(s(j.regDate)?.slice(0, 10)),
+            deadline: ymd(s(j.endDate)?.slice(0, 10)),
+            deadline_time: null,
+            detail_url: `https://careers.kakao.com/jobs/${id}`,
+            search_text: [title, s(j.companyName), s(j.jobPartName), loc, s(j.qualification)?.slice(0, 400)].filter(Boolean).join(" | "),
+            collected_at: now,
+          });
+        }
+        const totalPage = Number(json.totalPage ?? 1);
+        if (p >= totalPage || jobs.length === 0) break;
+      }
+      log(`company/카카오: ${kept}건`);
+    })(),
+    // (c) 네이버 공식 채용 API — 마감 시각까지 제공
+    (async () => {
+      const res = await fetch("https://recruit.navercorp.com/rcrt/loadJobList.do?annoSubTyCdArr=&sysCompanyCdArr=&empTypeCdArr=&entTypeCdArr=&workAreaCdArr=&sw=&subJobCdArr=&firstIndex=1&recordCountPerPage=200", { headers: { Accept: "application/json" } });
+      if (!res.ok) throw new Error(`naver ${res.status}`);
+      const json = await res.json();
+      const jobs: Record<string, unknown>[] = json.list ?? [];
+      let kept = 0;
+      for (const j of jobs) {
+        const title = s(j.annoSubject);
+        const id = s(j.annoId);
+        if (!title || !id) continue;
+        const endRaw = s(j.endYmdTime) ?? ""; // "2026.10.06 10:00:00"
+        const hm = endRaw.match(/\s(\d{2}:\d{2})/)?.[1] ?? null;
+        kept++;
+        rows.push({
+          job_id: `company:naver:${id}`,
+          source: "company",
+          title,
+          company: s(j.sysCompanyCdNm) ?? "NAVER",
+          region_names: ["경기 성남(본사 등)"],
+          region_sidos: ["경기도"],
+          is_national: false,
+          ncs_codes: ncsCodesForCategoryText([title, s(j.subJobCdNm)].filter(Boolean).join(" ")),
+          ncs_names: [s(j.subJobCdNm)].filter((x): x is string => !!x),
+          hire_types: [s(j.empTypeCdNm)].filter((x): x is string => !!x),
+          career: s(j.entTypeCdNm),
+          education: null,
+          salary_text: null,
+          headcount: null,
+          pbanc_begin: ymd(s(j.staYmd) ?? s(j.staYmdTime)?.slice(0, 10)),
+          deadline: ymd(endRaw.slice(0, 10)),
+          deadline_time: hm,
+          detail_url: `https://recruit.navercorp.com/rcrt/view.do?annoId=${id}`,
+          search_text: [title, s(j.sysCompanyCdNm), s(j.subJobCdNm), s(j.annoKeyword)?.slice(0, 200)].filter(Boolean).join(" | "),
+          collected_at: now,
+        });
+      }
+      log(`company/네이버: ${kept}건`);
+    })(),
+  ]);
+  for (const r of results) if (r.status === "rejected") log(`⚠ company 일부 실패: ${(r.reason as Error).message}`);
+  return rows;
+}
+
 export type RefreshReport = {
   collected: Record<string, number>;
   upserted: number;
@@ -180,7 +339,7 @@ export type RefreshReport = {
 export async function refreshJobPostings(db: SupabaseClient, log: (m: string) => void = () => {}): Promise<RefreshReport> {
   const now = new Date().toISOString();
   const errors: string[] = [];
-  const results = await Promise.allSettled([collectSaramin(now, log), collectPubinst(now, log)]);
+  const results = await Promise.allSettled([collectSaramin(now, log), collectPubinst(now, log), collectCompany(now, log)]);
   const rows: JobRow[] = [];
   const seen = new Set<string>();
   for (const r of results) {

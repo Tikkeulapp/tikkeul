@@ -239,7 +239,7 @@ export function JobsView({ session }: { session: SimSession }) {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[12.5px] text-mute">출처: 사람인 오픈API(민간) · 기획재정부 공공기관 채용정보 잡알리오(공공) — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
+            <p className="mt-3 text-[12.5px] text-mute">출처: 기업 공식 채용 채널(네이버·카카오·쿠팡·당근·크래프톤 등 공개 API) · 기획재정부 공공기관 채용정보 잡알리오 — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
           </>
         )}
       </section>

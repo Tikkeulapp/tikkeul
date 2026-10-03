@@ -28,7 +28,8 @@ const SYSTEM = `당신은 한국 취업준비생 채용공고 추천 어시스�
 규칙:
 - 후보에 없는 job_id 금지. reason은 그 후보의 정보에만 근거하고 자격요건을 지어내지 마세요.
 - 사용자의 목표 직무와 직무분야(NCS)가 가까울수록, 거주지와 근무지역이 가까울수록 우선.
-- "경력" 단독 공고는 제외. score 55 미만 제외. 무관하면 빈 배열.`;
+- "경력" 단독 공고는 제외. score 55 미만 제외. 무관하면 빈 배열.
+- 적합도가 비슷하면 민간 기업과 공공기관 공고를 섞어 추천하세요 (한쪽에 몰지 않기). 상시채용(마감 없음)도 불리하게 보지 마세요.`;
 
 export async function POST(request: Request) {
   let body: { userId?: string | null; personaId?: string | null; profileId?: string | null };
@@ -86,7 +87,11 @@ export async function POST(request: Request) {
     return sc;
   };
 
-  const cands = raw.map((r) => ({ r, sc: scoreOf(r) })).filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 25);
+  // 후보 25건 — 공채(마감 가중) 위주로 쏠리지 않게 민간(company) 상위 8건은 쿼터로 보장
+  const sorted = raw.map((r) => ({ r, sc: scoreOf(r) })).filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc);
+  const companyTop = sorted.filter((x) => x.r.source === "company").slice(0, 8);
+  const rest = sorted.filter((x) => !companyTop.includes(x));
+  const cands = [...companyTop, ...rest].slice(0, 25).sort((a, b) => b.sc - a.sc);
   const byId = new Map(cands.map((x) => [x.r.job_id, x]));
 
   const toRec = (r: Row, score: number, reason: string) => ({
@@ -126,6 +131,17 @@ export async function POST(request: Request) {
         ].filter(Boolean).join(" · ") + "인 공고입니다."),
       );
     }
+  }
+
+  // 균형 보정(코드) — 민간 후보가 있는데 추천이 전부 공공이면 상위 민간 2건을 보장
+  const mkRuleReason = (r: Row) => [
+    r.ncs_codes.some((c) => ncs.includes(c)) ? "목표 직무와 같은 분야" : null,
+    prof.sido && r.region_sidos.includes(prof.sido) ? "거주지와 근무지역 일치" : r.is_national ? "전국 지원 가능" : null,
+    "민간 기업 공고",
+  ].filter(Boolean).join(" · ") + "입니다.";
+  if (recommendations.length > 0 && !recommendations.some((x) => x.source === "company") && companyTop.length > 0) {
+    const extra = companyTop.slice(0, 2).map(({ r, sc }) => toRec(r, Math.min(90, 55 + sc * 4), mkRuleReason(r)));
+    recommendations = [...recommendations.slice(0, 6 - extra.length), ...extra];
   }
 
   const urgent = recommendations.filter((x) => x.dday !== null && x.dday <= 7).sort((a, b) => (a.dday ?? 99) - (b.dday ?? 99)).slice(0, 3);
