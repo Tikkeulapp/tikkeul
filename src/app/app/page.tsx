@@ -164,6 +164,35 @@ export default function AppPage() {
   const [jobLoading, setJobLoading] = useState(false);
   const [jobError, setJobError] = useState<string | null>(null);
   const [jobCalSaved, setJobCalSaved] = useState<Set<string>>(new Set()); // 캘린더에 담은 공고
+
+  // 키워드로 공고 찾기 (우측 위젯) — 노션 다중선택처럼 칩으로 쌓고, 한 번에 검색 페이지로
+  const [kwDraft, setKwDraft] = useState("");
+  const [kwList, setKwList] = useState<string[]>([]);
+  const addKeyword = (raw: string) => {
+    const kw = raw.trim().replace(/[,%()*"'\\]/g, "").slice(0, 20);
+    if (!kw) return;
+    setKwList((prev) => {
+      if (prev.some((k) => k.toLowerCase() === kw.toLowerCase()) || prev.length >= 8) return prev;
+      const next = [...prev, kw];
+      try { if (session) localStorage.setItem(`tikkeul.jobkw.${session.userId}`, JSON.stringify(next)); } catch { /* 무시 */ }
+      return next;
+    });
+    setKwDraft("");
+  };
+  const removeKeyword = (kw: string) => {
+    setKwList((prev) => {
+      const next = prev.filter((k) => k !== kw);
+      try { if (session) localStorage.setItem(`tikkeul.jobkw.${session.userId}`, JSON.stringify(next)); } catch { /* 무시 */ }
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (!session) return;
+    try {
+      const raw = localStorage.getItem(`tikkeul.jobkw.${session.userId}`);
+      if (raw) setKwList((JSON.parse(raw) as string[]).slice(0, 8));
+    } catch { /* 없음 */ }
+  }, [session]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [dbRecs, setDbRecs] = useState<Record<string, Rec>>({}); // 정책 DB에서 담은 항목의 기본정보
   const [aiRecs, setAiRecs] = useState<Rec[] | null>(null); // 추천 탭: 정책 DB에서 AI가 프로필 기준으로 고른 정책
@@ -1423,6 +1452,43 @@ export default function AppPage() {
                 </dl>
               </div>
             )}
+
+            {/* 키워드로 공고 찾기 — 스킬·업종을 칩으로 담아 한 번에 검색 */}
+            <div className="rounded-[18px] border border-line bg-card p-4">
+              <p className="text-[12.5px] font-bold text-mute">🔎 키워드로 공고 찾기</p>
+              <p className="mt-1 text-[12px] text-mute">관심 스킬·업종을 담아두고 한 번에 검색하세요 (예: RAG, 카드사)</p>
+              {kwList.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {kwList.map((k) => (
+                    <span key={k} className="inline-flex items-center gap-1 rounded-full bg-[#efe9fb] px-2.5 py-1 text-[12.5px] font-bold text-[#6b4fbb]">
+                      {k}
+                      <button onClick={() => removeKeyword(k)} className="text-[#6b4fbb]/60 hover:text-[#6b4fbb]" aria-label={`${k} 키워드 삭제`}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <input
+                value={kwDraft}
+                onChange={(e) => setKwDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (kwDraft.trim()) addKeyword(kwDraft);
+                    else if (kwList.length) window.location.href = `/app/jobs/keywords?kw=${encodeURIComponent(kwList.join(","))}`;
+                  }
+                }}
+                placeholder="키워드 입력 후 Enter"
+                aria-label="공고 검색 키워드"
+                className="mt-2 w-full rounded-[10px] border border-line bg-card px-3 py-2 text-[13.5px] outline-none focus:border-ink"
+              />
+              <button
+                onClick={() => { const list = kwDraft.trim() ? [...kwList, kwDraft.trim()] : kwList; if (list.length) window.location.href = `/app/jobs/keywords?kw=${encodeURIComponent(list.slice(0, 8).join(","))}`; }}
+                disabled={kwList.length === 0 && !kwDraft.trim()}
+                className="mt-2 w-full rounded-full bg-ink px-4 py-2 text-[13.5px] font-bold text-white transition hover:opacity-90 disabled:opacity-40"
+              >
+                키워드로 공고 찾기 →
+              </button>
+            </div>
           </aside>
         </div>
       </div>
