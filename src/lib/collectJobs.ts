@@ -23,6 +23,13 @@ export type JobRow = {
 };
 
 const s = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : typeof v === "number" ? String(v) : null);
+/** n자에서 자르되 영문·숫자 단어 중간에서 끊지 않는다 — "AIS"가 "AI"로 잘려 가짜 키워드 매칭을 만드는 것 방지. */
+const cutWord = (v: unknown, n: number): string | null => {
+  const t = s(v);
+  if (!t) return null;
+  if (t.length <= n) return t;
+  return t.slice(0, n).replace(/[A-Za-z0-9+#&.]+$/, "").trimEnd();
+};
 const list = (v: unknown): string[] => (s(v) ? (s(v) as string).split(",").map((x) => x.trim()).filter(Boolean) : []);
 const ymd = (v: unknown): string | null => {
   const t = s(v);
@@ -96,7 +103,7 @@ async function collectSaramin(now: string, log: (m: string) => void): Promise<Jo
         deadline: isOpenEnd ? null : (tsToYmd(it["expiration-timestamp"]) ?? ymd(it["expiration-date"])),
         deadline_time: isOpenEnd ? null : tsToHm(it["expiration-timestamp"]), // 사람인은 마감 시각 제공
         detail_url: s(it.url),
-        search_text: [title, s(companyDetail?.name), mid, jobCode, industry, s(it.keyword)?.slice(0, 300)].filter(Boolean).join(" | "),
+        search_text: [title, s(companyDetail?.name), mid, jobCode, industry, cutWord(it.keyword, 300)].filter(Boolean).join(" | "),
         collected_at: now,
       });
     }
@@ -158,7 +165,7 @@ async function collectPubinst(now: string, log: (m: string) => void): Promise<Jo
         deadline: ymd(it.pbancEndYmd),
         deadline_time: null, // 잡알리오 API는 마감 '시각'을 제공하지 않음 — 원문 확인 필요
         detail_url: s(it.srcUrl) ?? `https://job.alio.go.kr/recruitview.do?idx=${sn}`,
-        search_text: [title, s(it.instNm), ncsNames.join(" "), s(it.recrutSeNm), education, s(it.aplyQlfcCn)?.slice(0, 400), s(it.prefCondCn)?.slice(0, 200)].filter(Boolean).join(" | "),
+        search_text: [title, s(it.instNm), ncsNames.join(" "), s(it.recrutSeNm), education, cutWord(it.aplyQlfcCn, 400), cutWord(it.prefCondCn, 200)].filter(Boolean).join(" | "),
         collected_at: now,
       });
     }
@@ -274,7 +281,7 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
             deadline: ymd(s(j.endDate)?.slice(0, 10)),
             deadline_time: null,
             detail_url: `https://careers.kakao.com/jobs/${id}`,
-            search_text: [title, s(j.companyName), s(j.jobPartName), loc, s(j.qualification)?.slice(0, 400)].filter(Boolean).join(" | "),
+            search_text: [title, s(j.companyName), s(j.jobPartName), loc, cutWord(j.qualification, 400)].filter(Boolean).join(" | "),
             collected_at: now,
           });
         }
@@ -316,7 +323,7 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
           deadline: ymd(endRaw.slice(0, 10)),
           deadline_time: hm,
           detail_url: `https://recruit.navercorp.com/rcrt/view.do?annoId=${id}`,
-          search_text: [title, s(j.sysCompanyCdNm), s(j.subJobCdNm), s(j.annoKeyword)?.slice(0, 200)].filter(Boolean).join(" | "),
+          search_text: [title, s(j.sysCompanyCdNm), s(j.subJobCdNm), cutWord(j.annoKeyword, 200)].filter(Boolean).join(" | "),
           collected_at: now,
         });
       }

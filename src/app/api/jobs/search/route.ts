@@ -5,9 +5,9 @@
  */
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { careerOpenToNewcomer, dday, expandKeyword } from "@/data/ncs";
+import { careerOpenToNewcomer, dday, expandKeyword, findKeywordEvidence } from "@/data/ncs";
 
-const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url";
+const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url, search_text";
 const COLS_T = COLS + ", deadline_time";
 
 export async function POST(request: Request) {
@@ -37,12 +37,21 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: `검색 실패: ${error.message}` }, { status: 500 });
 
   // select(cols)가 동적 문자열이라 supabase-js 타입 추론이 안 됨 — 사용하는 필드만 명시
-  type Out = { career: string | null; education: string | null; deadline: string | null; deadline_time?: string | null } & Record<string, unknown>;
+  type Out = { career: string | null; education: string | null; deadline: string | null; deadline_time?: string | null; search_text: string | null; match?: { term: string; before: string; after: string } | null } & Record<string, unknown>;
   let rows = (data ?? []) as unknown as Out[];
+
+  // 키워드 검색이면 매칭 근거(어느 확장어가 어디에 걸렸는지)를 코드로 확정 —
+  // ilike는 짧은 영문 토큰(AI 등)이 단어 '속' 철자에도 걸리므로, 단어 경계 검사를 통과한 공고만 남긴다.
+  if (keywords.length) {
+    rows = rows
+      .map((r) => ({ ...r, match: findKeywordEvidence(r.search_text, keywords) }))
+      .filter((r) => r.match);
+  }
   if (body.career === "신입") rows = rows.filter((r) => careerOpenToNewcomer(r.career));
   if (body.education === "무관") rows = rows.filter((r) => !r.education || /무관|제한없음/.test(r.education));
   else if (body.education === "고졸") rows = rows.filter((r) => !r.education || !/대졸이상|학사이상|석사|박사/.test(r.education.replace(/\s/g, "")));
 
-  const jobs = rows.slice(0, 100).map((r) => ({ deadline_time: null, ...r, dday: dday(r.deadline) }));
+  // 원문 전체(search_text)는 응답에서 제거 — 근거 스니펫만 내려보낸다
+  const jobs = rows.slice(0, 100).map(({ search_text: _s, ...r }) => ({ deadline_time: null, ...r, dday: dday(r.deadline) }));
   return NextResponse.json({ jobs, total: rows.length, keywords });
 }

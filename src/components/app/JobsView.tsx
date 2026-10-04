@@ -15,6 +15,7 @@ type Job = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
   headcount: number | null; pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
+  match?: { term: string; before: string; after: string } | null;
 };
 
 const TODAY_KST = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
@@ -218,6 +219,14 @@ export function JobsView({ session }: { session: SimSession }) {
                     {j.salary_text && <> · {j.salary_text}</>}
                     {j.headcount ? <> · {j.headcount}명</> : null}
                   </p>
+                  {/* 키워드 검색 시: 어떤 단어가 공고 어디에 걸렸는지 근거 표시 */}
+                  {j.match && (
+                    <p className="mt-1 rounded-[8px] bg-paper px-2 py-1 text-[12.5px] leading-snug text-mute">
+                      “{j.match.before}
+                      <mark className="rounded-[3px] bg-[#efe9fb] px-0.5 font-bold text-[#6b4fbb] underline decoration-2">{j.match.term}</mark>
+                      {j.match.after}”
+                    </p>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-line pt-2 text-[13.5px]">
                     <span className="text-mute">
                       {j.deadline ? (

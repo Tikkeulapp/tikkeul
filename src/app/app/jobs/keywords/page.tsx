@@ -14,10 +14,12 @@ import { getPersona } from "@/data/personas";
 import type { SimSession } from "@/components/app/SimulateView";
 import { EmploymentToggle } from "@/components/app/EmploymentToggle";
 
+type Evidence = { term: string; before: string; after: string };
 type Job = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
   ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
   pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
+  match?: Evidence | null;
 };
 
 const TODAY_KST = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
@@ -28,6 +30,7 @@ export default function KeywordJobsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [jobs, setJobs] = useState<Map<string, Job>>(new Map());
   const [matchedBy, setMatchedBy] = useState<Map<string, Set<string>>>(new Map());
+  const [evidence, setEvidence] = useState<Map<string, Record<string, Evidence>>>(new Map()); // job_id → {키워드: 매칭 근거}
   const [expandedByKw, setExpandedByKw] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export default function KeywordJobsPage() {
         if (!alive) return;
         const jm = new Map<string, Job>();
         const mb = new Map<string, Set<string>>();
+        const ev = new Map<string, Record<string, Evidence>>();
         const ex: Record<string, string[]> = {};
         for (const r of results) {
           ex[r.k] = r.expanded;
@@ -74,10 +78,12 @@ export default function KeywordJobsPage() {
             jm.set(j.job_id, j);
             if (!mb.has(j.job_id)) mb.set(j.job_id, new Set());
             mb.get(j.job_id)!.add(r.k);
+            if (j.match) ev.set(j.job_id, { ...(ev.get(j.job_id) ?? {}), [r.k]: j.match });
           }
         }
         setJobs(jm);
         setMatchedBy(mb);
+        setEvidence(ev);
         setExpandedByKw(ex);
       } catch (e) {
         if (alive) setError(e instanceof Error ? e.message : String(e));
@@ -213,6 +219,14 @@ export default function KeywordJobsPage() {
                         <span key={k} className="rounded-full bg-[#efe9fb] px-2 py-0.5 text-[11.5px] font-bold text-[#6b4fbb]">#{k}</span>
                       ))}
                     </div>
+                    {/* 어떤 단어가 공고 어디에 걸렸는지 — 근거 문맥을 하이라이트로 */}
+                    {Object.entries(evidence.get(j.job_id) ?? {}).filter(([k]) => selected.has(k)).slice(0, 2).map(([k, m]) => (
+                      <p key={k} className="mt-1 rounded-[8px] bg-paper px-2 py-1 text-[12.5px] leading-snug text-mute">
+                        <span className="font-bold text-[#6b4fbb]">#{k}</span> → “{m.before}
+                        <mark className="rounded-[3px] bg-[#efe9fb] px-0.5 font-bold text-[#6b4fbb] underline decoration-2">{m.term}</mark>
+                        {m.after}”
+                      </p>
+                    ))}
                     <p className="mt-1.5 text-[13.5px] text-mute">
                       {(j.is_national && j.region_names.length === 0 ? "전국" : j.region_names.join("·")) || "지역 미상"}
                       {j.ncs_names.length > 0 && <> · {j.ncs_names.slice(0, 2).join("·")}</>}

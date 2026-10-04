@@ -130,6 +130,40 @@ export function expandKeyword(raw: string | null | undefined): string[] {
   return [...out].slice(0, 8);
 }
 
+/** 공고 원문에서 확장 키워드가 실제로 매칭된 위치와 주변 문맥을 찾는다 (카드에 근거 표시용).
+ *  짧은 영문 토큰(AI, ML 등)은 단어 경계를 요구해 training/email 속 'ai' 같은 오탐을 막는다.
+ *  매칭 실패 시 null — 호출부는 그 공고를 결과에서 제외한다 (근거 없는 매칭 금지). */
+export function findKeywordEvidence(
+  text: string | null | undefined,
+  terms: string[],
+): { term: string; before: string; after: string } | null {
+  const t = text ?? "";
+  if (!t) return null;
+  for (const raw of terms) {
+    const term = raw.trim();
+    if (!term) continue;
+    let idx = -1;
+    let len = term.length;
+    if (/^[a-z0-9&+#.]+$/i.test(term) && term.length <= 4) {
+      // 짧은 영문·숫자 토큰은 앞뒤가 영문·숫자가 아니어야 함 (단어 경계)
+      const esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const m = new RegExp(`(^|[^A-Za-z0-9])(${esc})(?![A-Za-z0-9])`, "i").exec(t);
+      if (m) { idx = m.index + m[1].length; len = m[2].length; }
+    } else {
+      idx = t.toLowerCase().indexOf(term.toLowerCase());
+    }
+    if (idx >= 0) {
+      const clean = (s: string) => s.replace(/\s*\|\s*/g, " · ");
+      return {
+        term: t.slice(idx, idx + len),
+        before: (idx > 30 ? "…" : "") + clean(t.slice(Math.max(0, idx - 30), idx)),
+        after: clean(t.slice(idx + len, idx + len + 34)) + (idx + len + 34 < t.length ? "…" : ""),
+      };
+    }
+  }
+  return null;
+}
+
 /** D-day 계산 (마감일 당일 = D-0, KST 기준). 마감이 없으면 null. */
 export function dday(deadline: string | null | undefined): number | null {
   if (!deadline) return null;
