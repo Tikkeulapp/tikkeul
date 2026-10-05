@@ -18,12 +18,16 @@ create table if not exists job_postings (
   pbanc_begin date,                  -- 공고 시작일
   deadline date,                     -- 접수 마감일
   deadline_time text,                -- 접수 마감 시각 "HH:MM" (소스가 제공할 때만, 잡알리오는 미제공)
+  summary text,                      -- 직무설명·요약 (소스가 제공할 때만)
+  requirements text,                 -- 자격요건(+우대) 요약
   detail_url text,                   -- 공고 원문 URL
   search_text text,                  -- 제목+회사+직무+자격 요약 (키워드 검색용)
   collected_at timestamptz default now()
 );
 -- 이미 테이블을 만든 경우: 아래 한 줄만 실행하면 됨 (마감 시각 컬럼 추가)
 alter table job_postings add column if not exists deadline_time text;
+alter table job_postings add column if not exists summary text;
+alter table job_postings add column if not exists requirements text;
 
 create index if not exists job_postings_deadline_idx on job_postings (deadline);
 create index if not exists job_postings_sidos_idx on job_postings using gin (region_sidos);

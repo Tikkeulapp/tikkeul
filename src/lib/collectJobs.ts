@@ -19,6 +19,7 @@ export type JobRow = {
   region_names: string[]; region_sidos: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[];
   career: string | null; education: string | null; salary_text: string | null; headcount: number | null;
+  summary: string | null; requirements: string | null;
   pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; search_text: string; collected_at: string;
 };
 
@@ -99,6 +100,8 @@ async function collectSaramin(now: string, log: (m: string) => void): Promise<Jo
         education: nameOf("required-education-level"),
         salary_text: s((it.salary as Record<string, unknown> | undefined)?.name),
         headcount: null,
+        summary: null,
+        requirements: null,
         pbanc_begin: tsToYmd(it["posting-timestamp"]),
         deadline: isOpenEnd ? null : (tsToYmd(it["expiration-timestamp"]) ?? ymd(it["expiration-date"])),
         deadline_time: isOpenEnd ? null : tsToHm(it["expiration-timestamp"]), // 사람인은 마감 시각 제공
@@ -161,6 +164,8 @@ async function collectPubinst(now: string, log: (m: string) => void): Promise<Jo
         education,
         salary_text: null,
         headcount: Number(s(it.recrutNope)) || null,
+        summary: null, // 잡알리오는 직무설명 필드가 없음 — 직무분야·제목이 설명 역할
+        requirements: [cutWord(it.aplyQlfcCn, 300), s(it.prefCondCn) ? `[우대] ${cutWord(it.prefCondCn, 160)}` : null].filter(Boolean).join(" · ") || null,
         pbanc_begin: ymd(it.pbancBgngYmd),
         deadline: ymd(it.pbancEndYmd),
         deadline_time: null, // 잡알리오 API는 마감 '시각'을 제공하지 않음 — 원문 확인 필요
@@ -237,6 +242,8 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
           education: null,
           salary_text: null,
           headcount: null,
+          summary: null,
+          requirements: null,
           pbanc_begin: ymd(s(j.first_published)?.slice(0, 10)),
           deadline: ymd(s(j.application_deadline)?.slice(0, 10)), // 없으면 상시
           deadline_time: null,
@@ -277,6 +284,8 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
             education: null,
             salary_text: null,
             headcount: Number(s(j.recruitCount)) || null,
+            summary: cutWord(s(j.workContentDesc) ?? s(j.introduction), 260),
+            requirements: cutWord(j.qualification, 260),
             pbanc_begin: ymd(s(j.regDate)?.slice(0, 10)),
             deadline: ymd(s(j.endDate)?.slice(0, 10)),
             deadline_time: null,
@@ -319,6 +328,8 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
           education: null,
           salary_text: null,
           headcount: null,
+          summary: null,
+          requirements: null,
           pbanc_begin: ymd(s(j.staYmd) ?? s(j.staYmdTime)?.slice(0, 10)),
           deadline: ymd(endRaw.slice(0, 10)),
           deadline_time: hm,
@@ -360,12 +371,12 @@ export async function refreshJobPostings(db: SupabaseClient, log: (m: string) =>
   let stripTime = false;
   for (let i = 0; i < rows.length; i += 500) {
     let chunk: Record<string, unknown>[] = rows.slice(i, i + 500);
-    if (stripTime) chunk = chunk.map(({ deadline_time: _t, ...rest }) => rest);
+    if (stripTime) chunk = chunk.map(({ deadline_time: _t, summary: _s2, requirements: _r2, ...rest }) => rest);
     let { error } = await db.from("job_postings").upsert(chunk, { onConflict: "job_id" });
-    if (error && /deadline_time/.test(error.message) && !stripTime) {
+    if (error && /deadline_time|summary|requirements|column/.test(error.message) && !stripTime) {
       stripTime = true;
-      log("deadline_time 컬럼 없음 — 시각 없이 저장 (scripts/sql_job_postings.sql의 ALTER 실행 필요)");
-      ({ error } = await db.from("job_postings").upsert(chunk.map(({ deadline_time: _t, ...rest }) => rest), { onConflict: "job_id" }));
+      log("신규 컬럼(deadline_time/summary/requirements) 없음 — 해당 필드 없이 저장 (scripts/sql_job_postings.sql의 ALTER 실행 필요)");
+      ({ error } = await db.from("job_postings").upsert(chunk.map(({ deadline_time: _t, summary: _s2, requirements: _r2, ...rest }) => rest), { onConflict: "job_id" }));
     }
     if (error) throw new Error(`upsert 실패 (${i}): ${error.message}`);
   }

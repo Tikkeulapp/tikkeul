@@ -18,7 +18,7 @@ type Evidence = { term: string; before: string; after: string };
 type Job = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
   ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
-  pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
+  summary?: string | null; requirements?: string | null; pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
   match?: Evidence | null;
 };
 
@@ -206,7 +206,7 @@ export default function KeywordJobsPage() {
                   <li key={j.job_id} className="flex flex-col rounded-[14px] border border-line bg-card p-4">
                     <div className="flex items-start justify-between gap-2">
                       <p className="min-w-0 truncate text-[13.5px] font-bold text-leaf-deep">
-                        <span className={`mr-1.5 rounded px-1.5 py-0.5 text-[11.5px] ${j.source === "pubinst" ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{j.source === "pubinst" ? "공공기관" : "민간"}</span>
+                        <span className={`mr-1.5 rounded px-1.5 py-0.5 text-[11.5px] ${j.source === "pubinst" ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{j.source === "pubinst" ? "공공기관" : "사기업"}</span>
                         {j.company ?? "기업 미상"}
                       </p>
                       {j.dday === null
@@ -219,6 +219,8 @@ export default function KeywordJobsPage() {
                         <span key={k} className="rounded-full bg-[#efe9fb] px-2 py-0.5 text-[11.5px] font-bold text-[#6b4fbb]">#{k}</span>
                       ))}
                     </div>
+                    {j.summary && <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-ink/80">{j.summary}</p>}
+                    {j.requirements && <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-mute">자격 · {j.requirements}</p>}
                     {/* 어떤 단어가 공고 어디에 걸렸는지 — 근거 문맥을 하이라이트로 */}
                     {Object.entries(evidence.get(j.job_id) ?? {}).filter(([k]) => selected.has(k)).slice(0, 2).map(([k, m]) => (
                       <p key={k} className="mt-1 rounded-[8px] bg-paper px-2 py-1 text-[12.5px] leading-snug text-mute">

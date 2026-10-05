@@ -101,33 +101,81 @@ export function careerOpenToNewcomer(recruitTypeText: string | null | undefined)
   return !/^경력(직)?$/.test(t); // "경력" 단독 표기만 제외
 }
 
-/** 검색 키워드 동의어 확장 — "agent"처럼 표기가 다른 같은 개념(AI·인공지능·에이전트)을 함께 찾는다.
- *  글자 그대로 일치만 보던 검색의 한계 보완. 사전은 코드가 관리(LLM 추측 없음). */
-const KW_SYNONYMS: [RegExp, string[]][] = [
-  [/^(ai|에이아이|인공지능|agent|에이전트|생성형|llm|rag|챗봇|머신러닝|딥러닝)$/i, ["AI", "인공지능", "에이전트", "생성형", "머신러닝"]],
-  [/^(카드|카드사|신용카드)$/i, ["카드", "신용카드", "여신", "결제", "금융"]],
-  [/^(은행|금융|핀테크)$/i, ["은행", "금융", "핀테크", "여신", "결제"]],
-  [/^(데이터|data|빅데이터|통계)$/i, ["데이터", "빅데이터", "통계", "전산"]],
-  [/^(개발|developer|sw|소프트웨어|프로그래밍|코딩|백엔드|프론트)$/i, ["개발", "소프트웨어", "전산", "정보시스템", "정보화"]],
-  [/^(디자인|ux|ui|design)$/i, ["디자인", "UX", "UI", "콘텐츠"]],
-  [/^(행정|사무|총무)$/i, ["행정", "사무", "일반직"]],
-  [/^(연구|r&d|연구원)$/i, ["연구", "연구원", "R&D"]],
-  [/^(보안|시큐리티|security)$/i, ["보안", "정보보호"]],
-  [/^(마케팅|홍보)$/i, ["마케팅", "홍보", "광고"]],
-];
+/** 검색 키워드 확장 — 방향성 있는 개념 트리.
+ *  규칙: ① aliases는 '같은 개념의 다른 표기'라 서로 치환 가능.
+ *        ② 확장은 children(하위 개념) 방향으로만 내려간다 — 상위 개념으로는 절대 확장하지 않는다.
+ *  예: "AI" → RAG·LLM·머신러닝까지 포함 / "RAG" → RAG(+검색증강생성)만. (RAG→AI 역류 금지)
+ *  사전은 코드가 관리하며(LLM 추측 없음), 사전에 없는 단어는 입력 그대로만 검색한다. */
+const CONCEPTS: Record<string, { aliases: string[]; children?: string[] }> = {
+  AI: { aliases: ["AI", "인공지능", "에이아이"], children: ["생성형AI", "머신러닝", "AI에이전트", "챗봇"] },
+  생성형AI: { aliases: ["생성형AI", "생성형 AI", "생성형"], children: ["LLM"] },
+  LLM: { aliases: ["LLM", "거대언어모델", "대규모 언어모델"], children: ["RAG"] },
+  RAG: { aliases: ["RAG", "검색증강생성", "검색 증강 생성"] },
+  머신러닝: { aliases: ["머신러닝", "ML", "기계학습", "machine learning"], children: ["딥러닝"] },
+  딥러닝: { aliases: ["딥러닝", "DL", "deep learning"] },
+  AI에이전트: { aliases: ["에이전트", "agent", "AI agent"] },
+  챗봇: { aliases: ["챗봇", "chatbot"] },
+  데이터: { aliases: ["데이터", "data"], children: ["빅데이터", "데이터분석", "데이터사이언스", "데이터엔지니어"] },
+  빅데이터: { aliases: ["빅데이터", "big data"] },
+  데이터분석: { aliases: ["데이터분석", "데이터 분석"] },
+  데이터사이언스: { aliases: ["데이터사이언스", "data science"] },
+  데이터엔지니어: { aliases: ["데이터엔지니어", "데이터 엔지니어", "data engineer"] },
+  개발: { aliases: ["개발", "developer", "소프트웨어", "software", "SW"], children: ["백엔드", "프론트엔드", "앱개발"] },
+  백엔드: { aliases: ["백엔드", "backend", "서버개발"] },
+  프론트엔드: { aliases: ["프론트엔드", "frontend", "프론트"] },
+  앱개발: { aliases: ["앱개발", "안드로이드", "android", "iOS"] },
+  보안: { aliases: ["보안", "정보보호", "security"] },
+  금융: { aliases: ["금융", "finance"], children: ["은행", "카드사", "보험사", "증권사", "핀테크", "결제"] },
+  은행: { aliases: ["은행", "뱅킹"] },
+  카드사: { aliases: ["카드사", "카드", "신용카드"], children: ["여신"] },
+  여신: { aliases: ["여신", "여신심사"] },
+  보험사: { aliases: ["보험사", "보험"] },
+  증권사: { aliases: ["증권사", "증권"] },
+  핀테크: { aliases: ["핀테크", "fintech"], children: ["결제"] },
+  결제: { aliases: ["결제", "페이", "payment", "PG"] },
+  디자인: { aliases: ["디자인", "design", "디자이너"], children: ["UX", "UI", "브랜드디자인"] },
+  UX: { aliases: ["UX"] },
+  UI: { aliases: ["UI"] },
+  브랜드디자인: { aliases: ["브랜드디자인", "브랜드 디자인", "BX"] },
+  마케팅: { aliases: ["마케팅", "marketing"], children: ["홍보", "광고", "그로스"] },
+  홍보: { aliases: ["홍보", "PR"] },
+  광고: { aliases: ["광고"] },
+  그로스: { aliases: ["그로스", "growth"] },
+  연구: { aliases: ["연구", "R&D", "research"], children: ["연구원"] },
+  연구원: { aliases: ["연구원", "researcher", "scientist"] },
+  행정: { aliases: ["행정", "사무", "총무"], children: ["일반직"] },
+  일반직: { aliases: ["일반직"] },
+};
 
-/** 키워드를 검색어 목록으로 확장. PostgREST or() 구문에 안전하게 특수문자는 제거. */
+/** 별칭(소문자·공백제거) → 개념 키 역색인 */
+const ALIAS_TO_CONCEPT = new Map<string, string>();
+for (const [key, c] of Object.entries(CONCEPTS)) {
+  for (const a of c.aliases) ALIAS_TO_CONCEPT.set(a.toLowerCase().replace(/\s+/g, ""), key);
+}
+
+/** 키워드를 검색어 목록으로 확장 — 자기 자신(별칭 포함) + 하위 개념만. 상위로는 확장하지 않는다. */
 export function expandKeyword(raw: string | null | undefined): string[] {
   const kw = (raw ?? "").trim();
   if (!kw) return [];
-  const out = new Set<string>();
-  for (const tok of kw.split(/\s+/).slice(0, 3)) {
-    const clean = tok.replace(/[,%()*"'\\]/g, "");
-    if (!clean) continue;
-    out.add(clean);
-    for (const [re, syns] of KW_SYNONYMS) if (re.test(clean)) for (const s of syns) out.add(s);
+  const clean = kw.replace(/[,%()*"'\\]/g, "");
+  if (!clean) return [];
+  const out = new Set<string>([clean]);
+  const concept = ALIAS_TO_CONCEPT.get(clean.toLowerCase().replace(/\s+/g, ""));
+  if (concept) {
+    // BFS로 하위 개념까지 내려가며 모든 별칭 수집 (역방향 없음)
+    const queue = [concept];
+    const seen = new Set<string>();
+    while (queue.length) {
+      const cur = queue.shift()!;
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      const node = CONCEPTS[cur];
+      if (!node) continue;
+      for (const a of node.aliases) out.add(a);
+      for (const ch of node.children ?? []) queue.push(ch);
+    }
   }
-  return [...out].slice(0, 8);
+  return [...out].slice(0, 12);
 }
 
 /** 공고 원문에서 확장 키워드가 실제로 매칭된 위치와 주변 문맥을 찾는다 (카드에 근거 표시용).

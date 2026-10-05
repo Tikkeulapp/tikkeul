@@ -19,7 +19,7 @@ const COLS = "job_id, source, title, company, region_names, region_sidos, is_nat
 type Row = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; region_sidos: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null;
-  salary_text: string | null; headcount: number | null; pbanc_begin: string | null; deadline: string | null; deadline_time?: string | null; detail_url: string | null; search_text: string | null;
+  salary_text: string | null; headcount: number | null; pbanc_begin: string | null; deadline: string | null; deadline_time?: string | null; summary?: string | null; requirements?: string | null; detail_url: string | null; search_text: string | null;
 };
 
 const SYSTEM = `당신은 한국 취업준비생 채용공고 추천 어시스턴트입니다. [사용자]와 [공고 후보](공공기관 채용정보 API에서 수집한 실제 공고)를 보고,
@@ -29,7 +29,7 @@ const SYSTEM = `당신은 한국 취업준비생 채용공고 추천 어시스�
 - 후보에 없는 job_id 금지. reason은 그 후보의 정보에만 근거하고 자격요건을 지어내지 마세요.
 - 사용자의 목표 직무와 직무분야(NCS)가 가까울수록, 거주지와 근무지역이 가까울수록 우선.
 - "경력" 단독 공고는 제외. score 55 미만 제외. 무관하면 빈 배열.
-- 적합도가 비슷하면 민간 기업과 공공기관 공고를 섞어 추천하세요 (한쪽에 몰지 않기). 상시채용(마감 없음)도 불리하게 보지 마세요.`;
+- 적합도가 비슷하면 사기업과 공공기관 공고를 섞어 추천하세요 (한쪽에 몰지 않기). 상시채용(마감 없음)도 불리하게 보지 마세요.`;
 
 export async function POST(request: Request) {
   let body: { userId?: string | null; personaId?: string | null; profileId?: string | null };
@@ -51,8 +51,8 @@ export async function POST(request: Request) {
   // 후보 풀: 직무분야별 (거주지+전국) / 마감 전만
   type Res = { data: Row[] | null; error: { message: string } | null };
   // deadline_time 컬럼이 없는 DB(ALTER 전) 호환
-  const probe = await db.from("job_postings").select("deadline_time").limit(1);
-  const cols = probe.error ? COLS : COLS + ", deadline_time";
+  const probe = await db.from("job_postings").select("deadline_time, summary, requirements").limit(1);
+  const cols = probe.error ? COLS : COLS + ", deadline_time, summary, requirements";
 
   const openOr = `deadline.is.null,deadline.gte.${today}`; // 상시·채용시 마감 포함
   const pools: Promise<Res>[] = ncs.map((code) => {
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     id: r.job_id, source: r.source, title: r.title, company: r.company,
     region: r.is_national && r.region_sidos.length === 0 ? "전국" : r.region_names.join("·"),
     ncs: r.ncs_names.slice(0, 2).join("·"), career: r.career, education: r.education, hireTypes: r.hire_types.join("·"),
-    salary: r.salary_text, deadline: r.deadline, deadlineTime: r.deadline_time ?? null,
+    salary: r.salary_text, summary: r.summary ?? null, requirements: r.requirements ?? null, deadline: r.deadline, deadlineTime: r.deadline_time ?? null,
     pbancBegin: r.pbanc_begin, dday: dday(r.deadline), url: r.detail_url, score, reason,
   });
 
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
   if (cands.length > 0) {
     try {
       const listForLlm = cands.map(({ r }) => ({
-        job_id: r.job_id, 제목: r.title, 회사: r.company, 구분: r.source === "pubinst" ? "공공기관" : "민간", 지역: r.region_names.join(","),
+        job_id: r.job_id, 제목: r.title, 회사: r.company, 구분: r.source === "pubinst" ? "공공기관" : "사기업", 지역: r.region_names.join(","),
         직무분야: r.ncs_names.join(","), 채용구분: r.career, 학력: r.education, 급여: r.salary_text, 마감: r.deadline ?? "상시",
       }));
       const userMsg = `[사용자]\n${JSON.stringify({ 목표직무: targetJob || "미상", 직무분야추정: ncs.map((c) => NCS_NAME_BY_CODE.get(c)), 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 나이: prof.age, 학력: education })}\n\n[공고 후보]\n${JSON.stringify(listForLlm)}`;
@@ -137,7 +137,7 @@ export async function POST(request: Request) {
   const mkRuleReason = (r: Row) => [
     r.ncs_codes.some((c) => ncs.includes(c)) ? "목표 직무와 같은 분야" : null,
     prof.sido && r.region_sidos.includes(prof.sido) ? "거주지와 근무지역 일치" : r.is_national ? "전국 지원 가능" : null,
-    "민간 기업 공고",
+    "사기업 공고",
   ].filter(Boolean).join(" · ") + "입니다.";
   if (recommendations.length > 0 && !recommendations.some((x) => x.source === "company") && companyTop.length > 0) {
     const extra = companyTop.slice(0, 2).map(({ r, sc }) => toRec(r, Math.min(90, 55 + sc * 4), mkRuleReason(r)));

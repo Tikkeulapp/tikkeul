@@ -8,7 +8,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { careerOpenToNewcomer, dday, expandKeyword, findKeywordEvidence } from "@/data/ncs";
 
 const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url, search_text";
-const COLS_T = COLS + ", deadline_time";
+const COLS_T = COLS + ", deadline_time, summary, requirements";
 
 export async function POST(request: Request) {
   let body: { sido?: string | null; ncs?: string | null; education?: string | null; career?: string | null; keyword?: string | null };
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 
   // deadline_time 컬럼이 아직 없는 DB(ALTER 전)에서도 동작하도록 프리플라이트
-  const probe = await db.from("job_postings").select("deadline_time").limit(1);
+  const probe = await db.from("job_postings").select("deadline_time, summary, requirements").limit(1);
   const cols = probe.error ? COLS : COLS_T;
 
   // 키워드는 동의어로 확장해 OR 검색 (예: agent → AI·인공지능·에이전트·생성형)
