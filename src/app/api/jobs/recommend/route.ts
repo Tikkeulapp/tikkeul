@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
 import { getPersona } from "@/data/personas";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, NCS_NAME_BY_CODE, isPublicOrg } from "@/data/ncs";
 
 export const maxDuration = 60;
@@ -111,8 +111,8 @@ export async function POST(request: Request) {
         직무분야: r.ncs_names.join(","), 채용구분: r.career, 학력: r.education, 급여: r.salary_text, 마감: r.deadline ?? "상시",
       }));
       const userMsg = `[사용자]\n${JSON.stringify({ 목표직무: targetJob || "미상", 직무분야추정: ncs.map((c) => NCS_NAME_BY_CODE.get(c)), 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 나이: prof.age, 학력: education })}\n\n[공고 후보]\n${JSON.stringify(listForLlm)}`;
-      let out = await groqJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);
-      if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await groqJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);
+      let out = await llmJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);
+      if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await llmJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);
       recommendations = (out.picks ?? [])
         .filter((p) => byId.has(p.job_id) && Number(p.score) >= 55)
         .sort((a, b) => b.score - a.score)

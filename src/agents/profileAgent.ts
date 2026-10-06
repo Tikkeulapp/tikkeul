@@ -1,7 +1,7 @@
 /**
  * Profile Agent (finance/agents/profile_agent.py 이식) — 대화형 슬롯필링.
  */
-import { ChatGroq } from "@langchain/groq";
+import { chatModel } from "@/services/llm";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import { extractReply } from "./policyAgent";
@@ -33,7 +33,7 @@ export async function runProfileAgent(
   missingFields: string[],
   deferUntil: string | null = null,
 ): Promise<string> {
-  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b", temperature: 0 });
+  const llm = chatModel(0);
   const agent = createReactAgent({
     llm,
     tools: buildProfileTools(userId, profileRowId, deferUntil),

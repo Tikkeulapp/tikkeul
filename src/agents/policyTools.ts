@@ -13,7 +13,7 @@ import { supabaseAdmin } from "@/services/supabase";
 import { classifyPolicyForUser, judgePolicy, saveMatchResult } from "@/services/policyMatch";
 import type { Verdict } from "@/types/policy";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 import { tavilySearch } from "@/services/tavily";
 
 export type ProfileCtx = {
@@ -195,7 +195,7 @@ export function buildWebSearchFallbackTool() {
         if (!r.title || !r.url) continue;
         let extracted: unknown = null;
         try {
-          extracted = await groqJson(WEB_EXTRACT_PROMPT, `제목: ${r.title}\n요약: ${r.content.slice(0, 600)}\nURL: ${r.url}`, 800);
+          extracted = await llmJson(WEB_EXTRACT_PROMPT, `제목: ${r.title}\n요약: ${r.content.slice(0, 600)}\nURL: ${r.url}`, 800);
         } catch {
           /* 추출 실패해도 원문 스니펫은 그대로 큐잉 */
         }

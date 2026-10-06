@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 import { refreshJobPostings } from "@/services/collectJobs";
 import { isAuthorizedCron } from "@/lib/cronAuth";
 
@@ -190,7 +190,7 @@ export async function GET(request: Request) {
           if (!title || knownTitles.has(title.replace(/\s+/g, ""))) continue;
           let extracted: unknown = null;
           try {
-            extracted = await groqJson(
+            extracted = await llmJson(
               "다음 웹페이지 제목·요약에서 청년/취준생 지원정책 정보를 JSON으로 추출: {\"is_policy\": true|false, \"title\": \"\", \"provider\": \"\", \"region_sido\": \"시도명 또는 null\", \"benefit\": \"혜택 요약\", \"target\": \"대상 요약\"}. 정책 공고가 아니면 is_policy=false.",
               `제목: ${title}\n요약: ${str(r.content).slice(0, 600)}\nURL: ${str(r.url)}`, 800,
             );

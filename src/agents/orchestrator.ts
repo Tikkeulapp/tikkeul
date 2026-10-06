@@ -8,7 +8,7 @@
  * tools 없이 responseFormat만 쓰는 게 훨씬 안정적이어서, 최근 매치 목록은 도구 호출로 얻는 대신
  * planTurn()이 미리 조회해 시스템 메시지로 프롬프트에 박아넣는다.
  */
-import { ChatGroq } from "@langchain/groq";
+import { chatModel } from "@/services/llm";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import { supabaseAdmin } from "@/services/supabase";
@@ -44,7 +44,7 @@ const SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Orchestrator Agent�
 - 개인정보나 정책과 무관한 잡담이면 intents를 빈 리스트로 두세요.`;
 
 export function makeOrchestrator(temperature = 0) {
-  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b", temperature });
+  const llm = chatModel(temperature);
   return createReactAgent({
     llm,
     tools: [],
@@ -78,7 +78,7 @@ async function fetchActiveMatchesSummary(userId: string, limit = 5): Promise<str
 }
 
 /** Groq의 strict JSON 스키마 구조화 출력이 가끔 필수 속성을 빠뜨린 채로 생성해 검증에
- * 실패한다(groq.ts의 groqJson()이 이미 같은 이유로 재시도하는 것과 동일한 문제) —
+ * 실패한다(groq.ts의 llmJson()이 이미 같은 이유로 재시도하는 것과 동일한 문제) —
  * 최대 2회까지 재시도한다. */
 export async function planTurn(userId: string, messages: ChatMessage[]): Promise<Plan> {
   const activeMatches = await fetchActiveMatchesSummary(userId);

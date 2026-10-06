@@ -3,7 +3,7 @@
  * 모드별로 별도 createReactAgent 인스턴스를 둔다 — 도구 집합·프롬프트가 달라서 하나로 합치는 것보다
  * 명확하고, 라우팅은 이미 Orchestrator가 끝낸 뒤이므로 여기서 다시 모드를 판단할 필요가 없다.
  */
-import { ChatGroq } from "@langchain/groq";
+import { chatModel } from "@/services/llm";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import type { ChatMessage } from "@/types/chat";
@@ -98,7 +98,7 @@ titleQuery(신규 지칭) 또는 referenceMatchId(직전 결과 재지칭) 중 �
 ${COMMON_OUTPUT_RULES}`;
 
 function makeLlm() {
-  return new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b", temperature: 0 });
+  return chatModel(0);
 }
 
 /** ReAct 루프의 마지막 메시지가 가끔 빈 내용으로 끝난다(도구 호출만 하고 요약 텍스트 없이

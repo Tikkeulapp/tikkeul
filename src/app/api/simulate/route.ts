@@ -9,7 +9,7 @@ import type { Loan } from "@/types/persona";
 import { derive } from "@/lib/derive";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 import {
   aggregateCards,
   simulate,
@@ -230,9 +230,9 @@ export async function POST(request: Request) {
     if (!cands.length) return;
     const list = cands.map((c) => ({ policy_id: c.policy_id, source: c.source, title: c.title, provider: c.provider, region: regionOf(c), theme: c.theme, end_date: c.end_date ?? (c.always_open ? "상시" : null), snippet: (c.search_text ?? "").slice(0, 320) }));
     const userMsg = JSON.stringify({ 사용자: userBrief, 정책후보: list });
-    let out = await groqJson<{ picks: DbPick[] }>(DB_PICK_SYSTEM, userMsg, 2000);
+    let out = await llmJson<{ picks: DbPick[] }>(DB_PICK_SYSTEM, userMsg, 2000);
     // 모델이 간헐적으로 빈 배열을 내면 한 번 더 시도 (비결정성 완화)
-    if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await groqJson<{ picks: DbPick[] }>(DB_PICK_SYSTEM, userMsg, 2000);
+    if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await llmJson<{ picks: DbPick[] }>(DB_PICK_SYSTEM, userMsg, 2000);
     console.log(`[simulate] db picks: ${out?.picks?.length ?? 0} / cands ${list.length}`);
     const seenTitle = new Set<string>();
     const seenReason = new Set<string>();
@@ -259,7 +259,7 @@ export async function POST(request: Request) {
       경고: result.warnings,
       열리는제도: [...programs.likely, ...programs.needsCheck].map((x) => ({ 이름: x.name, 판정: x.status, 이유: x.reason })),
     };
-    const out = await groqJson<AiComment>(AI_SYSTEM, JSON.stringify(payload), 1200);
+    const out = await llmJson<AiComment>(AI_SYSTEM, JSON.stringify(payload), 1200);
     ai = out && typeof out.summary === "string" ? out : null;
   })().catch((e) => { aiError = e instanceof Error ? e.message : String(e); });
   await Promise.all([pickTask, commentTask]);

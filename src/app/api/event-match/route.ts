@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 import { resolveProfile } from "@/services/profile";
 import { normalizeSido } from "@/lib/region";
 import { isPolicyRelevantEvent } from "@/lib/calendarRules";
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
 
   try {
     // ── 1) 일정 의미 추출 ──
-    const extracted = await groqJson<Extracted>(
+    const extracted = await llmJson<Extracted>(
       EXTRACT_SYSTEM,
       `일정: "${title.trim()}"${date ? ` (날짜: ${date})` : ""}`,
       1200,
@@ -173,14 +173,14 @@ export async function POST(request: Request) {
     // ── 3) LLM 선별 (일정에 직접 붙는 혜택) ──
     let recommendations: object[] = [];
     if (candidates.length > 0) {
-      let ranked = await groqJson<Ranked>(
+      let ranked = await llmJson<Ranked>(
         RANK_SYSTEM,
         `[사용자]\n${JSON.stringify(profile.summary)}\n\n[일정]\n"${title.trim()}" (${date ?? "날짜 미상"}, 유형: ${extracted.event_type})\n\n[정책 후보]\n${JSON.stringify(compact(candidates), null, 1)}`,
         2000,
       );
       // 모델이 간헐적으로 빈 배열을 내면 한 번 더 시도 (비결정성 완화 — 후보가 3건 이상일 때만)
       if (!(ranked.recommendations ?? []).length && candidates.length >= 3) {
-      ranked = await groqJson<Ranked>(
+      ranked = await llmJson<Ranked>(
         RANK_SYSTEM,
         `[사용자]\n${JSON.stringify(profile.summary)}\n\n[일정]\n"${title.trim()}" (${date ?? "날짜 미상"}, 유형: ${extracted.event_type})\n\n[정책 후보]\n${JSON.stringify(compact(candidates), null, 1)}`,
         2000,
@@ -233,7 +233,7 @@ export async function POST(request: Request) {
       const close = (closeRows ?? []) as Cand[];
       let delta: Delta = { opening: [], closing: [] };
       if (open.length + close.length > 0) {
-        delta = await groqJson<Delta>(
+        delta = await llmJson<Delta>(
           DELTA_SYSTEM,
           `[사용자]\n${JSON.stringify(profile.summary)}\n\n[이동] ${userSido ?? "미상"} → ${newSido} (${date ?? "날짜 미상"})\n\n[새 지역 정책 후보]\n${JSON.stringify(compact(open), null, 1)}\n\n[현 거주지 정책 후보]\n${JSON.stringify(compact(close), null, 1)}`,
           2500,

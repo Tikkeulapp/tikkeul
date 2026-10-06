@@ -8,7 +8,7 @@
  * 이 함수를 쓰는 곳(/api/relevance, /api/event-match)은 이 과도기적 분기를 몰라도 된다.
  */
 import { supabaseAdmin } from "@/services/supabase";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 import { classifyConditions } from "@/lib/eligibility";
 import type { EligibilityCondition, EligibilityResult } from "@/types/eligibility";
 import type { PolicyInput, Verdict } from "@/types/policy";
@@ -95,7 +95,7 @@ export async function judgePolicy(opts: {
     : null;
 
   if (!classified) {
-    const fallback = await groqJson<Verdict>(
+    const fallback = await llmJson<Verdict>(
       FALLBACK_SYSTEM,
       `[오늘 날짜] ${new Date().toISOString().slice(0, 10)}\n\n[사용자 정보]\n${JSON.stringify(opts.profileSummary, null, 1)}\n\n[정책 정보]\n${JSON.stringify(opts.policy, null, 1)}\n\n이 사용자가 이 정책의 대상인지 판정하고 규칙대로 JSON만 출력하세요.`,
     );
@@ -103,7 +103,7 @@ export async function judgePolicy(opts: {
   }
 
   const { result, eligibilityText } = classified;
-  const explained = await groqJson<{
+  const explained = await llmJson<{
     score: number;
     reasons: string[];
     missing_information: string[];

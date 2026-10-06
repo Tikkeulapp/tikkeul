@@ -7,7 +7,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
-import { groqJson } from "@/services/groq";
+import { llmJson } from "@/services/llm";
 
 export const maxDuration = 60;
 
@@ -109,8 +109,8 @@ export async function POST(request: Request) {
   let picks: Pick[] = [];
   let aiError: string | null = null;
   try {
-    let out = await groqJson<{ picks: Pick[] }>(SYSTEM, userMsg, 2000);
-    if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await groqJson<{ picks: Pick[] }>(SYSTEM, userMsg, 2000);
+    let out = await llmJson<{ picks: Pick[] }>(SYSTEM, userMsg, 2000);
+    if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await llmJson<{ picks: Pick[] }>(SYSTEM, userMsg, 2000);
     picks = (out.picks ?? []).filter((p) => byId.has(p.policy_id) && Number(p.score) >= 60).sort((a, b) => b.score - a.score).slice(0, 6);
   } catch (e) {
     aiError = e instanceof Error ? e.message : String(e);
