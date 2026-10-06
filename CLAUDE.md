@@ -19,7 +19,7 @@
 - DB 스키마 변경은 `supabase/schema.sql`에 SQL을 먼저 적는다 (프리뷰·프로덕션이 같은 DB를 쓴다).
 
 ## 개발 프로세스
-- CRITICAL: 새 기능 구현 시 반드시 테스트를 먼저 작성하고, 테스트가 통과하는 구현을 작성할 것 (TDD). 테스트는 대상 파일 옆 `*.test.ts` (`node:test` + `node:assert/strict`).
+- CRITICAL: `src/lib/`은 TDD — 테스트를 먼저 작성하고, 테스트가 통과하는 구현을 작성할 것 (`tdd-guard.sh` 훅이 강제). 테스트는 대상 파일 옆 `*.test.ts` (`node:test` + `node:assert/strict`). 그 밖의 코드는 테스트 가능한 로직이면 `src/lib/`로 빼서 테스트한다.
 - 커밋 메시지는 conventional commits 형식을 따를 것 (feat:, fix:, docs:, refactor:, chore:). scope는 기능 단위 (예: `feat(jobs): ...`)
 - `main`에 직접 커밋하지 않는다 — 브랜치 → PR → Vercel 프리뷰 확인 → 머지.
 - `.env.local`은 절대 커밋하지 않는다 (`.env.example` 참고).
