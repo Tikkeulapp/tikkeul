@@ -53,6 +53,26 @@ const tsToHm = (v: unknown): string | null => {
 export const todayKst = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
 /** "-", "." 같은 자리채움 값은 정보가 아니므로 버린다. */
 const meaningful = (v: string | null): string | null => (v && v.replace(/[\s\-·.없음]/g, "").length >= 5 ? v : null);
+/** 이스케이프된 HTML 본문(Greenhouse content 등)을 평문으로 — 엔티티 복원 → 태그 제거 → 공백 정리. */
+const stripHtml = (v: unknown): string | null => {
+  const t = s(v);
+  if (!t) return null;
+  const out = t
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/<(style|script)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&#x?[0-9a-fA-F]+;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return out || null;
+};
+/** 본문에서 자격요건 단락 시작점을 찾아 발췌. 못 찾으면 null — 추측으로 채우지 않는다. */
+const pickRequirements = (text: string | null, n = 260): string | null => {
+  if (!text) return null;
+  const m = text.match(/자격\s*요건|지원\s*자격|필수\s*(요건|경험|역량|조건)|이런\s*분(을|과|이)?\s*(찾|함께)|(Basic\s+)?Qualifications|Requirements|What you('ll| will)? need/i);
+  if (!m || m.index == null) return null;
+  return meaningful(cutWord(text.slice(m.index), n));
+};
 
 /* ── 사람인 (민간) — 최신 N건 부분 스냅샷 ───────────── */
 async function collectSaramin(now: string, log: (m: string) => void): Promise<JobRow[]> {
@@ -215,7 +235,8 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
   const results = await Promise.allSettled([
     // (a) Greenhouse 공개 보드
     ...GH_ORGS.map(async (org) => {
-      const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${org.slug}/jobs`);
+      // content=true: 기업이 외부 게시용으로 공개한 공고 본문(HTML)까지 한 번에 받는다.
+      const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${org.slug}/jobs?content=true`);
       if (!res.ok) throw new Error(`greenhouse ${org.slug} ${res.status}`);
       const json = await res.json();
       const jobs: Record<string, unknown>[] = json.jobs ?? [];
@@ -228,6 +249,7 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
         // 해외 전용 공고 제외 (국내 지명·Korea 표기가 전혀 없으면 스킵)
         if (loc && !/korea|seoul|pangyo|bundang|seongnam|busan|daejeon|서울|판교|성남|분당|부산|대전|remote/i.test(loc)) continue;
         const { names, sidos } = sidosFromLocationText(loc);
+        const body = stripHtml(j.content);
         kept++;
         rows.push({
           job_id: `company:gh:${org.slug}:${id}`,
@@ -237,20 +259,20 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
           region_names: names,
           region_sidos: sidos,
           is_national: sidos.length === 0,
-          ncs_codes: ncsCodesForCategoryText(title),
+          ncs_codes: ncsCodesForCategoryText([title, cutWord(body, 300)].filter(Boolean).join(" ")),
           ncs_names: [],
           hire_types: [],
           career: null,
           education: null,
           salary_text: null,
           headcount: null,
-          summary: null,
-          requirements: null,
+          summary: meaningful(cutWord(body, 260)),
+          requirements: pickRequirements(body),
           pbanc_begin: ymd(s(j.first_published)?.slice(0, 10)),
           deadline: ymd(s(j.application_deadline)?.slice(0, 10)), // 없으면 상시
           deadline_time: null,
           detail_url: s(j.absolute_url),
-          search_text: [title, org.name, loc].filter(Boolean).join(" | "),
+          search_text: [title, org.name, loc, cutWord(body, 600)].filter(Boolean).join(" | "),
           collected_at: now,
         });
       }
@@ -360,7 +382,7 @@ async function collectWork24(now: string, log: (m: string) => void): Promise<Job
   const tag = (block: string, name: string): string | null => {
     const m = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
     const v = m?.[1]?.trim();
-    return v ? v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') : null;
+    return v ? v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x?[0-9a-fA-F]+;/g, " ").replace(/\s+/g, " ").trim() || null : null;
   };
   let page = 1;
   let total = Infinity;
@@ -391,7 +413,7 @@ async function collectWork24(now: string, log: (m: string) => void): Promise<Job
         region_sidos: [],
         is_national: true,
         ncs_codes: ncsCodesForCategoryText(title),
-        ncs_names: coType ? [coType] : [],
+        ncs_names: [], // 직무명은 상세 조회에서 채운다 (기업구분은 직무가 아님)
         hire_types: (typeNm ?? "").split("|").map((x) => x.trim()).filter(Boolean).slice(0, 3),
         career: null,
         education: null,
@@ -410,7 +432,46 @@ async function collectWork24(now: string, log: (m: string) => void): Promise<Job
     if (items.length === 0) break;
     page += 1;
   }
-  log(`work24: 사기업 ${rows.length}건 수집 (공공기관 ${publicSkipped}건은 잡알리오 중복으로 제외)`);
+
+  // 목록 API에는 직무내용·자격요건이 없다 — 건별 상세(callTp=D)로 보강한다.
+  // 실패한 건은 목록 데이터만으로 유지(추측으로 채우지 않음).
+  let enriched = 0;
+  let cursor = 0;
+  const enrichOne = async (r: JobRow) => {
+    const seq = r.job_id.split(":")[1];
+    const res = await fetch(`https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L21.do?authKey=${encodeURIComponent(key)}&callTp=D&returnType=XML&empSeqno=${seq}`);
+    const xml = await res.text();
+    if (!res.ok || /<error>|<errMsg/i.test(xml)) return;
+    const jobNames = [...new Set([...xml.matchAll(/<jobsCdKorNm>([\s\S]*?)<\/jobsCdKorNm>/g)].map((m) => m[1].trim()).filter(Boolean))];
+    const duties = ([...xml.matchAll(/<empRecrListInfo>([\s\S]*?)<\/empRecrListInfo>/g)].map((m) => {
+      const nm = tag(m[1], "empRecrNm");
+      const jc = tag(m[1], "jobCont");
+      return jc ? (nm ? `[${nm}] ${jc}` : jc) : null;
+    }).filter(Boolean) as string[]).join(" · ");
+    const reqs = tag(xml, "recrCommCont");
+    const careers = [...new Set([...xml.matchAll(/<empWantedCareerNm>([\s\S]*?)<\/empWantedCareerNm>/g)].flatMap((m) => m[1].split("|").map((x) => x.trim())).filter(Boolean))];
+    const regions = [...new Set([...xml.matchAll(/<workRegionNm>([\s\S]*?)<\/workRegionNm>/g)].map((m) => m[1].trim()).filter(Boolean))];
+    if (jobNames.length) r.ncs_names = jobNames.slice(0, 3);
+    r.ncs_codes = ncsCodesForCategoryText([r.title, jobNames.join(" "), cutWord(duties, 300)].filter(Boolean).join(" "));
+    r.summary = meaningful(cutWord(duties, 280));
+    r.requirements = meaningful(cutWord(reqs, 300));
+    if (careers.length) r.career = careers.join("·");
+    if (regions.length && !regions.some((x) => /지역무관|전국/.test(x))) {
+      const sidos = [...new Set(regions.flatMap((x) => sidosFromLocationText(x).sidos))];
+      r.region_names = regions.slice(0, 4);
+      r.region_sidos = sidos;
+      r.is_national = sidos.length === 0;
+    }
+    r.search_text = [r.search_text, jobNames.join(" "), cutWord(duties, 500), cutWord(reqs, 300)].filter(Boolean).join(" | ");
+    enriched++;
+  };
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    while (cursor < rows.length) {
+      const r = rows[cursor++];
+      try { await enrichOne(r); } catch { /* 목록 데이터만으로 유지 */ }
+    }
+  }));
+  log(`work24: 사기업 ${rows.length}건 수집, 상세 보강 ${enriched}건 (공공기관 ${publicSkipped}건은 잡알리오 중복으로 제외)`);
   return rows;
 }
 
