@@ -5,6 +5,14 @@ import { BRAND } from "@/config/brand";
 export const metadata: Metadata = {
   title: `${BRAND.name} — ${BRAND.tagline}`,
   description: `${BRAND.oneLiner} ${BRAND.description}`,
+  // 카카오톡·슬랙 등 링크 공유 미리보기
+  openGraph: {
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: BRAND.oneLiner,
+    siteName: BRAND.name,
+    locale: "ko_KR",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
