@@ -345,6 +345,73 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
   return rows;
 }
 
+/* ── 4. 고용24 공채속보 (work24) — 개인회원 인증키로 이용 가능한 채용정보 하위 API ─────
+ * callOpenApiSvcInfo210L21: 대기업·중견기업 공채 공고 (회사명·접수기간·고용형태·원문 링크).
+ * 공공기관 공고는 잡알리오 전수와 중복되므로 사기업만 가져온다. XML 응답을 정규식으로 파싱. */
+async function collectWork24(now: string, log: (m: string) => void): Promise<JobRow[]> {
+  const key = process.env.WORK24_API_KEY;
+  if (!key) {
+    log("work24: WORK24_API_KEY 없음 — 건너뜀");
+    return [];
+  }
+  const rows: JobRow[] = [];
+  const tag = (block: string, name: string): string | null => {
+    const m = block.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`));
+    const v = m?.[1]?.trim();
+    return v ? v.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"') : null;
+  };
+  let page = 1;
+  let total = Infinity;
+  let publicSkipped = 0;
+  while ((page - 1) * 100 < total && page <= 10) {
+    const res = await fetch(`https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L21.do?authKey=${encodeURIComponent(key)}&callTp=L&returnType=XML&startPage=${page}&display=100`);
+    const text = await res.text();
+    if (!res.ok || /<error>|<errMsg/i.test(text)) throw new Error(`work24 ${res.status}: ${text.slice(0, 150)}`);
+    if (page === 1) {
+      total = Number(text.match(/<total>(\d+)<\/total>/)?.[1] ?? 0);
+      log(`work24(공채속보): 전체 ${total}건`);
+    }
+    const items = text.match(/<dhsOpenEmpInfo>[\s\S]*?<\/dhsOpenEmpInfo>/g) ?? [];
+    for (const block of items) {
+      const id = tag(block, "empSeqno");
+      const title = tag(block, "empWantedTitle");
+      if (!id || !title) continue;
+      const coType = tag(block, "coClcdNm") ?? "";
+      if (/공공/.test(coType)) { publicSkipped++; continue; } // 잡알리오와 중복 방지
+      const company = tag(block, "empBusiNm");
+      const typeNm = tag(block, "empWantedTypeNm");
+      rows.push({
+        job_id: `work24:${id}`,
+        source: "work24",
+        title,
+        company,
+        region_names: [], // 이 API는 근무지역을 제공하지 않음 — 원문에서 확인
+        region_sidos: [],
+        is_national: true,
+        ncs_codes: ncsCodesForCategoryText(title),
+        ncs_names: coType ? [coType] : [],
+        hire_types: (typeNm ?? "").split("|").map((x) => x.trim()).filter(Boolean).slice(0, 3),
+        career: null,
+        education: null,
+        salary_text: null,
+        headcount: null,
+        summary: null,
+        requirements: null,
+        pbanc_begin: ymd(tag(block, "empWantedStdt")),
+        deadline: ymd(tag(block, "empWantedEndt")),
+        deadline_time: null,
+        detail_url: tag(block, "empWantedHomepgDetail") ?? tag(block, "empWantedMobileUrl"),
+        search_text: [title, company, coType, typeNm].filter(Boolean).join(" | "),
+        collected_at: now,
+      });
+    }
+    if (items.length === 0) break;
+    page += 1;
+  }
+  log(`work24: 사기업 ${rows.length}건 수집 (공공기관 ${publicSkipped}건은 잡알리오 중복으로 제외)`);
+  return rows;
+}
+
 export type RefreshReport = {
   collected: Record<string, number>;
   upserted: number;
@@ -357,7 +424,7 @@ export type RefreshReport = {
 export async function refreshJobPostings(db: SupabaseClient, log: (m: string) => void = () => {}): Promise<RefreshReport> {
   const now = new Date().toISOString();
   const errors: string[] = [];
-  const results = await Promise.allSettled([collectSaramin(now, log), collectPubinst(now, log), collectCompany(now, log)]);
+  const results = await Promise.allSettled([collectSaramin(now, log), collectPubinst(now, log), collectCompany(now, log), collectWork24(now, log)]);
   const rows: JobRow[] = [];
   const seen = new Set<string>();
   for (const r of results) {
