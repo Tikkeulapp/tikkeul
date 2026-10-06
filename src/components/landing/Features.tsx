@@ -87,8 +87,8 @@ export function Features() {
             ))}
           </div>
 
-          {/* 미리보기 */}
-          <div className="rounded-[24px] border border-line bg-card p-8 text-ink">
+          {/* 미리보기 — 탭마다 내용 길이가 달라도 카드 크기는 동일하게 고정 */}
+          <div className="flex min-h-[480px] flex-col rounded-[24px] border border-line bg-card p-8 text-ink">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-leaf-deep">{current.preview.title}</span>
               <small className="text-[12px] font-bold text-mute">미리보기</small>
@@ -103,7 +103,8 @@ export function Features() {
               className="mt-4 text-[15px] leading-relaxed text-ink/85 [&_b]:text-leaf-deep"
               dangerouslySetInnerHTML={{ __html: current.preview.copy }}
             />
-            <p className="mt-6 rounded-[12px] bg-mint px-4 py-3 text-[13.5px] font-bold text-leaf-deep">
+            <div className="min-h-6 flex-1" />
+            <p className="rounded-[12px] bg-mint px-4 py-3 text-[13.5px] font-bold text-leaf-deep">
               💡 {current.preview.insight}
             </p>
           </div>
