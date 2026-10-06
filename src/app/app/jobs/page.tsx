@@ -40,8 +40,10 @@ export default function JobsPage() {
   return (
     <main className="min-h-screen bg-paper">
       <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-6 font-semibold">
-        <LogoMark size={28} />
-        <span>{BRAND.name}</span>
+        <Link href="/app" className="flex items-center gap-2.5 transition hover:opacity-75" title="메인 캘린더로">
+          <LogoMark size={28} />
+          <span>{BRAND.name}</span>
+        </Link>
         <span className="ml-auto flex items-center gap-2.5 text-[16px] text-mute">
           <EmploymentToggle />
           <span>
