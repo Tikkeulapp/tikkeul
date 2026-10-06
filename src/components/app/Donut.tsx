@@ -39,14 +39,13 @@ export function Donut({
   const total = segments.reduce((s, x) => s + Math.max(0, x.value), 0);
   const cx = size / 2, cy = size / 2, rO = size / 2 - 2, rI = rO - thickness, rMid = rO - thickness / 2;
   const gap = segments.length > 1 ? 0.025 : 0;
-  let angle = -Math.PI / 2;
-  const pieces = segments
-    .filter((s) => s.value > 0)
-    .map((s) => {
+  const visible = segments.filter((s) => s.value > 0);
+  const pieces = visible.map((s, i) => {
       const frac = total ? s.value / total : 0;
-      const a0 = angle + gap / 2;
-      const a1 = angle + frac * Math.PI * 2 - gap / 2;
-      angle += frac * Math.PI * 2;
+      const before = visible.slice(0, i).reduce((sum, x) => sum + x.value, 0);
+      const start = -Math.PI / 2 + (total ? before / total : 0) * Math.PI * 2;
+      const a0 = start + gap / 2;
+      const a1 = start + frac * Math.PI * 2 - gap / 2;
       const pct = Math.round(frac * 100);
       const mid = (a0 + a1) / 2;
       const [lx, ly] = polar(cx, cy, rMid, mid);

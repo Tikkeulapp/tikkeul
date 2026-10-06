@@ -56,21 +56,78 @@ function DdayBadge({ d }: { d: number | null }) {
   );
 }
 
+type SearchParams = { sido: string; ncs: string; education: string; career: string; hire: string; org: string; keywords: string[] };
+
 const cleanKw = (raw: string) => raw.trim().replace(/[,%()*"'\\]/g, "").slice(0, 20);
+
+type JobsResult = {
+  jobsMap: Record<string, Job>;
+  matchedBy: Record<string, string[]>; // job_id → 매칭된 키워드들
+  evidence: Record<string, Record<string, Evidence>>; // job_id → {kw: 근거}
+  expandedByKw: Record<string, string[]>;
+  singleTotal: number; // 키워드 없는 검색의 전체 건수
+};
+
+/** /api/jobs/search 호출 — 키워드가 여럿이면 키워드별로 불러 합집합. state는 건드리지 않는다. */
+async function fetchJobs(params: SearchParams): Promise<JobsResult> {
+  const base = { sido: params.sido || null, ncs: params.ncs || null, education: params.education || null, career: params.career || null, hire: params.hire || null, org: params.org || null };
+  const call = async (keyword: string | null) => {
+    const res = await fetch("/api/jobs/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...base, keyword }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? "검색 실패");
+    return json as { jobs: Job[]; total: number; keywords: string[] };
+  };
+
+  const jobsMap: Record<string, Job> = {};
+  const matchedBy: Record<string, string[]> = {};
+  const evidence: Record<string, Record<string, Evidence>> = {};
+  const expandedByKw: Record<string, string[]> = {};
+
+  if (params.keywords.length === 0) {
+    const r = await call(null);
+    for (const j of r.jobs) jobsMap[j.job_id] = j;
+    return { jobsMap, matchedBy, evidence, expandedByKw, singleTotal: r.total };
+  }
+  const results = await Promise.all(params.keywords.map(async (k) => ({ k, r: await call(k) })));
+  for (const { k, r } of results) {
+    expandedByKw[k] = r.keywords;
+    for (const j of r.jobs) {
+      jobsMap[j.job_id] = j;
+      const kws = (matchedBy[j.job_id] ??= []);
+      if (!kws.includes(k)) kws.push(k);
+      if (j.match) (evidence[j.job_id] ??= {})[k] = j.match;
+    }
+  }
+  return { jobsMap, matchedBy, evidence, expandedByKw, singleTotal: 0 };
+}
+
+function urlKwChips(): string[] {
+  if (typeof window === "undefined") return [];
+  const kwParam = new URLSearchParams(window.location.search).get("kw") ?? "";
+  return [...new Set(kwParam.split(",").map(cleanKw).filter(Boolean))].slice(0, 8);
+}
 
 export function JobsView({ session }: { session: SimSession }) {
   const persona = session.personaId ? getPersona(session.personaId) : null;
   const defaultSido = persona ? persona.declared.region.sido : "";
   const defaultNcs = ncsCodesForTargetJob(persona?.declared.targetJob)[0] ?? "";
 
-  const [sido, setSido] = useState(defaultSido);
-  const [ncs, setNcs] = useState(defaultNcs);
+  // /app/jobs?kw=... 로 진입하면 그 키워드로 시작하고 필터는 넓게 연다.
+  // JobsView는 세션 로드 후 클라이언트에서만 렌더되므로 초기값에서 window를 읽어도 된다.
+  const [urlChips] = useState(urlKwChips);
+  const fromUrl = urlChips.length > 0;
+  const [sido, setSido] = useState(fromUrl ? "" : defaultSido);
+  const [ncs, setNcs] = useState(fromUrl ? "" : defaultNcs);
   const [education, setEducation] = useState("");
-  const [career, setCareer] = useState("신입");
+  const [career, setCareer] = useState(fromUrl ? "" : "신입");
   const [hire, setHire] = useState("");
   const [org, setOrg] = useState("");
   const [kwDraft, setKwDraft] = useState("");
-  const [kwChips, setKwChips] = useState<string[]>([]);
+  const [kwChips, setKwChips] = useState<string[]>(urlChips);
 
   const [jobsMap, setJobsMap] = useState<Record<string, Job>>({});
   const [matchedBy, setMatchedBy] = useState<Record<string, string[]>>({}); // job_id → 매칭된 키워드들
@@ -80,77 +137,45 @@ export function JobsView({ session }: { session: SimSession }) {
   const [selectedKw, setSelectedKw] = useState<Set<string>>(new Set());
   const [singleTotal, setSingleTotal] = useState(0); // 키워드 없는 검색의 전체 건수
   const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // 마운트 직후 자동 검색이 돈다
   const [error, setError] = useState<string | null>(null);
   const [appliedNcs, setAppliedNcs] = useState(defaultNcs);
   const [calSaved, setCalSaved] = useState<Set<string>>(new Set());
   const [calBusy, setCalBusy] = useState<string | null>(null);
 
-  const search = useCallback(async (params: { sido: string; ncs: string; education: string; career: string; hire: string; org: string; keywords: string[] }) => {
+  const applyResult = useCallback((params: SearchParams, r: JobsResult) => {
+    setSingleTotal(r.singleTotal);
+    setJobsMap(r.jobsMap);
+    setMatchedBy(r.matchedBy);
+    setEvidence(r.evidence);
+    setExpandedByKw(r.expandedByKw);
+    setResultKws(params.keywords);
+    setSelectedKw(new Set(params.keywords));
+    setAppliedNcs(params.ncs);
+    setSearched(true);
+    setLoading(false);
+  }, []);
+
+  const applyError = useCallback((e: unknown) => {
+    setError(e instanceof Error ? e.message : String(e));
+    setJobsMap({});
+    setSearched(true);
+    setLoading(false);
+  }, []);
+
+  const search = useCallback((params: SearchParams) => {
     setLoading(true);
     setError(null);
-    try {
-      const base = { sido: params.sido || null, ncs: params.ncs || null, education: params.education || null, career: params.career || null, hire: params.hire || null, org: params.org || null };
-      const call = async (keyword: string | null) => {
-        const res = await fetch("/api/jobs/search", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...base, keyword }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? "검색 실패");
-        return json as { jobs: Job[]; total: number; keywords: string[] };
-      };
-
-      const jm: Record<string, Job> = {};
-      const mb: Record<string, string[]> = {};
-      const ev: Record<string, Record<string, Evidence>> = {};
-      const ex: Record<string, string[]> = {};
-
-      if (params.keywords.length === 0) {
-        const r = await call(null);
-        for (const j of r.jobs) jm[j.job_id] = j;
-        setSingleTotal(r.total);
-      } else {
-        const results = await Promise.all(params.keywords.map(async (k) => ({ k, r: await call(k) })));
-        for (const { k, r } of results) {
-          ex[k] = r.keywords;
-          for (const j of r.jobs) {
-            jm[j.job_id] = j;
-            (mb[j.job_id] ??= []).includes(k) || mb[j.job_id].push(k);
-            if (j.match) (ev[j.job_id] ??= {})[k] = j.match;
-          }
-        }
-        setSingleTotal(0);
-      }
-      setJobsMap(jm);
-      setMatchedBy(mb);
-      setEvidence(ev);
-      setExpandedByKw(ex);
-      setResultKws(params.keywords);
-      setSelectedKw(new Set(params.keywords));
-      setAppliedNcs(params.ncs);
-      setSearched(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setJobsMap({});
-      setSearched(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    fetchJobs(params).then((r) => applyResult(params, r), applyError);
+  }, [applyResult, applyError]);
 
   // 첫 진입: URL의 ?kw= 가 있으면 그 키워드로(필터는 넓게), 없으면 프로필 기본 조건으로 자동 검색
   useEffect(() => {
-    const kwParam = new URLSearchParams(window.location.search).get("kw") ?? "";
-    const chips = [...new Set(kwParam.split(",").map(cleanKw).filter(Boolean))].slice(0, 8);
-    if (chips.length) {
-      setKwChips(chips);
-      setSido(""); setNcs(""); setCareer("");
-      void search({ sido: "", ncs: "", education: "", career: "", hire: "", org: "", keywords: chips });
-    } else {
-      void search({ sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", hire: "", org: "", keywords: [] });
-    }
+    // 첫 자동 검색 — loading은 초기값이 true라 여기선 결과 반영만 (콜백 안 setState)
+    const params: SearchParams = fromUrl
+      ? { sido: "", ncs: "", education: "", career: "", hire: "", org: "", keywords: urlChips }
+      : { sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", hire: "", org: "", keywords: [] };
+    fetchJobs(params).then((r) => applyResult(params, r), applyError);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

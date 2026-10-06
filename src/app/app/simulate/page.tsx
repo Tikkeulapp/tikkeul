@@ -1,24 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { getPersona } from "@/data/personas";
-import { SimulateView, type SimSession } from "@/components/app/SimulateView";
+import { SimulateView } from "@/components/app/SimulateView";
 import { EmploymentToggle } from "@/components/app/EmploymentToggle";
+import { useStoredSession } from "@/components/app/useStoredSession";
 
 export default function SimulatePage() {
-  const [session, setSession] = useState<SimSession | null | undefined>(undefined);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("tikkeul.session");
-      setSession(raw ? (JSON.parse(raw) as SimSession) : null);
-    } catch {
-      setSession(null);
-    }
-  }, []);
+  const session = useStoredSession();
 
   if (session === undefined) return null;
   if (!session) {

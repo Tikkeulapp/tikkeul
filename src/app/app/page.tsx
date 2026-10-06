@@ -126,6 +126,8 @@ const RECS: Record<string, Rec[]> = {
 };
 
 const TODAY = new Date().toISOString().slice(0, 10);
+/** 저장 실패로 event_id가 없을 때 매칭 결과를 묶어둘 임시 키 (이벤트 핸들러에서만 호출) */
+const tempEventId = () => `tmp-${Date.now()}`;
 const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -140,6 +142,62 @@ function monthCells(y: number, m: number): (string | null)[] {
 }
 const prevMonth = ({ y, m }: { y: number; m: number }) => (m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 });
 const nextMonth = ({ y, m }: { y: number; m: number }) => (m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 });
+
+type ProfileFieldProps = { value: string | null; saving: boolean; onSave: (value: string) => void };
+
+const fieldClass = (value: string | null) =>
+  !value ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card";
+
+function FieldSelect({ value, saving, onSave, options }: ProfileFieldProps & { options: string[] }) {
+  return (
+    <select
+      value={value ?? ""}
+      disabled={saving}
+      onChange={(e) => { if (e.target.value) onSave(e.target.value); }}
+      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${fieldClass(value)}`}
+    >
+      <option value="" disabled>선택</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+// 시·군·구는 정해진 목록이 없어 자유 입력 — 매 키 입력마다 저장하면 타이핑 중 계속 API를
+// 두드리게 되니, 포커스를 벗어날 때(blur)만 값이 바뀌었으면 저장한다.
+function FieldText({ value, saving, onSave, placeholder }: ProfileFieldProps & { placeholder?: string }) {
+  return (
+    <input
+      key={value ?? ""}
+      type="text"
+      defaultValue={value ?? ""}
+      placeholder={placeholder}
+      disabled={saving}
+      onBlur={(e) => {
+        const v = e.target.value.trim();
+        if (v && v !== value) onSave(v);
+      }}
+      className={`w-24 rounded border px-1.5 py-0.5 text-right text-[13px] disabled:opacity-50 ${fieldClass(value)}`}
+    />
+  );
+}
+
+function FieldDate({ value, saving, onSave }: ProfileFieldProps) {
+  return (
+    <input
+      type="date"
+      value={value?.slice(0, 10) ?? ""}
+      disabled={saving}
+      onChange={(e) => { if (e.target.value) onSave(e.target.value); }}
+      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${fieldClass(value)}`}
+    />
+  );
+}
+
+function MissingBadge() {
+  return (
+    <span className="rounded border border-[#f6c453] bg-[#fff7e0] px-1.5 py-0.5 text-[11.5px] font-bold text-[#b45309]">❗ 입력 필요</span>
+  );
+}
 
 export default function AppPage() {
   const [session, setSession] = useState<Session | null>(null);
@@ -289,59 +347,16 @@ export default function AppPage() {
     }
   };
 
-  const isFieldMissing = (field: EditableField) => !currentFieldValue(field);
   // 값이 없는 필드는 기본적으로 숨긴다 — 방금 챗봇이 그 필드를 물어봤을 때만("neededFields")
   // 눈에 띄게 드러낸다. 수정 모드에서는 사용자가 뭐든 채울 수 있어야 하니 전부 보여준다.
   const shouldShowField = (field: EditableField) => editingProfile || !!currentFieldValue(field) || neededFields.has(field);
 
-  const FieldSelect = ({ field, options }: { field: EditableField; options: string[] }) => (
-    <select
-      value={currentFieldValue(field) ?? ""}
-      disabled={savingField === field}
-      onChange={(e) => void saveProfileField(field, e.target.value)}
-      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${
-        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
-      }`}
-    >
-      <option value="" disabled>선택</option>
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-
-  // 시·군·구는 정해진 목록이 없어 자유 입력 — 매 키 입력마다 저장하면 타이핑 중 계속 API를
-  // 두드리게 되니, 포커스를 벗어날 때(blur)만 값이 바뀌었으면 저장한다.
-  const FieldText = ({ field, placeholder }: { field: EditableField; placeholder?: string }) => (
-    <input
-      key={currentFieldValue(field) ?? ""}
-      type="text"
-      defaultValue={currentFieldValue(field) ?? ""}
-      placeholder={placeholder}
-      disabled={savingField === field}
-      onBlur={(e) => {
-        const v = e.target.value.trim();
-        if (v && v !== currentFieldValue(field)) void saveProfileField(field, v);
-      }}
-      className={`w-24 rounded border px-1.5 py-0.5 text-right text-[13px] disabled:opacity-50 ${
-        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
-      }`}
-    />
-  );
-
-  const FieldDate = ({ field }: { field: EditableField }) => (
-    <input
-      type="date"
-      value={currentFieldValue(field)?.slice(0, 10) ?? ""}
-      disabled={savingField === field}
-      onChange={(e) => { if (e.target.value) void saveProfileField(field, e.target.value); }}
-      className={`rounded border px-1.5 py-0.5 text-[13px] disabled:opacity-50 ${
-        isFieldMissing(field) ? "border-[#f6c453] bg-[#fff7e0] ring-1 ring-[#f6c453]" : "border-line bg-card"
-      }`}
-    />
-  );
-
-  const MissingBadge = () => (
-    <span className="rounded border border-[#f6c453] bg-[#fff7e0] px-1.5 py-0.5 text-[11.5px] font-bold text-[#b45309]">❗ 입력 필요</span>
-  );
+  /** 프로필 편집 입력(FieldSelect/FieldText/FieldDate)에 넘길 값·저장 상태·저장 콜백 */
+  const fieldProps = (field: EditableField): ProfileFieldProps => ({
+    value: currentFieldValue(field),
+    saving: savingField === field,
+    onSave: (v) => void saveProfileField(field, v),
+  });
 
   const resetProfileToDefault = async () => {
     if (!session || resettingProfile) return;
@@ -426,6 +441,12 @@ export default function AppPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const loadEvents = useCallback(async (userId: string) => {
+    const res = await fetch(`/api/events?userId=${encodeURIComponent(userId)}`);
+    const json = await res.json();
+    if (res.ok) setEvents(json.events);
+  }, []);
+
   /** 추천 공고의 접수 시작일·마감일을 캘린더 일정으로 등록 (시작일은 미래일 때만) */
   const addJobToCalendar = useCallback(async (j: JobRec) => {
     if (!session || !j.deadline) return;
@@ -442,14 +463,7 @@ export default function AppPage() {
       setJobCalSaved((prev) => new Set(prev).add(j.id));
       void loadEvents(session.userId); // 달력에 즉시 반영
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
-
-  const loadEvents = useCallback(async (userId: string) => {
-    const res = await fetch(`/api/events?userId=${encodeURIComponent(userId)}`);
-    const json = await res.json();
-    if (res.ok) setEvents(json.events);
-  }, []);
+  }, [session, loadEvents]);
 
   /** match_mode==='search'(event-match의 AI 추천)는 제외 — 마이티끌은 사용자가 정책 1건을
    * 직접 담은/판정한 행위만 센다 (POST /api/policy-matches, /api/relevance 참고). */
@@ -735,7 +749,7 @@ export default function AppPage() {
       setSaving(false);
     }
     // 저장된 일정에 AI 매칭 실행 — 일정에 혜택 붙이기 (일정별로 결과 유지)
-    void matchEvent(eventTitle, newEventId ?? `tmp-${Date.now()}`, date);
+    void matchEvent(eventTitle, newEventId ?? tempEventId(), date);
   };
 
   const matchEvent = async (eventTitle: string, eventId: string, eventDate: string) => {
@@ -1371,7 +1385,7 @@ export default function AppPage() {
                     <dt className="text-mute">{editingProfile ? "생년월일" : "나이"}</dt>
                     <dd className="font-semibold">
                       {editingProfile
-                        ? <FieldDate field="birth_date" />
+                        ? <FieldDate {...fieldProps("birth_date")} />
                         : (() => { const bd = currentFieldValue("birth_date"); return bd ? `${new Date().getFullYear() - Number(bd.slice(0, 4))}세` : <MissingBadge />; })()}
                     </dd>
                   </div>
@@ -1379,8 +1393,8 @@ export default function AppPage() {
                     <div className="flex flex-col gap-1">
                       <dt className="text-mute">거주지</dt>
                       <dd className="flex flex-col gap-1 font-semibold">
-                        <FieldSelect field="region_sido" options={SIDO_OPTIONS} />
-                        <FieldText field="region_sigungu" placeholder="시·군·구" />
+                        <FieldSelect {...fieldProps("region_sido")} options={SIDO_OPTIONS} />
+                        <FieldText {...fieldProps("region_sigungu")} placeholder="시·군·구" />
                       </dd>
                     </div>
                   ) : (
@@ -1394,7 +1408,7 @@ export default function AppPage() {
                       <dt className="text-mute">학력</dt>
                       <dd className="font-semibold">
                         {editingProfile
-                          ? <FieldSelect field="education_status" options={EDUCATION_OPTIONS} />
+                          ? <FieldSelect {...fieldProps("education_status")} options={EDUCATION_OPTIONS} />
                           : persona
                             ? `${currentFieldValue("education_status")} · ${persona.declared.education.major}`
                             : currentFieldValue("education_status") ?? <MissingBadge />}
@@ -1404,25 +1418,25 @@ export default function AppPage() {
                   {shouldShowField("employment_status") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">취업상태</dt>
-                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="employment_status" options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? <MissingBadge />}</dd>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect {...fieldProps("employment_status")} options={EMPLOYMENT_OPTIONS} /> : currentFieldValue("employment_status") ?? <MissingBadge />}</dd>
                     </div>
                   )}
                   {shouldShowField("housing_type") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">가구형태</dt>
-                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="housing_type" options={HOUSING_OPTIONS} /> : currentFieldValue("housing_type") ?? <MissingBadge />}</dd>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect {...fieldProps("housing_type")} options={HOUSING_OPTIONS} /> : currentFieldValue("housing_type") ?? <MissingBadge />}</dd>
                     </div>
                   )}
                   {shouldShowField("income_bracket") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">소득분위</dt>
-                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="income_bracket" options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? <MissingBadge />}</dd>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect {...fieldProps("income_bracket")} options={INCOME_OPTIONS} /> : currentFieldValue("income_bracket") ?? <MissingBadge />}</dd>
                     </div>
                   )}
                   {shouldShowField("asset_bracket") && (
                     <div className="flex items-center justify-between">
                       <dt className="text-mute">자산분위</dt>
-                      <dd className="font-semibold">{editingProfile ? <FieldSelect field="asset_bracket" options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? <MissingBadge />}</dd>
+                      <dd className="font-semibold">{editingProfile ? <FieldSelect {...fieldProps("asset_bracket")} options={ASSET_OPTIONS} /> : currentFieldValue("asset_bracket") ?? <MissingBadge />}</dd>
                     </div>
                   )}
                 </dl>
