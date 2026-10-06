@@ -18,7 +18,8 @@ export function Trust() {
     <section id="trust" className="bg-mint-soft py-24">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-5 lg:grid-cols-[0.8fr_1.2fr]">
         <div>
-          <p className="text-[13px] font-semibold tracking-widest text-[#dceeb1]">TRUST BY DESIGN</p>
+          {/* 밝은 배경 위라 연두 글자가 묻힘 — 검정 배지로 반전 */}
+          <p className="inline-block bg-ink px-2.5 py-1 text-[13px] font-semibold tracking-widest text-white">TRUST BY DESIGN</p>
           <h2 className="mt-3 text-3xl font-light leading-tight sm:text-[44px] sm:leading-[1.1]">
             돈 얘기라서,
             <br />더 깐깐하게
