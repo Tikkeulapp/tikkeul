@@ -9,4 +9,10 @@ if echo "$CMD" | grep -qiE 'rm\s+-(rf|fr)\b|git\s+push\s+(.*\s)?(--force|-f)\b|g
   exit 2
 fi
 
+# 비밀값 파일을 출력하는 명령 차단 (키가 컨텍스트에 남는다). 스크립트가 내부에서 읽는 건 허용.
+if echo "$CMD" | grep -qE '\b(cat|head|tail|less|more|grep|sed|awk|bat|xxd|strings)\b[^|;&]*(^|[[:space:]"'"'"'/])\.env(\.local)?([[:space:]"'"'"']|$)'; then
+  echo "BLOCKED: .env 파일 내용 출력은 금지 — 필요한 키 이름만 .env.example에서 확인하세요." >&2
+  exit 2
+fi
+
 exit 0

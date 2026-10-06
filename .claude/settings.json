@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "deny": [
+      "Read(./.env.local)",
+      "Read(./.env)"
+    ]
+  },
   "hooks": {
     "Stop": [
       {

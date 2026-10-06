@@ -74,7 +74,7 @@ docs/
   UI_GUIDE.md                디자인 토큰·컴포넌트·금지 패턴
   reference/                 기획·설계 원문 (하네스 프롬프트에는 주입되지 않음)
 .claude/
-  settings.json              훅 — Stop: src 변경 시 lint+typecheck+test / PreToolUse: 위험 명령 차단·TDD 가드
+  settings.json              .env 읽기 deny · 훅 — Stop: src 변경 시 lint+typecheck+test / PreToolUse: 위험 명령 차단·TDD 가드
   agents/reviewer.md         독립 리뷰 서브에이전트 (/review가 위임)
   commands/harness.md        /harness — 탐색 → 논의 → step 설계 → phases 생성 → 실행
   commands/review.md         /review — reviewer 서브에이전트로 체크리스트 검수
@@ -82,7 +82,7 @@ scripts/
   execute.py                 phase 내 step을 claude -p로 순차 실행 (재시도·브랜치·2단계 커밋)
   test_execute.py            execute.py 테스트 (npm run test:harness)
   hooks/tdd-guard.sh         테스트 파일 없이 src/lib 구현 파일 편집 시 차단
-  hooks/guard-bash.sh        강제 삭제·force push·hard reset·테이블 삭제 명령 차단
+  hooks/guard-bash.sh        강제 삭제·force push·hard reset·테이블 삭제·.env 출력 차단
   hooks/stop-verify.sh       응답 종료 시 검증, 실패하면 Claude에게 되돌려 수정
 phases/index.json            phase 목록 (phases/<task>/index.json + step{N}.md)
 ```
