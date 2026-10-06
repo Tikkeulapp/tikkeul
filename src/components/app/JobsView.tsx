@@ -263,20 +263,34 @@ export function JobsView({ session }: { session: SimSession }) {
               {ORGS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <div>
-            <p className={label}>키워드 (여러 개 — Enter로 추가)</p>
-            {kwChips.length > 0 && (
-              <div className="mb-1.5 flex flex-wrap gap-1.5">
-                {kwChips.map((k) => (
-                  <span key={k} className="inline-flex items-center gap-1 rounded-full bg-[#efe9fb] px-2.5 py-1 text-[12.5px] font-bold text-[#6b4fbb]">
-                    {k}
-                    <button type="button" onClick={() => setKwChips((prev) => prev.filter((x) => x !== k))} className="text-[#6b4fbb]/60 hover:text-[#6b4fbb]" aria-label={`${k} 키워드 삭제`}>✕</button>
-                  </span>
-                ))}
-              </div>
-            )}
+          <button type="submit" disabled={loading} className="rounded-full bg-ink px-5 py-2.5 text-[15px] font-bold text-white transition hover:opacity-90 disabled:opacity-50">
+            {loading ? "검색 중…" : "공고 검색 →"}
+          </button>
+        </div>
+      </form>
+
+      {/* ── 결과 ── */}
+      <section>
+        {/* 키워드 검색 — 티끌 핵심 기능이라 결과 상단에 크게 배치 (동의어 확장 + 원문 근거 하이라이트) */}
+        <div className="mb-4 rounded-[18px] border border-[#6b4fbb]/25 bg-gradient-to-r from-[#efe9fb] to-[#f8f5fe] p-4">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <p className="text-[16px] font-extrabold text-[#4a3a85]">🔍 키워드 검색</p>
+            <span className="rounded-full bg-[#6b4fbb] px-2.5 py-0.5 text-[11.5px] font-bold text-white">핵심 기능</span>
+            <p className="text-[12.5px] text-[#6b4fbb]/90">동의어까지 넓혀 찾고, 공고 원문 어디에 걸렸는지 근거를 보여드려요</p>
+          </div>
+          {kwChips.length > 0 && (
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {kwChips.map((k) => (
+                <span key={k} className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[13px] font-bold text-[#6b4fbb] shadow-sm">
+                  {k}
+                  <button type="button" onClick={() => setKwChips((prev) => prev.filter((x) => x !== k))} className="text-[#6b4fbb]/60 hover:text-[#6b4fbb]" aria-label={`${k} 키워드 삭제`}>✕</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-2.5 flex gap-2">
             <input
-              className={input}
+              className="min-w-0 flex-1 rounded-[10px] border border-[#6b4fbb]/30 bg-white px-3 py-2 text-[15px] outline-none placeholder:text-[#6b4fbb]/45 focus:border-[#6b4fbb]"
               value={kwDraft}
               onChange={(e) => setKwDraft(e.target.value)}
               onKeyDown={(e) => {
@@ -286,18 +300,15 @@ export function JobsView({ session }: { session: SimSession }) {
                   else runSearch();
                 }
               }}
-              placeholder="예: RAG, 카드사 — Enter로 칩 추가"
+              placeholder="예: RAG, 카드사 — Enter로 여러 개 추가"
               aria-label="키워드"
             />
+            <button type="button" onClick={() => runSearch()} disabled={loading} className="shrink-0 rounded-full bg-[#6b4fbb] px-5 py-2 text-[14.5px] font-bold text-white transition hover:opacity-90 disabled:opacity-50">
+              {loading ? "검색 중…" : "키워드로 검색 →"}
+            </button>
           </div>
-          <button type="submit" disabled={loading} className="rounded-full bg-ink px-5 py-2.5 text-[15px] font-bold text-white transition hover:opacity-90 disabled:opacity-50">
-            {loading ? "검색 중…" : "공고 검색 →"}
-          </button>
         </div>
-      </form>
 
-      {/* ── 결과 ── */}
-      <section>
         {error && <p className="mb-3 rounded-[12px] bg-[#fde8e8] px-4 py-3 text-[14.5px] font-bold text-[#c0392b]">⚠ {error}</p>}
 
         {/* 키워드 토글 — 켠 키워드의 합집합만 표시 */}

@@ -60,7 +60,7 @@ export default function JobsPage() {
             <h1 className="text-[34px] font-extrabold tracking-tight">📋 채용공고 검색</h1>
           </div>
           <p className="max-w-2xl text-[16px] text-mute">
-            공공기관 채용정보(잡알리오) 실제 공고입니다. 조건을 고르면 접수 중 공고가 마감 임박순으로 나옵니다.
+            공공기관(잡알리오)·고용24·기업 공식 채널의 실제 공고입니다. 조건을 고르면 접수 중 공고가 마감 임박순으로 나옵니다.
           </p>
         </div>
 
