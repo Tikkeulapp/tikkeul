@@ -77,7 +77,7 @@ docs/
   settings.json              .env 읽기 deny · 훅 — Stop: src 변경 시 lint+typecheck+test / PreToolUse: 위험 명령 차단·TDD 가드
   agents/reviewer.md         독립 리뷰 서브에이전트 (/review가 위임)
   commands/harness.md        /harness — 탐색 → 논의 → step 설계 → phases 생성 → 실행
-  commands/review.md         /review — reviewer 서브에이전트로 체크리스트 검수
+  commands/review.md         /review — reviewer 서브에이전트로 검수 (심각도 4단계 + 판정)
 scripts/
   execute.py                 phase 내 step을 claude -p로 순차 실행 (재시도·브랜치·2단계 커밋)
   test_execute.py            execute.py 테스트 (npm run test:harness)
