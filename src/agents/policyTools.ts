@@ -9,11 +9,12 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
-import { supabaseAdmin } from "@/lib/supabase";
-import { classifyPolicyForUser, judgePolicy, saveMatchResult, type Verdict } from "@/lib/policyMatch";
+import { supabaseAdmin } from "@/services/supabase";
+import { classifyPolicyForUser, judgePolicy, saveMatchResult } from "@/services/policyMatch";
+import type { Verdict } from "@/types/policy";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
-import { groqJson } from "@/lib/groq";
-import { tavilySearch } from "@/lib/tavily";
+import { groqJson } from "@/services/groq";
+import { tavilySearch } from "@/services/tavily";
 
 export type ProfileCtx = {
   userId: string;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { groqJson } from "@/lib/groq";
-import { refreshJobPostings } from "@/lib/collectJobs";
+import { supabaseAdmin } from "@/services/supabase";
+import { groqJson } from "@/services/groq";
+import { refreshJobPostings } from "@/services/collectJobs";
 
 export const maxDuration = 60;
 

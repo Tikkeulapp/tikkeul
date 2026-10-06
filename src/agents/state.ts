@@ -42,4 +42,3 @@ export const PlanSchema = z.object({
 });
 export type Plan = z.infer<typeof PlanSchema>;
 
-export type ChatMessage = { role: "user" | "assistant" | "system"; content: string };

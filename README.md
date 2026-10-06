@@ -57,9 +57,34 @@ npm run build && npm run start # http://localhost:3000
 | 추천 탭 내용 | ⚠ 데모 데이터 (AI 매칭 결과로 교체 예정) | `RECS` in `src/app/app/page.tsx` |
 | 검색바 AI 채팅 | ⏳ UI만 | — |
 | 마이티끌 DB 저장 (`user_policy_matches`) | ⏳ 브라우저 저장 중 | — |
-| 기획서 · 기능명세서 | ⏳ 미착수 | `docs/` |
+| 기획서 · 기능명세서 | ⏳ 미착수 | `docs/reference/` |
 
 ---
+
+## 하네스 구조 (Harness framework)
+
+이 저장소는 Harness 프레임워크 구조를 따른다. Claude Code 세션은 `CLAUDE.md` → `docs/*.md` 순으로 규칙을 읽는다.
+
+```
+CLAUDE.md                    프로젝트 규칙 (CRITICAL 규칙·명령어) — AGENTS.md(Next.js 16 안내) 포함
+docs/
+  PRD.md                     목표·사용자·핵심 기능·MVP 제외
+  ARCHITECTURE.md            디렉토리 구조·의존 방향·데이터 흐름
+  ADR.md                     기술 결정 기록
+  UI_GUIDE.md                디자인 토큰·컴포넌트·금지 패턴
+  reference/                 기획·설계 원문 (하네스 프롬프트에는 주입되지 않음)
+.claude/
+  settings.json              훅 — Stop: lint+build+test / PreToolUse: 위험 명령 차단·TDD 가드
+  commands/harness.md        /harness — 탐색 → 논의 → step 설계 → phases 생성 → 실행
+  commands/review.md         /review — 아키텍처·스택·테스트·CRITICAL 규칙 체크리스트
+scripts/
+  execute.py                 phase 내 step을 claude -p로 순차 실행 (재시도·브랜치·2단계 커밋)
+  test_execute.py            execute.py 테스트 (npm run test:harness)
+  hooks/tdd-guard.sh         테스트 파일 없이 src 구현 파일 편집 시 차단
+phases/index.json            phase 목록 (phases/<task>/index.json + step{N}.md)
+```
+
+실행: `/harness`로 step을 설계한 뒤 `python3 scripts/execute.py <task-name>`.
 
 ## 폴더 구조
 
@@ -69,28 +94,33 @@ src/
     page.tsx                 랜딩
     app/start/page.tsx       페르소나 선택·직접 입력
     app/page.tsx             앱 메인 (검색바·정책 패널·달력·위젯·상세 모달)
+    app/simulate, app/jobs   취업 후 시뮬레이션 · 채용공고
     api/session              페르소나 → users 생성 + 시드 일정
     api/signup               직접 입력 → profile_survey + users + finance
     api/events               캘린더 일정 CRUD (user_calendar)
-    api/relevance            정책 1건 × 사용자 → LLM 자격 판정
+    api/relevance            정책 1건 × 사용자 → 자격 판정
     api/event-match          일정 텍스트 → 관련 정책 추천 (3단 파이프라인)
+    api/chat                 검색바 AI 채팅 (agents/)
+    api/simulate, api/jobs   시뮬레이션 · 채용공고 검색/추천
+    api/cron/*               정책·공고 증분 수집, 마감 알림
   components/landing/        랜딩 섹션들
   components/app/            앱 화면 컴포넌트
-  data/personas.ts           페르소나 3종 (설문값 + 마이데이터 mock + 시드 일정)
-  lib/derive.ts              마이데이터 → 도출 피처 (LLM 아님, 규칙)
-  lib/supabase.ts            서버 전용 Supabase 클라이언트
-  lib/groq.ts                Groq LLM JSON 호출 헬퍼
+  types/                     공유 타입 (persona, profile, eligibility, policy, simulate, chat)
+  lib/                       순수 함수 + 단위 테스트 (derive, eligibility, simulate, region, calendarRules)
+  services/                  외부 I/O (supabase, groq, tavily, policyMatch, profile, notifications, collectJobs)
+  agents/                    LangGraph 채팅 에이전트
+  data/                      페르소나 mock·NCS·시험·취업 후 참고 데이터
   config/brand.ts            서비스명·슬로건 단일 소스
 scripts/
   seed.mts                   페르소나 → DB 시드
   collect_gov24.py           행안부 공공서비스 전체 수집 → 취준 필터
   load_policies.mts          온통청년 → policies 적재
   load_gov24.mts             gov24 → policies 적재
+  collect_jobs.mts           채용공고 수동 수집 (크론과 로직 공유)
 supabase/schema.sql          테이블 생성 SQL (Supabase SQL Editor에서 실행)
-docs/                        기획·설계 문서 (아래)
 ```
 
-## 문서 (docs/)
+## 참고 문서 (docs/reference/)
 
 | 문서 | 내용 |
 |---|---|
@@ -100,6 +130,8 @@ docs/                        기획·설계 문서 (아래)
 | `FINANCE_피처정의.md` | 실정책 178건 요건 분석 → 정책 판정용 금융 피처 15종 |
 | `POLICIES_수집기획.md` | 정책 3개 API 소스, 조건코드(JA), 분류 2축, 스키마 |
 | `검색추천_3단설계.md` | 조건필터 → 하이브리드 검색 → LLM 판정. **v2 pgvector 분담 스펙** |
+| `기능명세서.md` · `STATUS.md` · `작업정리_보고서용.md` | 제출용 명세, 현황, 작업 정리 |
+| `채용공고_시스템_설계.md` · `취업후_시뮬레이션_설계.md` · `RAG_기법비교.md` | 기능별 설계 |
 
 ## DB 테이블 (Supabase)
 

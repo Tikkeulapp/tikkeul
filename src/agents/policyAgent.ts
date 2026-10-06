@@ -6,7 +6,7 @@
 import { ChatGroq } from "@langchain/groq";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
-import type { ChatMessage } from "./state";
+import type { ChatMessage } from "@/types/chat";
 import {
   buildBenefitInfoTool,
   buildCheckEligibilityTool,

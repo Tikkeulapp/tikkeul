@@ -8,7 +8,7 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 import { PERSONAS } from "@/data/personas";
 
 const isPersonaId = (id: string) => PERSONAS.some((p) => p.id === id);

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { notifyPolicyDeadlines } from "@/lib/notifications";
+import { supabaseAdmin } from "@/services/supabase";
+import { notifyPolicyDeadlines } from "@/services/notifications";
 
 /** GET /api/cron/notify — 마감 임박 알림 (Vercel Cron 일 1회 / 수동 호출 가능).
  * /api/cron/discover와 같은 인증 패턴(CRON_SECRET). */

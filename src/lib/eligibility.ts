@@ -1,36 +1,10 @@
 /**
  * 자격 판정 규칙엔진 (finance/rules/eligibility.py 이식).
  * 판정(confirmed/excluded/insufficient_info)은 여기서만 결정된다 — LLM은 이 결과를
- * 설명하는 역할만 한다 (src/lib/policyMatch.ts 참고).
+ * 설명하는 역할만 한다 (src/services/policyMatch.ts 참고).
  */
 
-export type ConditionOperator = "=" | "!=" | "<" | "<=" | ">" | ">=" | "in" | "not in";
-
-/** source_table은 AI_FINANCE 실제 테이블명(profile_survey/finance)을 그대로 쓴다. */
-export type EligibilityCondition = {
-  field: string;
-  source_table: "profile_survey" | "finance";
-  operator: ConditionOperator;
-  value: unknown;
-};
-
-export type ConditionCheck = {
-  field: string;
-  source_table: string;
-  operator: ConditionOperator;
-  expected: unknown;
-  actual: unknown;
-  present: boolean;
-  satisfied: boolean | null; // present가 false면 null
-};
-
-export type EligibilityStatus = "confirmed" | "excluded" | "insufficient_info";
-
-export type EligibilityResult = {
-  status: EligibilityStatus;
-  missingFields: string[];
-  checks: ConditionCheck[];
-};
+import type { ConditionCheck, ConditionOperator, EligibilityCondition, EligibilityResult, EligibilityStatus } from "@/types/eligibility";
 
 /** classifyConditions가 conditions 자체를 못 받았을 때(정책에 자격조건이 아직 등록 안 됨) 쓰는
  * sentinel — 실제 사용자 프로필 필드가 아니므로, 이 값을 profile_survey/finance 필드처럼 사용자에게

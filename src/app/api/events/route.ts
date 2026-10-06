@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { notifyCalendarEvent } from "@/lib/notifications";
+import { supabaseAdmin } from "@/services/supabase";
+import { notifyCalendarEvent } from "@/services/notifications";
 
 /** GET /api/events?userId=... — 해당 사용자의 캘린더 일정 목록 */
 export async function GET(request: Request) {

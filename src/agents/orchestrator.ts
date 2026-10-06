@@ -11,8 +11,9 @@
 import { ChatGroq } from "@langchain/groq";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
-import { supabaseAdmin } from "@/lib/supabase";
-import { PlanSchema, type ChatMessage, type Plan } from "./state";
+import { supabaseAdmin } from "@/services/supabase";
+import { PlanSchema, type Plan } from "./state";
+import type { ChatMessage } from "@/types/chat";
 
 const SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Orchestrator Agent입니다. 라우터가 아니라 플래너입니다.
 사용자 발화 하나에 여러 의도가 섞여 있을 수 있다는 전제로, 다음을 판단해 Plan으로 출력하세요.

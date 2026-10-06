@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 
 /**
  * POST /api/signup — 사용자가 직접 입력한 정보로 시작.

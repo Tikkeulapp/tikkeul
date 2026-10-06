@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { COMPANY_TYPES, type CompanyType, type GoalType, type SimResult, type SpendingProfile } from "@/lib/simulate";
+import { COMPANY_TYPES } from "@/lib/simulate";
+import type { CompanyType, GoalType, SimResult, SpendingProfile } from "@/types/simulate";
 import { HOUSE_REGIONS, type HouseRegion } from "@/data/postjob_reference";
 import type { JudgedProgram } from "@/data/postjob_programs";
 import { Donut } from "@/components/app/Donut";

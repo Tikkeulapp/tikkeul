@@ -6,7 +6,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import { extractReply } from "./policyAgent";
 import { buildProfileTools } from "./profileTools";
-import type { ChatMessage } from "./state";
+import type { ChatMessage } from "@/types/chat";
 
 const SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Profile Agent입니다. 대화에서 언급된 개인정보를 구조화해
 profile_survey를 갱신합니다. 당신의 역할은 여기까지입니다 — 정책 자격 여부·추가 확인 필요 항목은

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { groqJson } from "@/lib/groq";
-import { resolveProfile } from "@/lib/profile";
+import { supabaseAdmin } from "@/services/supabase";
+import { groqJson } from "@/services/groq";
+import { resolveProfile } from "@/services/profile";
 import { normalizeSido } from "@/lib/region";
 import { isPolicyRelevantEvent } from "@/lib/calendarRules";
-import { saveMatchResult } from "@/lib/policyMatch";
+import { saveMatchResult } from "@/services/policyMatch";
 
 /**
  * POST /api/event-match — 일정 텍스트 → 관련 정책 추천 (서비스의 심장)

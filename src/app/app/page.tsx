@@ -4,7 +4,8 @@ import { isPublicOrg } from "@/data/ncs";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { getPersona, type Persona } from "@/data/personas";
+import { getPersona } from "@/data/personas";
+import type { Persona } from "@/types/persona";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";

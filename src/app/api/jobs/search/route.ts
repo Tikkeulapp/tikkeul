@@ -4,7 +4,7 @@
  * 마감 지난 공고 제외, 마감 임박순 정렬. LLM 없이 전부 코드 필터.
  */
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 import { careerMatchesFilter, dday, expandKeyword, findKeywordEvidence, hireBuckets, isPublicOrg } from "@/data/ncs";
 
 const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url, search_text";

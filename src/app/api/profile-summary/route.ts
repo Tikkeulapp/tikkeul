@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { resolveProfile } from "@/lib/profile";
+import { resolveProfile } from "@/services/profile";
 
 /**
  * GET /api/profile-summary — 대시보드 우측 프로필 카드용 요약.

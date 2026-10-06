@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getPersona } from "@/data/personas";
 import { derive } from "@/lib/derive";
-import { resolveProfile } from "@/lib/profile";
-import { judgePolicy, saveMatchResult } from "@/lib/policyMatch";
+import { resolveProfile } from "@/services/profile";
+import { judgePolicy, saveMatchResult } from "@/services/policyMatch";
 
 export async function POST(request: Request) {
   let body: {

@@ -6,10 +6,10 @@
  * 마감 D-7 이하는 urgent로 따로 내려 "마감 임박" 표시에 쓴다.
  */
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { resolveProfile } from "@/lib/profile";
+import { supabaseAdmin } from "@/services/supabase";
+import { resolveProfile } from "@/services/profile";
 import { getPersona } from "@/data/personas";
-import { groqJson } from "@/lib/groq";
+import { groqJson } from "@/services/groq";
 import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, NCS_NAME_BY_CODE, isPublicOrg } from "@/data/ncs";
 
 export const maxDuration = 60;

@@ -7,26 +7,13 @@
  * LLM이 search_text/target/content 원문을 보고 통째로 판정하는 폴백 경로를 그대로 쓴다.
  * 이 함수를 쓰는 곳(/api/relevance, /api/event-match)은 이 과도기적 분기를 몰라도 된다.
  */
-import { supabaseAdmin } from "@/lib/supabase";
-import { groqJson } from "@/lib/groq";
-import { classifyConditions, type EligibilityCondition, type EligibilityResult } from "@/lib/eligibility";
-import { notifyNewMatch } from "@/lib/notifications";
+import { supabaseAdmin } from "@/services/supabase";
+import { groqJson } from "@/services/groq";
+import { classifyConditions } from "@/lib/eligibility";
+import type { EligibilityCondition, EligibilityResult } from "@/types/eligibility";
+import type { PolicyInput, Verdict } from "@/types/policy";
+import { notifyNewMatch } from "@/services/notifications";
 
-export type Verdict = {
-  score: number;
-  eligibility: "LIKELY" | "NEEDS_CHECK" | "UNLIKELY";
-  reasons: string[];
-  missing_information: string[];
-  evidence_todo: string[];
-};
-
-export type PolicyInput = {
-  title: string;
-  benefit?: string;
-  target?: string;
-  content?: string;
-  region?: string;
-};
 
 const STATUS_TO_ELIGIBILITY = {
   confirmed: "LIKELY",

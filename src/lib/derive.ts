@@ -3,35 +3,8 @@
  * 결정론적 규칙 기반 — LLM을 쓰지 않는다 ("금액과 날짜는 계산 코드가" 원칙).
  * 페르소나(mock)든 실서비스(API)든 동일하게 동작한다.
  */
-import type { MyDataSnapshot, Transaction } from "@/data/personas";
-
-export type RecurringIncome = {
-  label: string;
-  kind: "WORK" | "BENEFIT" | "FAMILY";
-  avgMonthlyKrw: number;
-  monthsObserved: number;
-};
-
-export type BenefitStatus = {
-  name: string;
-  monthlyKrw: number;
-  firstSeenMonth: string; // YYYY-MM
-  /** 제도별 통상 수급 기간으로 추정한 종료 시점 — 어디까지나 추정 */
-  endEstimateMonth: string | null;
-};
-
-export type DerivedProfile = {
-  liquidAssetsKrw: number;
-  incomes: RecurringIncome[];
-  /** 정기 근로소득이 관측되지 않으면 true */
-  noRegularWorkIncome: boolean;
-  rentMonthlyKrw: number | null;
-  benefits: BenefitStatus[];
-  fixedCosts: { label: string; monthlyKrw: number }[];
-  /** 취준 관련으로 분류된 지출 (최근 순) */
-  jobPrepSpending: { date: string; description: string; amountKrw: number }[];
-  jobPrepTotalKrw: number;
-};
+import type { MyDataSnapshot, Transaction } from "@/types/persona";
+import type { BenefitStatus, DerivedProfile, RecurringIncome } from "@/types/profile";
 
 /** 수당류 통상 수급 개월 수 (종료 추정용 — 정확한 값은 공식 확인 필요) */
 const BENEFIT_TYPICAL_MONTHS: { pattern: RegExp; months: number }[] = [

@@ -1,11 +1,11 @@
 /**
- * 채용공고 수동 수집 실행기 — 실제 로직은 src/lib/collectJobs.ts (크론과 공유).
+ * 채용공고 수동 수집 실행기 — 실제 로직은 src/services/collectJobs.ts (크론과 공유).
  * 실행: npx tsx scripts/collect_jobs.mts
  * 자동 갱신: /api/cron/discover(매일 06:00 KST)가 같은 함수를 호출한다.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { refreshJobPostings } from "../src/lib/collectJobs";
+import { refreshJobPostings } from "../src/services/collectJobs";
 
 if (existsSync(".env.local")) {
   for (const line of readFileSync(".env.local", "utf-8").split("\n")) {

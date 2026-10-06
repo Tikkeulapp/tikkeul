@@ -3,7 +3,7 @@
  * 각 항목의 요건은 공고 기준을 요약한 것이며 asOf 시점 이후 변경될 수 있다 → 화면에 "확인 필요" 원칙 유지.
  * 판정은 코드가(LIKELY / NEEDS_CHECK / UNLIKELY), 설명은 reason 문자열로 고정 — LLM은 요건을 새로 만들지 않는다.
  */
-import type { CompanyType, GoalType } from "@/lib/simulate";
+import type { CompanyType, GoalType } from "@/types/simulate";
 
 export type ProgramStatus = "LIKELY" | "NEEDS_CHECK" | "UNLIKELY";
 export type ProgramCategory = "자산형성" | "세제" | "주거" | "대출" | "결혼" | "연금";

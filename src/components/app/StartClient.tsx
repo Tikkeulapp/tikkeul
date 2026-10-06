@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Persona } from "@/data/personas";
-import type { DerivedProfile } from "@/lib/derive";
+import type { Persona } from "@/types/persona";
+import type { DerivedProfile } from "@/types/profile";
 import { formatKrw } from "@/lib/derive";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";

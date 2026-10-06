@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { groqJson } from "@/lib/groq";
+import { supabaseAdmin } from "@/services/supabase";
+import { groqJson } from "@/services/groq";
 import { normalizeSido } from "@/lib/region";
 import { PERSONAS } from "@/data/personas";
-import { resolveProfile } from "@/lib/profile";
+import { resolveProfile } from "@/services/profile";
 import { planTurn } from "@/agents/orchestrator";
 import { runPolicyCompare, runPolicyLookup, runPolicySearch } from "@/agents/policyAgent";
 import { runProfileAgent } from "@/agents/profileAgent";
-import type { ChatMessage, Plan } from "@/agents/state";
+import type { Plan } from "@/agents/state";
+import type { ChatMessage } from "@/types/chat";
 import type { ProfileCtx } from "@/agents/policyTools";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
-import { classifyPolicyForUser } from "@/lib/policyMatch";
+import { classifyPolicyForUser } from "@/services/policyMatch";
 
 const HISTORY_LIMIT = 12;
 

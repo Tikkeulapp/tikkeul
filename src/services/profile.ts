@@ -1,35 +1,13 @@
 import { getPersona } from "@/data/personas";
 import { derive } from "@/lib/derive";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 import { normalizeSido } from "@/lib/region";
+import type { EffectiveProfile, ProfileChange } from "@/types/profile";
 
 /**
  * 사용자 프로필 해석 — 페르소나(코드) 또는 직접입력 회원(DB) + profile_changes(이사·졸업 등) 반영.
  * effective_from ≤ 오늘인 변경은 적용, 미래 변경은 pending으로 노출.
  */
-export type ProfileChange = {
-  id: string;
-  field: string;
-  old_value: string | null;
-  new_value: string;
-  effective_from: string;
-  source_event: string | null;
-  status: string;
-};
-
-export type EffectiveProfile = {
-  summary: Record<string, unknown>; // LLM에 넘길 요약
-  sido: string | null;
-  sigungu: string | null;
-  age: number | null;
-  applied: ProfileChange[];
-  pending: ProfileChange[];
-  /** profile_survey 원본 행(profile_changes 반영 후) — 규칙엔진용. 페르소나/직접입력 둘 다
-   * scripts/seed.mts, /api/signup으로 DB에 있으므로 항상 조회를 시도한다. */
-  profileRow: Record<string, unknown> | null;
-  /** finance 원본 행 — 규칙엔진용 */
-  financeRow: Record<string, unknown> | null;
-};
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 const ageFrom = (birth: string | null | undefined) =>

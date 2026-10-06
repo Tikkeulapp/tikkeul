@@ -3,7 +3,7 @@
  * 최대 50건. 원문(search_text)은 600자까지만 내려준다.
  */
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 
 export async function GET(request: Request) {
   const raw = new URL(request.url).searchParams.get("ids") ?? "";

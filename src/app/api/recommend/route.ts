@@ -5,9 +5,9 @@
  * 금액은 원문에 명시된 경우에만 추출(없으면 null) — 절약 위젯 합산용.
  */
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
-import { resolveProfile } from "@/lib/profile";
-import { groqJson } from "@/lib/groq";
+import { supabaseAdmin } from "@/services/supabase";
+import { resolveProfile } from "@/services/profile";
+import { groqJson } from "@/services/groq";
 
 export const maxDuration = 60;
 

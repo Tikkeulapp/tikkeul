@@ -4,22 +4,19 @@
  * 흐름: 프로필·마이데이터(카드·대출·계좌) 해석 → simulate() 결정론 계산 → 제도 규칙 판정 → LLM은 해설만
  */
 import { NextResponse } from "next/server";
-import { getPersona, type Loan } from "@/data/personas";
+import { getPersona } from "@/data/personas";
+import type { Loan } from "@/types/persona";
 import { derive } from "@/lib/derive";
-import { supabaseAdmin } from "@/lib/supabase";
-import { resolveProfile } from "@/lib/profile";
-import { groqJson } from "@/lib/groq";
+import { supabaseAdmin } from "@/services/supabase";
+import { resolveProfile } from "@/services/profile";
+import { groqJson } from "@/services/groq";
 import {
   aggregateCards,
   simulate,
   COMPANY_TYPES,
   GOAL_TYPES,
-  type GoalSpec,
-  type GoalType,
-  type SimInput,
-  type SpendingProfile,
-  type CompanyType,
 } from "@/lib/simulate";
+import type { CompanyType, GoalSpec, GoalType, SimInput, SpendingProfile } from "@/types/simulate";
 import { judgePrograms, type ProgramCtx } from "@/data/postjob_programs";
 import { HOUSE_REGIONS, type HouseRegion } from "@/data/postjob_reference";
 

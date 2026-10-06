@@ -44,3 +44,7 @@ next-env.d.ts
 .tools/
 
 .env.local
+
+# harness — phase execution outputs
+phases/**/phase*-output.json
+phases/**/step*-output.json

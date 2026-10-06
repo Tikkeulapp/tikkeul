@@ -1,7 +1,7 @@
 /**
  * Notification Scheduler (finance/services/notification_scheduler.py 이식) — 이벤트/크론 기반, LLM 없음.
  */
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 
 const DEADLINE_LEAD_DAYS = 7;
 

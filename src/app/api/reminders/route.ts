@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase";
+import { supabaseAdmin } from "@/services/supabase";
 
 /** GET /api/reminders?userId=... — 인앱 알림 노출. 실제 이메일/푸시 발송 채널은 범위 밖. */
 export async function GET(request: Request) {
