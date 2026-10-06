@@ -51,6 +51,8 @@ const tsToHm = (v: unknown): string | null => {
   return hm === "00:00" ? null : hm;
 };
 export const todayKst = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+/** "-", "." 같은 자리채움 값은 정보가 아니므로 버린다. */
+const meaningful = (v: string | null): string | null => (v && v.replace(/[\s\-·.없음]/g, "").length >= 5 ? v : null);
 
 /* ── 사람인 (민간) — 최신 N건 부분 스냅샷 ───────────── */
 async function collectSaramin(now: string, log: (m: string) => void): Promise<JobRow[]> {
@@ -284,8 +286,8 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
             education: null,
             salary_text: null,
             headcount: Number(s(j.recruitCount)) || null,
-            summary: cutWord(s(j.workContentDesc) ?? s(j.introduction), 260),
-            requirements: cutWord(j.qualification, 260),
+            summary: meaningful(cutWord(s(j.workContentDesc) ?? s(j.introduction), 260)),
+            requirements: meaningful(cutWord(j.qualification, 260)),
             pbanc_begin: ymd(s(j.regDate)?.slice(0, 10)),
             deadline: ymd(s(j.endDate)?.slice(0, 10)),
             deadline_time: null,
