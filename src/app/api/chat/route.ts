@@ -207,6 +207,15 @@ export async function POST(request: Request) {
 
     if (plan.intents.includes("policy_search")) {
       const ctx: ProfileCtx = { userId, profileRow: profile.profileRow, financeRow: profile.financeRow };
+      // 프로필은 도구(get_user_profile류)로만 노출돼 있어 에이전트가 도구를 안 부른 턴에는
+      // 이미 수집된 나이·거주지를 사용자에게 되묻는 버그가 있다(직접 재현: 나이 30세가 프로필에
+      // 있는데 "나이를 알려주실 수 있나요?"). 요약을 시스템 메시지로 항상 주입해 결정적으로 막는다.
+      if (profile.summary && Object.keys(profile.summary).length > 0) {
+        messages.push({
+          role: "system",
+          content: `사용자 프로필(이미 수집된 확정 정보): ${JSON.stringify(profile.summary)}\n여기 있는 값(나이·거주지·학력·취업상태 등)은 절대 사용자에게 되묻지 말고 그대로 판정·답변에 사용하세요. 여기에 없는 정보만 질문할 수 있습니다.`,
+        });
+      }
       const prior = plan.intents.includes("profile_update") ? reply : null; // 프로필 반영·이사 델타 답변은 유지
       const FALLBACK_TEXT = "답변을 정리하는 중 문제가 생겼어요. 다시 한 번 말씀해 주시겠어요?";
       const isEmptyReply = (s: string) => /답변을 정리하는 중 문제/.test(s);

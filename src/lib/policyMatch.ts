@@ -145,7 +145,27 @@ export async function saveMatchResult(opts: {
   verdict: Verdict;
 }): Promise<void> {
   const eligibilityStatus = ELIGIBILITY_TO_STATUS[opts.verdict.eligibility];
-  const status = eligibilityStatus === "excluded" ? "dismissed" : "recommended";
+  // status 의미: recommended/applied = 마이티끌에 보임, dismissed = 안 보임 (DB CHECK 제약상 이 세 값뿐).
+  // "판정"은 "담기"가 아니다 — lookup/compare 판정만 한 행을 recommended로 저장하면 자세히보기·챗봇
+  // 질문만 해도 마이티끌에 들어가는 버그가 된다. 판정 행은 dismissed로 두되, 이미 담아둔 정책의
+  // 재판정이 담김 상태를 지우면 안 되므로 최신 행이 담김이면 그 status를 승계한다.
+  // search(이벤트 매칭 AI 제안)는 기존대로 recommended — 프론트가 match_mode로 어차피 제외하고,
+  // 신규 매칭 알림(notifyNewMatch)은 받아야 하기 때문.
+  let status: string;
+  if (eligibilityStatus === "excluded") status = "dismissed";
+  else if (opts.matchMode === "search") status = "recommended";
+  else {
+    const { data: latest } = await supabaseAdmin()
+      .from("user_policy_matches")
+      .select("status, match_mode")
+      .eq("user_id", opts.userId)
+      .eq("policy_id", opts.policyId)
+      .order("checked_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const savedAlready = !!latest && latest.match_mode !== "search" && (latest.status === "recommended" || latest.status === "applied");
+    status = savedAlready ? (latest.status as string) : "dismissed";
+  }
   const { error } = await supabaseAdmin().from("user_policy_matches").insert({
     user_id: opts.userId,
     policy_id: opts.policyId,

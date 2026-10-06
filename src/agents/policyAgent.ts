@@ -18,6 +18,15 @@ import {
   type ProfileCtx,
 } from "./policyTools";
 
+/** 세 모드 공통 답변 규칙 — 내부 산출물 노출·기관명 지어내기·아는 정보 되묻기 방지 (배포에서 실제 재현된 사례들) */
+const COMMON_OUTPUT_RULES = `답변 작성 규칙(공통):
+- 내부 식별자(policy_id, match_id)·도구 호출 JSON·"저장" 코드블록을 답변에 절대 쓰지 마세요.
+  도구는 호출로만 사용하고, 그 인자나 결과 원문(JSON)을 사용자에게 보여주지 않습니다.
+- 담당 기관·문의처는 도구가 준 정책 데이터에 있을 때만 적으세요. 데이터에 없으면 기관명을
+  추측해 지어내지 말고 "정책 원문 링크에서 확인하세요"라고만 안내하세요.
+- 시스템 메시지의 사용자 프로필에 이미 있는 값(나이·거주지·학력·취업상태 등)은 절대
+  되묻지 말고 그대로 판정과 설명에 사용하세요.`;
+
 const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(search 모드)입니다. 자격 판정은 항상
 도구(규칙엔진)가 하고, 당신은 해석/설명만 합니다.
 
@@ -37,7 +46,9 @@ const SEARCH_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
    안내하고 끝냅니다. 사용자가 특정 후보를 다시 지칭할 때만 lookup_and_check로 넘어갑니다
    (이는 Orchestrator가 다음 턴에 처리합니다).
 5. 마지막에 후보 목록과 각각의 추천 이유, 확인 필요 여부를 한국어로 요약해 답하세요.
-   search_policies도 web_search_fallback도 아무것도 못 찾았으면 "관련 정책을 찾지 못했습니다"라고 답하세요.`;
+   search_policies도 web_search_fallback도 아무것도 못 찾았으면 "관련 정책을 찾지 못했습니다"라고 답하세요.
+
+${COMMON_OUTPUT_RULES}`;
 
 const LOOKUP_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(lookup_and_check 모드)입니다. 특정
 정책 1건에 대한 자격 여부를 확답하는 것이 목표입니다. 자격 판정은 항상 도구(규칙엔진)가 합니다.
@@ -60,7 +71,9 @@ const LOOKUP_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(
    save_lookup_result를 호출해 insufficient_info로 저장하고, 답변에서 어떤 정보가
    더 필요한지 명확히 알려주세요 (이 모드는 적극적으로 되물어도 됩니다).
 5. 모든 항목이 확인됐다면 save_lookup_result로 confirmed/excluded 결과를 저장하고,
-   항목별 충족 여부를 근거로 결론(가능/불가능)과 이유를 한국어로 설명하세요.`;
+   항목별 충족 여부를 근거로 결론(가능/불가능)과 이유를 한국어로 설명하세요.
+
+${COMMON_OUTPUT_RULES}`;
 
 const COMPARE_SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Policy Agent(compare 모드)입니다. 정책 2건
 이상을 나란히 비교하는 것이 목표입니다. 자격 판정은 항상 도구(규칙엔진)가 합니다.
@@ -80,7 +93,9 @@ titleQuery(신규 지칭) 또는 referenceMatchId(직전 결과 재지칭) 중 �
    자격 결과와 함께 비교표 형태로 정리하세요. 그 다음 각 정책마다 save_compare_result를
    한 번씩 호출해 결과를 저장하세요.
 5. 최종 답변은 각 정책의 자격 여부(가능/불가능/정보부족)와 혜택 내용을 나란히 비교하는
-   한국어 표/목록으로 정리하세요.`;
+   한국어 표/목록으로 정리하세요.
+
+${COMMON_OUTPUT_RULES}`;
 
 function makeLlm() {
   return new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature: 0 });
@@ -89,7 +104,16 @@ function makeLlm() {
 /** ReAct 루프의 마지막 메시지가 가끔 빈 내용으로 끝난다(도구 호출만 하고 요약 텍스트 없이
  * 종료하는 경우) — 사용자에게 빈 응답을 보내는 대신 재시도 안내로 대체. */
 export function extractReply(result: { messages: { content?: unknown }[] }): string {
-  const reply = String(result.messages.at(-1)?.content ?? "").trim();
+  let reply = String(result.messages.at(-1)?.content ?? "").trim();
+  // 에이전트가 도구를 호출하는 대신 호출 인자 JSON을 본문에 써버리는 경우가 실제로 있다
+  // (배포 재현: "저장 ```json {\"policyId\": ...}```") — 프롬프트로 금지하되, 새어 나온
+  // 내부 산출물은 여기서 한 번 더 걷어낸다.
+  reply = reply
+    .replace(/(?:^|\n)[-–—\s]*저장[^\n]*\n+```[\s\S]*?```/g, "")
+    .replace(/```(?:json)?\s*\{[^`]*"(?:policyId|matchScore|referenceMatchId)"[\s\S]*?```/g, "")
+    .replace(/^.*정책\s*ID\s*[:：].*$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   return reply || "답변을 정리하는 중 문제가 생겼어요. 다시 한 번 말씀해 주시겠어요?";
 }
 

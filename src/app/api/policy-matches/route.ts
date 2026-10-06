@@ -26,9 +26,14 @@ export async function GET(request: Request) {
     .order("checked_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // 정책별 대표 행: 사용자의 직접 행위/판정(비-search)이 있으면 그중 최신을, 없으면 search 최신을.
+  // 이벤트 매칭이 같은 정책에 새 search 행을 계속 삽입하므로, 단순 "최신 1건"을 쓰면
+  // 담아둔(recommended) 행이 나중 search 행에 가려져 마이티끌에서 사라진다.
   const latestByPolicy = new Map<string, MatchRow>();
   for (const row of (data ?? []) as MatchRow[]) {
-    if (!latestByPolicy.has(row.policy_id)) latestByPolicy.set(row.policy_id, row);
+    const cur = latestByPolicy.get(row.policy_id);
+    if (!cur) latestByPolicy.set(row.policy_id, row);
+    else if (cur.match_mode === "search" && row.match_mode !== "search") latestByPolicy.set(row.policy_id, row);
   }
   return NextResponse.json({ matches: [...latestByPolicy.values()] });
 }
@@ -56,7 +61,7 @@ export async function POST(request: Request) {
   const db = supabaseAdmin();
   const { data: existing } = await db
     .from("user_policy_matches")
-    .select("match_id")
+    .select("match_id, match_mode")
     .eq("user_id", userId)
     .eq("policy_id", policyId)
     .order("checked_at", { ascending: false })
@@ -65,13 +70,26 @@ export async function POST(request: Request) {
 
   if (action === "remove") {
     if (!existing) return NextResponse.json({ ok: true });
-    const { error } = await db.from("user_policy_matches").update({ status: "dismissed" }).eq("match_id", existing.match_id);
+    // 같은 정책의 행이 여러 개(판정 이력 + search 제안)일 수 있으므로 전부 내린다 —
+    // 최신 1건만 내리면 남은 recommended 행이 GET의 대표 행으로 떠올라 "빼기"가 안 먹는다.
+    const { error } = await db
+      .from("user_policy_matches")
+      .update({ status: "dismissed" })
+      .eq("user_id", userId)
+      .eq("policy_id", policyId)
+      .neq("status", "dismissed");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
   if (existing) {
-    const { error } = await db.from("user_policy_matches").update({ status: "recommended" }).eq("match_id", existing.match_id);
+    // 기존 행이 search(이벤트 매칭의 AI 제안)여도 "담기"는 사용자의 직접 행위이므로
+    // lookup_and_check로 승격한다 — search인 채로 status만 바꾸면 프론트의 마이티끌 필터
+    // (match_mode !== 'search')에 걸러져 새로고침 후 담은 정책이 사라진다.
+    const { error } = await db
+      .from("user_policy_matches")
+      .update({ status: "recommended", match_mode: "lookup_and_check" })
+      .eq("match_id", existing.match_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
