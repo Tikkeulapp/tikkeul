@@ -1475,7 +1475,7 @@ export default function AppPage() {
                   if (e.key === "Enter") {
                     e.preventDefault();
                     if (kwDraft.trim()) addKeyword(kwDraft);
-                    else if (kwList.length) window.location.href = `/app/jobs/keywords?kw=${encodeURIComponent(kwList.join(","))}`;
+                    else if (kwList.length) window.location.href = `/app/jobs?kw=${encodeURIComponent(kwList.join(","))}`;
                   }
                 }}
                 placeholder="키워드 입력 후 Enter"
@@ -1483,7 +1483,7 @@ export default function AppPage() {
                 className="mt-2 w-full rounded-[10px] border border-line bg-card px-3 py-2 text-[13.5px] outline-none focus:border-ink"
               />
               <button
-                onClick={() => { const list = kwDraft.trim() ? [...kwList, kwDraft.trim()] : kwList; if (list.length) window.location.href = `/app/jobs/keywords?kw=${encodeURIComponent(list.slice(0, 8).join(","))}`; }}
+                onClick={() => { const list = kwDraft.trim() ? [...kwList, kwDraft.trim()] : kwList; if (list.length) window.location.href = `/app/jobs?kw=${encodeURIComponent(list.slice(0, 8).join(","))}`; }}
                 disabled={kwList.length === 0 && !kwDraft.trim()}
                 className="mt-2 w-full rounded-full bg-ink px-4 py-2 text-[13.5px] font-bold text-white transition hover:opacity-90 disabled:opacity-40"
               >

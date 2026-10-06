@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * 채용공고 검색 화면 — 조건(지역·직무분야·학력·경력·키워드)을 고르면 마감 전 공고가 마감 임박순으로 나온다.
- * 데이터: 공공기관 채용정보(잡알리오) 수집분(job_postings). 필터·정렬은 전부 코드가 처리(LLM 없음).
- * 첫 진입 시 프로필(거주지·목표 직무 → NCS)을 기본 조건으로 채워 "본인 조건 검색"이 한 번에 되게 한다.
+ * 채용공고 검색 화면 — 조건(지역·직무분야·학력·경력)과 다중 키워드를 조합해 검색한다.
+ * 키워드는 노션 다중선택처럼 칩으로 쌓고(Enter), 결과 상단의 키워드 토글 버튼으로
+ * 켠 키워드의 합집합만 본다. 카드에는 어떤 키워드가 원문 어디에 걸렸는지 근거를 하이라이트.
+ * 키워드마다 방향성 동의어 확장(하위 개념만) 적용. 필터·정렬·근거는 전부 코드가 처리(LLM 없음).
+ * /app/jobs?kw=RAG,카드사 로 진입하면 칩이 미리 채워져 자동 검색된다 (메인 위젯 연동).
  */
 import { useCallback, useEffect, useState } from "react";
 import { getPersona } from "@/data/personas";
@@ -11,11 +13,12 @@ import { NCS_CATEGORIES, ncsCodesForTargetJob } from "@/data/ncs";
 import { SIDO_CANONICAL } from "@/lib/region";
 import type { SimSession } from "@/components/app/SimulateView";
 
+type Evidence = { term: string; before: string; after: string };
 type Job = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
   headcount: number | null; summary?: string | null; requirements?: string | null; pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
-  match?: { term: string; before: string; after: string } | null;
+  match?: Evidence | null;
 };
 
 const TODAY_KST = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
@@ -40,6 +43,8 @@ function DdayBadge({ d }: { d: number | null }) {
   );
 }
 
+const cleanKw = (raw: string) => raw.trim().replace(/[,%()*"'\\]/g, "").slice(0, 20);
+
 export function JobsView({ session }: { session: SimSession }) {
   const persona = session.personaId ? getPersona(session.personaId) : null;
   const defaultSido = persona ? persona.declared.region.sido : "";
@@ -49,54 +54,117 @@ export function JobsView({ session }: { session: SimSession }) {
   const [ncs, setNcs] = useState(defaultNcs);
   const [education, setEducation] = useState("");
   const [career, setCareer] = useState("신입");
-  const [keyword, setKeyword] = useState("");
-  const [jobs, setJobs] = useState<Job[] | null>(null);
-  const [total, setTotal] = useState(0);
+  const [kwDraft, setKwDraft] = useState("");
+  const [kwChips, setKwChips] = useState<string[]>([]);
+
+  const [jobsMap, setJobsMap] = useState<Record<string, Job>>({});
+  const [matchedBy, setMatchedBy] = useState<Record<string, string[]>>({}); // job_id → 매칭된 키워드들
+  const [evidence, setEvidence] = useState<Record<string, Record<string, Evidence>>>({}); // job_id → {kw: 근거}
+  const [expandedByKw, setExpandedByKw] = useState<Record<string, string[]>>({});
+  const [resultKws, setResultKws] = useState<string[]>([]); // 마지막 검색에 쓴 키워드들 (토글 버튼)
+  const [selectedKw, setSelectedKw] = useState<Set<string>>(new Set());
+  const [singleTotal, setSingleTotal] = useState(0); // 키워드 없는 검색의 전체 건수
+  const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [appliedNcs, setAppliedNcs] = useState(defaultNcs); // 마지막 검색에 쓴 직무분야 (일치 항목 우선 표시용)
-  const [usedKeywords, setUsedKeywords] = useState<string[]>([]); // 동의어 확장된 검색어 (빈 결과 안내용)
-  const [calSaved, setCalSaved] = useState<Set<string>>(new Set()); // 캘린더에 담은 공고
+  const [appliedNcs, setAppliedNcs] = useState(defaultNcs);
+  const [calSaved, setCalSaved] = useState<Set<string>>(new Set());
   const [calBusy, setCalBusy] = useState<string | null>(null);
 
-  const search = useCallback(async (params: { sido: string; ncs: string; education: string; career: string; keyword: string }) => {
+  const search = useCallback(async (params: { sido: string; ncs: string; education: string; career: string; keywords: string[] }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/jobs/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sido: params.sido || null, ncs: params.ncs || null,
-          education: params.education || null, career: params.career || null, keyword: params.keyword || null,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "검색 실패");
-      setJobs(json.jobs ?? []);
-      setTotal(json.total ?? 0);
+      const base = { sido: params.sido || null, ncs: params.ncs || null, education: params.education || null, career: params.career || null };
+      const call = async (keyword: string | null) => {
+        const res = await fetch("/api/jobs/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...base, keyword }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "검색 실패");
+        return json as { jobs: Job[]; total: number; keywords: string[] };
+      };
+
+      const jm: Record<string, Job> = {};
+      const mb: Record<string, string[]> = {};
+      const ev: Record<string, Record<string, Evidence>> = {};
+      const ex: Record<string, string[]> = {};
+
+      if (params.keywords.length === 0) {
+        const r = await call(null);
+        for (const j of r.jobs) jm[j.job_id] = j;
+        setSingleTotal(r.total);
+      } else {
+        const results = await Promise.all(params.keywords.map(async (k) => ({ k, r: await call(k) })));
+        for (const { k, r } of results) {
+          ex[k] = r.keywords;
+          for (const j of r.jobs) {
+            jm[j.job_id] = j;
+            (mb[j.job_id] ??= []).includes(k) || mb[j.job_id].push(k);
+            if (j.match) (ev[j.job_id] ??= {})[k] = j.match;
+          }
+        }
+        setSingleTotal(0);
+      }
+      setJobsMap(jm);
+      setMatchedBy(mb);
+      setEvidence(ev);
+      setExpandedByKw(ex);
+      setResultKws(params.keywords);
+      setSelectedKw(new Set(params.keywords));
       setAppliedNcs(params.ncs);
-      setUsedKeywords(json.keywords ?? []);
+      setSearched(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      setJobs([]);
+      setJobsMap({});
+      setSearched(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // 첫 진입: 프로필 기본 조건으로 자동 검색
+  // 첫 진입: URL의 ?kw= 가 있으면 그 키워드로(필터는 넓게), 없으면 프로필 기본 조건으로 자동 검색
   useEffect(() => {
-    void search({ sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", keyword: "" });
+    const kwParam = new URLSearchParams(window.location.search).get("kw") ?? "";
+    const chips = [...new Set(kwParam.split(",").map(cleanKw).filter(Boolean))].slice(0, 8);
+    if (chips.length) {
+      setKwChips(chips);
+      setSido(""); setNcs(""); setCareer("");
+      void search({ sido: "", ncs: "", education: "", career: "", keywords: chips });
+    } else {
+      void search({ sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", keywords: [] });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    void search({ sido, ncs, education, career, keyword });
+  const addChip = (raw: string) => {
+    const kw = cleanKw(raw);
+    if (!kw) return;
+    setKwChips((prev) => (prev.some((k) => k.toLowerCase() === kw.toLowerCase()) || prev.length >= 8 ? prev : [...prev, kw]));
+    setKwDraft("");
   };
 
-  /** 직무분야 표시: 검색에 쓴 분야와 일치하는 항목을 맨 앞으로 (대형 공채는 분야가 5개+라 잘리면 안 맞아 보임) */
+  const runSearch = (chipsOverride?: string[]) => {
+    const chips = chipsOverride ?? (kwDraft.trim() ? [...kwChips, cleanKw(kwDraft)].filter(Boolean).slice(0, 8) : kwChips);
+    if (kwDraft.trim()) { setKwChips(chips); setKwDraft(""); }
+    void search({ sido, ncs, education, career, keywords: chips });
+  };
+
+  const toggleKw = (k: string) => setSelectedKw((prev) => {
+    const next = new Set(prev);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    return next;
+  });
+
+  const countOf = (k: string) => Object.values(matchedBy).filter((ks) => ks.includes(k)).length;
+
+  const visible = Object.values(jobsMap)
+    .filter((j) => resultKws.length === 0 || (matchedBy[j.job_id] ?? []).some((k) => selectedKw.has(k)))
+    .sort((a, b) => ((a.deadline ?? "9999") < (b.deadline ?? "9999") ? -1 : 1));
+
+  /** 직무분야 표시: 검색에 쓴 분야와 일치하는 항목을 맨 앞으로 */
   const orderedNcs = (j: Job): { names: string[]; matchedFirst: boolean; more: number } => {
     let names = j.ncs_names;
     let matchedFirst = false;
@@ -135,7 +203,7 @@ export function JobsView({ session }: { session: SimSession }) {
   return (
     <div className="mt-4 grid gap-4 lg:grid-cols-[320px_1fr]">
       {/* ── 검색 조건 ── */}
-      <form onSubmit={onSubmit} className="h-fit rounded-[18px] border border-line bg-card p-4 lg:sticky lg:top-4">
+      <form onSubmit={(e) => { e.preventDefault(); runSearch(); }} className="h-fit rounded-[18px] border border-line bg-card p-4 lg:sticky lg:top-4">
         <p className="text-[15px] font-bold">검색 조건</p>
         <p className="mt-1 text-[12.5px] text-mute">처음에는 내 프로필(거주지·목표 직무) 기준으로 검색돼요.</p>
         <div className="mt-3 flex flex-col gap-3">
@@ -167,8 +235,31 @@ export function JobsView({ session }: { session: SimSession }) {
             </select>
           </div>
           <div>
-            <p className={label}>키워드</p>
-            <input className={input} value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="예: 데이터, 전산, 행정" aria-label="키워드" />
+            <p className={label}>키워드 (여러 개 — Enter로 추가)</p>
+            {kwChips.length > 0 && (
+              <div className="mb-1.5 flex flex-wrap gap-1.5">
+                {kwChips.map((k) => (
+                  <span key={k} className="inline-flex items-center gap-1 rounded-full bg-[#efe9fb] px-2.5 py-1 text-[12.5px] font-bold text-[#6b4fbb]">
+                    {k}
+                    <button type="button" onClick={() => setKwChips((prev) => prev.filter((x) => x !== k))} className="text-[#6b4fbb]/60 hover:text-[#6b4fbb]" aria-label={`${k} 키워드 삭제`}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input
+              className={input}
+              value={kwDraft}
+              onChange={(e) => setKwDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (kwDraft.trim()) addChip(kwDraft);
+                  else runSearch();
+                }
+              }}
+              placeholder="예: RAG, 카드사 — Enter로 칩 추가"
+              aria-label="키워드"
+            />
           </div>
           <button type="submit" disabled={loading} className="rounded-full bg-ink px-5 py-2.5 text-[15px] font-bold text-white transition hover:opacity-90 disabled:opacity-50">
             {loading ? "검색 중…" : "공고 검색 →"}
@@ -178,25 +269,51 @@ export function JobsView({ session }: { session: SimSession }) {
 
       {/* ── 결과 ── */}
       <section>
-        {error && <p className="rounded-[12px] bg-[#fde8e8] px-4 py-3 text-[14.5px] font-bold text-[#c0392b]">⚠ {error}</p>}
-        {jobs === null || loading ? (
+        {error && <p className="mb-3 rounded-[12px] bg-[#fde8e8] px-4 py-3 text-[14.5px] font-bold text-[#c0392b]">⚠ {error}</p>}
+
+        {/* 키워드 토글 — 켠 키워드의 합집합만 표시 */}
+        {resultKws.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {resultKws.map((k) => {
+              const on = selectedKw.has(k);
+              return (
+                <button
+                  key={k}
+                  onClick={() => toggleKw(k)}
+                  className={`rounded-full border px-4 py-1.5 text-[14px] font-bold transition ${on ? "border-[#6b4fbb] bg-[#efe9fb] text-[#6b4fbb]" : "border-line bg-card text-mute hover:text-ink"}`}
+                  title={expandedByKw[k]?.length > 1 ? `확장 검색어: ${expandedByKw[k].join(", ")}` : undefined}
+                >
+                  {on ? "✓ " : ""}{k} <span className="font-normal">({countOf(k)})</span>
+                </button>
+              );
+            })}
+            <span className="text-[12.5px] text-mute">버튼을 켜고 끄면 해당 키워드 공고만 보여요</span>
+          </div>
+        )}
+
+        {!searched || loading ? (
           <p className="rounded-[18px] border border-line bg-card p-6 text-[15px] text-mute">공고를 불러오는 중…</p>
-        ) : jobs.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="rounded-[18px] border border-line bg-card p-6">
             <p className="text-[15.5px] font-bold">조건에 맞는 접수 중 공고가 없어요.</p>
-            {usedKeywords.length > 1 && (
-              <p className="mt-1 text-[14px] text-mute">키워드는 동의어까지 넓혀 찾았어요: {usedKeywords.join(" · ")}</p>
+            {resultKws.length > 0 && (
+              <p className="mt-1 text-[14px] text-mute">
+                키워드는 동의어까지 넓혀 찾았어요 — {resultKws.filter((k) => (expandedByKw[k]?.length ?? 0) > 1).map((k) => `${k}: ${expandedByKw[k].join("·")}`).join(" / ") || resultKws.join("·")}
+              </p>
             )}
-            <p className="mt-1 text-[14px] text-mute">지역을 &ldquo;전국 전체&rdquo;로 넓히거나 직무 분야·학력 조건을 풀어보세요.</p>
+            <p className="mt-1 text-[14px] text-mute">지역을 &ldquo;전국 전체&rdquo;로 넓히거나 직무 분야·학력·키워드 조건을 풀어보세요.</p>
           </div>
         ) : (
           <>
             <p className="mb-2 text-[14px] text-mute">
-              접수 중 공고 <b className="text-ink">{total}건</b> · 마감 임박순 {total > jobs.length ? `(상위 ${jobs.length}건 표시)` : ""}
-              {usedKeywords.length > 1 && <> · 키워드 확장: {usedKeywords.join("·")}</>}
+              접수 중 공고 <b className="text-ink">{resultKws.length ? visible.length : singleTotal}건</b> · 마감 임박순
+              {resultKws.length === 0 && singleTotal > visible.length ? ` (상위 ${visible.length}건 표시)` : ""}
+              {resultKws.some((k) => (expandedByKw[k]?.length ?? 0) > 1) && (
+                <> · 확장: {resultKws.filter((k) => (expandedByKw[k]?.length ?? 0) > 1).map((k) => `${k}→${expandedByKw[k].filter((x) => x !== k).join("·")}`).join(" / ")}</>
+              )}
             </p>
             <ul className="grid gap-3 xl:grid-cols-2">
-              {jobs.map((j) => (
+              {visible.map((j) => (
                 <li key={j.job_id} className="flex flex-col rounded-[14px] border border-line bg-card p-4">
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate text-[13.5px] font-bold text-leaf-deep">
@@ -206,6 +323,13 @@ export function JobsView({ session }: { session: SimSession }) {
                     <DdayBadge d={j.dday} />
                   </div>
                   <p className="mt-1 text-[16px] font-bold leading-snug">{j.title}</p>
+                  {resultKws.length > 0 && (matchedBy[j.job_id] ?? []).length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {(matchedBy[j.job_id] ?? []).map((k) => (
+                        <span key={k} className="rounded-full bg-[#efe9fb] px-2 py-0.5 text-[11.5px] font-bold text-[#6b4fbb]">#{k}</span>
+                      ))}
+                    </div>
+                  )}
                   <p className="mt-1.5 text-[13.5px] text-mute">
                     {(j.is_national && j.region_names.length === 0 ? "전국" : j.region_names.join("·")) || "지역 미상"}
                     {(() => { const o = orderedNcs(j); return o.names.length > 0 && (
@@ -221,14 +345,14 @@ export function JobsView({ session }: { session: SimSession }) {
                   </p>
                   {j.summary && <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-ink/80">{j.summary}</p>}
                   {j.requirements && <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-mute">자격 · {j.requirements}</p>}
-                  {/* 키워드 검색 시: 어떤 단어가 공고 어디에 걸렸는지 근거 표시 */}
-                  {j.match && (
-                    <p className="mt-1 rounded-[8px] bg-paper px-2 py-1 text-[12.5px] leading-snug text-mute">
-                      “{j.match.before}
-                      <mark className="rounded-[3px] bg-[#efe9fb] px-0.5 font-bold text-[#6b4fbb] underline decoration-2">{j.match.term}</mark>
-                      {j.match.after}”
+                  {/* 키워드가 공고 원문 어디에 걸렸는지 — 근거 하이라이트 (켜진 키워드만, 최대 2개) */}
+                  {Object.entries(evidence[j.job_id] ?? {}).filter(([k]) => selectedKw.has(k)).slice(0, 2).map(([k, m]) => (
+                    <p key={k} className="mt-1 rounded-[8px] bg-paper px-2 py-1 text-[12.5px] leading-snug text-mute">
+                      <span className="font-bold text-[#6b4fbb]">#{k}</span> → “{m.before}
+                      <mark className="rounded-[3px] bg-[#efe9fb] px-0.5 font-bold text-[#6b4fbb] underline decoration-2">{m.term}</mark>
+                      {m.after}”
                     </p>
-                  )}
+                  ))}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-line pt-2 text-[13.5px]">
                     <span className="text-mute">
                       {j.deadline ? (
@@ -250,7 +374,7 @@ export function JobsView({ session }: { session: SimSession }) {
                 </li>
               ))}
             </ul>
-            <p className="mt-3 text-[12.5px] text-mute">출처: 기업 공식 채용 채널(네이버·카카오·쿠팡·당근·크래프톤 등 공개 API) · 기획재정부 공공기관 채용정보 잡알리오 — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
+            <p className="mt-3 text-[12.5px] text-mute">출처: 기업 공식 채용 채널(네이버·카카오·쿠팡·당근·크래프톤 등 공개 API) · 고용24 공채속보 · 기획재정부 공공기관 채용정보 잡알리오 — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
           </>
         )}
       </section>
