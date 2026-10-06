@@ -5,50 +5,26 @@ import { useState } from "react";
 const FEATURES = [
   {
     key: "match",
-    label: "일정에 붙는 정책 매칭",
-    small: "면접·시험·이사를 적으면 혜택이 따라옵니다",
+    label: "지원정책 매칭",
+    small: "일정·마이데이터·AI 자격 판정·챗봇이 한 흐름으로",
     preview: {
-      title: "일정 → 정책 매칭",
+      title: "지원정책 매칭",
       stat: "4,475",
       unit: "개 정책에서",
-      copy: "면접·시험·이사 일정을 적으면 AI가 전국 정책 중 <b>그 일정에 붙는 혜택</b>만 골라 이유와 함께 보여줍니다. 이사를 적으면 새 거주지에서 열리는 혜택과 사라지는 혜택까지 알려드립니다.",
-      insight: "“대전 이사”를 적으면 대전 월세지원과 함께 거주지 변경 제안이 뜹니다.",
-    },
-  },
-  {
-    key: "profile",
-    label: "마이데이터로 내 상황 이해",
-    small: "소득·월세·수급·소비 습관을 코드로 읽습니다",
-    preview: {
-      title: "내 상황 이해",
-      stat: "15",
-      unit: "가지 금융 피처",
-      copy: "계좌·카드·대출 마이데이터에서 <b>월 소득, 월세, 받고 있는 수당, 소비 습관</b>을 규칙 코드로 계산합니다. 설문은 마이데이터로 알 수 없는 것만 묻습니다.",
-      insight: "숫자는 코드가 계산하고, AI는 판단과 설명만 합니다.",
-    },
-  },
-  {
-    key: "judge",
-    label: "AI 자격 판정 · 마이티끌",
-    small: "받을 수 있는지, 무엇을 챙길지, 언제 마감인지",
-    preview: {
-      title: "자격 판정과 마이티끌",
-      stat: "3",
-      unit: "단계 판정",
-      copy: "<b>신청 가능성 높음 / 추가 확인 필요 / 요건 미충족</b>으로 판정하고 근거와 미리 챙길 증빙을 알려줍니다. 담은 정책은 마감일·연결 일정·예상 절약액으로 관리합니다.",
-      insight: "마감 3일 전이면 캘린더 위에 알림이 뜹니다.",
-    },
-  },
-  {
-    key: "chat",
-    label: "AI 챗봇",
-    small: "이게 뭐예요? 저한테 맞아요? 둘 중 뭐가 나아요?",
-    preview: {
-      title: "AI 챗봇",
-      stat: "3",
-      unit: "가지 질문",
-      copy: "“이게 뭐예요?” “저한테 맞아요?” “둘 중 뭐가 나아요?” — <b>정보 제공·매칭·비교</b> 세 종류의 질문에 정책 DB를 근거로 답합니다.",
+      copy: "면접·시험·이사 일정을 적으면 <b>그 일정에 붙는 혜택</b>만 골라 보여줍니다. 마이데이터로 소득·월세·수급을 읽어 <b>신청 가능성 3단계 판정</b>과 근거·증빙·마감 관리(마이티끌)까지, 정책 DB를 근거로 답하는 <b>AI 챗봇</b>과 한 흐름으로 이어집니다.",
       insight: "DB에 없는 정책은 없다고 말합니다. 지어내지 않습니다.",
+    },
+  },
+  {
+    key: "jobs",
+    label: "채용공고 검색·추천",
+    small: "공공·사기업 공고를 모아 조건과 키워드로",
+    preview: {
+      title: "채용공고",
+      stat: "1,200+",
+      unit: "건 접수 중 공고에서",
+      copy: "공공기관 전수(잡알리오)·고용24 공채속보·기업 공식 채용 채널을 매일 아침 모읍니다. 학력·직무 조건과 <b>키워드 검색</b>으로 찾고, 내 프로필 기준 <b>맞춤 추천</b>과 마감 임박 표시, 공고 마감일 <b>캘린더 담기</b>까지 이어집니다.",
+      insight: "키워드가 왜 매칭됐는지 공고 원문 근거에 밑줄로 보여줍니다.",
     },
   },
   {
@@ -98,7 +74,7 @@ export function Features() {
               >
                 <span
                   className={`text-sm font-semibold ${
-                    active === f.key ? "text-[#1b8f47]" : "text-white/60"
+                    active === f.key ? "text-[#dceeb1]" : "text-white/60"
                   }`}
                 >
                   0{i + 1}
@@ -118,7 +94,7 @@ export function Features() {
               <small className="text-[12px] font-bold text-mute">미리보기</small>
             </div>
             <p className="mt-6">
-              <strong className="text-[56px] font-bold tracking-[-0.02em] text-[#1b8f47]">
+              <strong className="text-[56px] font-bold tracking-[-0.02em] text-[#dceeb1]">
                 {current.preview.stat}
               </strong>
               <span className="ml-1.5 font-bold text-mute">{current.preview.unit}</span>
