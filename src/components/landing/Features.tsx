@@ -49,7 +49,7 @@ export function Features() {
     <section id="features" className="bg-leaf-deep py-24 text-white">
       <div className="mx-auto w-full max-w-6xl px-5">
         <div className="max-w-xl">
-          <p className="text-[13px] font-semibold tracking-widest text-[#7ddf9a]">
+          <p className="text-[13px] font-semibold tracking-widest text-[#dceeb1]">
             YOUR JOB-HUNT CO-PILOT
           </p>
           <h2 className="mt-3 text-3xl font-light leading-tight sm:text-[44px] sm:leading-[1.1]">
@@ -66,7 +66,7 @@ export function Features() {
               <button
                 key={f.key}
                 onClick={() => setActive(f.key)}
-                className={`flex items-center gap-4 rounded-[12px] border p-5 text-left transition ${
+                className={`flex flex-1 items-center gap-4 rounded-[12px] border p-5 text-left transition ${
                   active === f.key
                     ? "border-white bg-card text-ink"
                     : "border-white/15 bg-white/5 text-white hover:bg-white/10"
