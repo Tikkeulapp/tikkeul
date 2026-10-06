@@ -98,7 +98,7 @@ titleQuery(신규 지칭) 또는 referenceMatchId(직전 결과 재지칭) 중 �
 ${COMMON_OUTPUT_RULES}`;
 
 function makeLlm() {
-  return new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature: 0 });
+  return new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b", temperature: 0 });
 }
 
 /** ReAct 루프의 마지막 메시지가 가끔 빈 내용으로 끝난다(도구 호출만 하고 요약 텍스트 없이

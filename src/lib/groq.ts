@@ -10,7 +10,7 @@ export async function groqJson<T>(
 ): Promise<T> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY 환경변수가 필요합니다");
-  const model = process.env.GROQ_MODEL ?? "openai/gpt-oss-20b";
+  const model = process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
 
   const call = async (tokens: number) => {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {

@@ -43,7 +43,7 @@ const SYSTEM_PROMPT = `당신은 정책 매칭 서비스의 Orchestrator Agent�
 - 개인정보나 정책과 무관한 잡담이면 intents를 빈 리스트로 두세요.`;
 
 export function makeOrchestrator(temperature = 0) {
-  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature });
+  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b", temperature });
   return createReactAgent({
     llm,
     tools: [],

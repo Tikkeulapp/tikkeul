@@ -33,7 +33,7 @@ export async function runProfileAgent(
   missingFields: string[],
   deferUntil: string | null = null,
 ): Promise<string> {
-  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-20b", temperature: 0 });
+  const llm = new ChatGroq({ model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b", temperature: 0 });
   const agent = createReactAgent({
     llm,
     tools: buildProfileTools(userId, profileRowId, deferUntil),
