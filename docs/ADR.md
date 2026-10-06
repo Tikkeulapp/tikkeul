@@ -32,7 +32,7 @@
 
 ### ADR-006: 테스트는 node:test + tsx
 **결정**: 별도 테스트 프레임워크 없이 `node --import tsx --test "src/**/*.test.ts"`. 테스트 파일은 대상 옆에 둔다.
-**이유**: 의존성 추가 없음. `tsx`가 `@/` 경로 별칭을 해석한다. 하네스 TDD 가드(`scripts/hooks/tdd-guard.sh`)가 같은 폴더의 `*.test.ts`를 찾는다.
+**이유**: 의존성 추가 없음. `tsx`가 `@/` 경로 별칭을 해석한다. 하네스 TDD 가드(`scripts/hooks/tdd-guard.sh`)가 `src/lib/` 편집 시 같은 폴더의 `*.test.ts`를 찾는다.
 **트레이드오프**: 컴포넌트 렌더 테스트(jsdom)는 없다 — UI는 빌드·수동 확인.
 
 ### ADR-007: 정책 데이터는 국가 API 전수 + 웹 발견물 격리

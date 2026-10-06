@@ -48,3 +48,7 @@ next-env.d.ts
 # harness — phase execution outputs
 phases/**/phase*-output.json
 phases/**/step*-output.json
+
+# python caches
+__pycache__/
+.pytest_cache/

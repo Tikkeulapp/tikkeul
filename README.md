@@ -74,13 +74,16 @@ docs/
   UI_GUIDE.md                디자인 토큰·컴포넌트·금지 패턴
   reference/                 기획·설계 원문 (하네스 프롬프트에는 주입되지 않음)
 .claude/
-  settings.json              훅 — Stop: lint+build+test / PreToolUse: 위험 명령 차단·TDD 가드
+  settings.json              .env 읽기 deny · 훅 — Stop: src 변경 시 lint+typecheck+test / PreToolUse: 위험 명령 차단·TDD 가드
+  agents/reviewer.md         독립 리뷰 서브에이전트 (/review가 위임)
   commands/harness.md        /harness — 탐색 → 논의 → step 설계 → phases 생성 → 실행
-  commands/review.md         /review — 아키텍처·스택·테스트·CRITICAL 규칙 체크리스트
+  commands/review.md         /review — reviewer 서브에이전트로 검수 (심각도 4단계 + 판정)
 scripts/
   execute.py                 phase 내 step을 claude -p로 순차 실행 (재시도·브랜치·2단계 커밋)
   test_execute.py            execute.py 테스트 (npm run test:harness)
-  hooks/tdd-guard.sh         테스트 파일 없이 src 구현 파일 편집 시 차단
+  hooks/tdd-guard.sh         테스트 파일 없이 src/lib 구현 파일 편집 시 차단
+  hooks/guard-bash.sh        강제 삭제·force push·hard reset·테이블 삭제·.env 출력 차단
+  hooks/stop-verify.sh       응답 종료 시 검증, 실패하면 Claude에게 되돌려 수정
 phases/index.json            phase 목록 (phases/<task>/index.json + step{N}.md)
 ```
 
@@ -130,7 +133,7 @@ supabase/schema.sql          테이블 생성 SQL (Supabase SQL Editor에서 실
 | `FINANCE_피처정의.md` | 실정책 178건 요건 분석 → 정책 판정용 금융 피처 15종 |
 | `POLICIES_수집기획.md` | 정책 3개 API 소스, 조건코드(JA), 분류 2축, 스키마 |
 | `검색추천_3단설계.md` | 조건필터 → 하이브리드 검색 → LLM 판정. **v2 pgvector 분담 스펙** |
-| `기능명세서.md` · `STATUS.md` · `작업정리_보고서용.md` | 제출용 명세, 현황, 작업 정리 |
+| `기능명세서.md` · `STATUS.md` · `작업정리_보고서용.md` | 제출용 명세, 현황(9/5 스냅샷), 작업 정리 |
 | `채용공고_시스템_설계.md` · `취업후_시뮬레이션_설계.md` · `RAG_기법비교.md` | 기능별 설계 |
 
 ## DB 테이블 (Supabase)
