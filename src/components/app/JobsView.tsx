@@ -8,8 +8,7 @@
  * /app/jobs?kw=RAG,카드사 로 진입하면 칩이 미리 채워져 자동 검색된다 (메인 위젯 연동).
  */
 import { useCallback, useEffect, useState } from "react";
-import { getPersona } from "@/data/personas";
-import { NCS_CATEGORIES, ncsCodesForTargetJob } from "@/data/ncs";
+import { NCS_CATEGORIES } from "@/data/ncs";
 import { SIDO_CANONICAL } from "@/lib/region";
 import type { SimSession } from "@/components/app/SimulateView";
 import { isPublicOrg } from "@/data/ncs";
@@ -30,9 +29,9 @@ const EDUCATIONS = [
   { value: "고졸", label: "고졸 지원 가능" },
 ];
 const CAREERS = [
+  { value: "", label: "전체" },
   { value: "신입", label: "신입 지원 가능" },
   { value: "경력", label: "경력 지원 가능" },
-  { value: "", label: "전체" },
 ];
 const HIRES = [
   { value: "", label: "전체" },
@@ -112,18 +111,13 @@ function urlKwChips(): string[] {
 }
 
 export function JobsView({ session }: { session: SimSession }) {
-  const persona = session.personaId ? getPersona(session.personaId) : null;
-  const defaultSido = persona ? persona.declared.region.sido : "";
-  const defaultNcs = ncsCodesForTargetJob(persona?.declared.targetJob)[0] ?? "";
-
-  // /app/jobs?kw=... 로 진입하면 그 키워드로 시작하고 필터는 넓게 연다.
+  // /app/jobs?kw=... 로 진입하면 그 키워드로 시작한다. 필터 기본값은 전부 "전체".
   // JobsView는 세션 로드 후 클라이언트에서만 렌더되므로 초기값에서 window를 읽어도 된다.
   const [urlChips] = useState(urlKwChips);
-  const fromUrl = urlChips.length > 0;
-  const [sido, setSido] = useState(fromUrl ? "" : defaultSido);
-  const [ncs, setNcs] = useState(fromUrl ? "" : defaultNcs);
+  const [sido, setSido] = useState("");
+  const [ncs, setNcs] = useState("");
   const [education, setEducation] = useState("");
-  const [career, setCareer] = useState(fromUrl ? "" : "신입");
+  const [career, setCareer] = useState("");
   const [hire, setHire] = useState("");
   const [org, setOrg] = useState("");
   const [kwDraft, setKwDraft] = useState("");
@@ -139,7 +133,8 @@ export function JobsView({ session }: { session: SimSession }) {
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(true); // 마운트 직후 자동 검색이 돈다
   const [error, setError] = useState<string | null>(null);
-  const [appliedNcs, setAppliedNcs] = useState(defaultNcs);
+  const [appliedNcs, setAppliedNcs] = useState("");
+  const [page, setPage] = useState(1); // 결과 페이지 (10건씩)
   const [calSaved, setCalSaved] = useState<Set<string>>(new Set());
   const [calBusy, setCalBusy] = useState<string | null>(null);
 
@@ -152,6 +147,7 @@ export function JobsView({ session }: { session: SimSession }) {
     setResultKws(params.keywords);
     setSelectedKw(new Set(params.keywords));
     setAppliedNcs(params.ncs);
+    setPage(1);
     setSearched(true);
     setLoading(false);
   }, []);
@@ -169,12 +165,10 @@ export function JobsView({ session }: { session: SimSession }) {
     fetchJobs(params).then((r) => applyResult(params, r), applyError);
   }, [applyResult, applyError]);
 
-  // 첫 진입: URL의 ?kw= 가 있으면 그 키워드로(필터는 넓게), 없으면 프로필 기본 조건으로 자동 검색
+  // 첫 진입: 조건 없이(전체) 자동 검색 — URL의 ?kw= 가 있으면 그 키워드만 적용
   useEffect(() => {
     // 첫 자동 검색 — loading은 초기값이 true라 여기선 결과 반영만 (콜백 안 setState)
-    const params: SearchParams = fromUrl
-      ? { sido: "", ncs: "", education: "", career: "", hire: "", org: "", keywords: urlChips }
-      : { sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", hire: "", org: "", keywords: [] };
+    const params: SearchParams = { sido: "", ncs: "", education: "", career: "", hire: "", org: "", keywords: urlChips };
     fetchJobs(params).then((r) => applyResult(params, r), applyError);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -192,17 +186,35 @@ export function JobsView({ session }: { session: SimSession }) {
     void search({ sido, ncs, education, career, hire, org, keywords: chips });
   };
 
-  const toggleKw = (k: string) => setSelectedKw((prev) => {
-    const next = new Set(prev);
-    if (next.has(k)) next.delete(k); else next.add(k);
-    return next;
-  });
+  const toggleKw = (k: string) => {
+    setSelectedKw((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+    setPage(1);
+  };
 
   const countOf = (k: string) => Object.values(matchedBy).filter((ks) => ks.includes(k)).length;
 
   const visible = Object.values(jobsMap)
     .filter((j) => resultKws.length === 0 || (matchedBy[j.job_id] ?? []).some((k) => selectedKw.has(k)))
     .sort((a, b) => ((a.deadline ?? "9999") < (b.deadline ?? "9999") ? -1 : 1));
+
+  // 페이지네이션 — 10건씩, 번호로 이동. 현재 페이지 ±2와 처음/끝만 보여주고 사이는 …
+  const PER_PAGE = 10;
+  const pageCount = Math.max(1, Math.ceil(visible.length / PER_PAGE));
+  const curPage = Math.min(page, pageCount);
+  const paged = visible.slice((curPage - 1) * PER_PAGE, curPage * PER_PAGE);
+  const pageNums: (number | "…")[] = [];
+  for (let n = 1; n <= pageCount; n++) {
+    if (n === 1 || n === pageCount || Math.abs(n - curPage) <= 2) pageNums.push(n);
+    else if (pageNums[pageNums.length - 1] !== "…") pageNums.push("…");
+  }
+  const goPage = (n: number) => {
+    setPage(Math.min(Math.max(1, n), pageCount));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   /** 직무분야 표시: 검색에 쓴 분야와 일치하는 항목을 맨 앞으로 */
   const orderedNcs = (j: Job): { names: string[]; matchedFirst: boolean; more: number } => {
@@ -245,7 +257,7 @@ export function JobsView({ session }: { session: SimSession }) {
       {/* ── 검색 조건 ── */}
       <form onSubmit={(e) => { e.preventDefault(); runSearch(); }} className="h-fit rounded-[18px] border border-line bg-card p-4 lg:sticky lg:top-4">
         <p className="text-[15px] font-bold">검색 조건</p>
-        <p className="mt-1 text-[12.5px] text-mute">처음에는 내 프로필(거주지·목표 직무) 기준으로 검색돼요.</p>
+        <p className="mt-1 text-[12.5px] text-mute">조건을 고르면 접수 중 공고가 마감 임박순으로 나와요.</p>
         <div className="mt-3 flex flex-col gap-3">
           <div>
             <p className={label}>근무 지역</p>
@@ -369,12 +381,13 @@ export function JobsView({ session }: { session: SimSession }) {
             <p className="mb-2 text-[14px] text-mute">
               접수 중 공고 <b className="text-ink">{resultKws.length ? visible.length : singleTotal}건</b> · 마감 임박순
               {resultKws.length === 0 && singleTotal > visible.length ? ` (상위 ${visible.length}건 표시)` : ""}
+              {pageCount > 1 && <> · {curPage}/{pageCount} 페이지</>}
               {resultKws.some((k) => (expandedByKw[k]?.length ?? 0) > 1) && (
                 <> · 확장: {resultKws.filter((k) => (expandedByKw[k]?.length ?? 0) > 1).map((k) => `${k}→${expandedByKw[k].filter((x) => x !== k).join("·")}`).join(" / ")}</>
               )}
             </p>
             <ul className="grid gap-3 xl:grid-cols-2">
-              {visible.map((j) => (
+              {paged.map((j) => (
                 <li key={j.job_id} className="flex flex-col rounded-[14px] border border-line bg-card p-4">
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate text-[13.5px] font-bold text-leaf-deep">
@@ -435,6 +448,30 @@ export function JobsView({ session }: { session: SimSession }) {
                 </li>
               ))}
             </ul>
+            {pageCount > 1 && (
+              <nav className="mt-4 flex flex-wrap items-center justify-center gap-1.5" aria-label="페이지 이동">
+                <button onClick={() => goPage(curPage - 1)} disabled={curPage === 1} className="rounded-[10px] border border-line bg-card px-3 py-1.5 text-[14px] font-bold text-mute transition hover:text-ink disabled:opacity-40">
+                  ← 이전
+                </button>
+                {pageNums.map((n, i) =>
+                  n === "…" ? (
+                    <span key={`e${i}`} className="px-1 text-[14px] text-mute">…</span>
+                  ) : (
+                    <button
+                      key={n}
+                      onClick={() => goPage(n)}
+                      aria-current={n === curPage ? "page" : undefined}
+                      className={`min-w-9 rounded-[10px] px-3 py-1.5 text-[14px] font-bold transition ${n === curPage ? "bg-ink text-white" : "border border-line bg-card text-mute hover:text-ink"}`}
+                    >
+                      {n}
+                    </button>
+                  ),
+                )}
+                <button onClick={() => goPage(curPage + 1)} disabled={curPage === pageCount} className="rounded-[10px] border border-line bg-card px-3 py-1.5 text-[14px] font-bold text-mute transition hover:text-ink disabled:opacity-40">
+                  다음 →
+                </button>
+              </nav>
+            )}
             <p className="mt-3 text-[12.5px] text-mute">출처: 기업 공식 채용 채널(네이버·카카오·쿠팡·당근·크래프톤 등 공개 API) · 고용24 공채속보 · 기획재정부 공공기관 채용정보 잡알리오 — 지원 자격·일정은 반드시 공고 원문에서 확인하세요.</p>
           </>
         )}

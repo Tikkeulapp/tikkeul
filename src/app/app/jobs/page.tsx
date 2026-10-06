@@ -44,14 +44,9 @@ export default function JobsPage() {
       </header>
 
       <div className="mx-auto w-full max-w-[1600px] px-6 pb-16">
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[14px] font-bold text-mute">지금 지원할 수 있는 곳</p>
-            <h1 className="text-[34px] font-extrabold tracking-tight">📋 채용공고 검색</h1>
-          </div>
-          <p className="max-w-2xl text-[16px] text-mute">
-            공공기관(잡알리오)·고용24·기업 공식 채널의 실제 공고입니다. 조건을 고르면 접수 중 공고가 마감 임박순으로 나옵니다.
-          </p>
+        <div className="mt-2">
+          <p className="text-[14px] font-bold text-mute">지금 지원할 수 있는 곳</p>
+          <h1 className="text-[34px] font-extrabold tracking-tight">📋 채용공고 검색</h1>
         </div>
 
         <JobsView session={session} />
