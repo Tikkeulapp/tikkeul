@@ -79,7 +79,7 @@ async function fetchJson(url: string, attempts = 3) {
 }
 
 export async function GET(request: Request) {
-  // Vercel Cron 인증 — CRON_SECRET 미설정이면 거부 (fail-closed)
+  // Vercel Cron 인증 (CRON_SECRET 설정 시에만 검사)
   if (!isAuthorizedCron(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
