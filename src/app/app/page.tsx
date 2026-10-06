@@ -791,15 +791,18 @@ export default function AppPage() {
   return (
     <main className="min-h-screen bg-paper">
       <OnboardingTour />
-      <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
+      <header className="relative mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
         <span>{BRAND.name}</span>
+        {/* 취업전/채용/취업후 토글 — 헤더 정중앙 고정 */}
+        <div className="absolute left-1/2 -translate-x-1/2">
+          <EmploymentToggle />
+        </div>
         <span className="ml-auto flex items-center gap-2.5 text-[14.5px] text-mute">
           {alarmCount > 0 && !alarmDismissed && (
             <a href="#alarm" className="rounded-full bg-[#f6c453] px-2 py-0.5 text-[12.5px] font-bold text-ink hover:bg-[#f0b42e]" title="마감 임박 알림으로 이동">🔔 {alarmCount}</a>
           )}
           {profileNote && <span className="rounded-full bg-[#2fbf5f] px-2 py-0.5 text-[12.5px] font-bold text-white">🏠 {profileNote}</span>}
-          <EmploymentToggle />
           <span>
             {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
             <Link href="/app/start" className="underline">프로필 변경</Link> ·{" "}

@@ -29,13 +29,16 @@ export default function JobsPage() {
 
   return (
     <main className="min-h-screen bg-paper">
-      <header className="mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-6 font-semibold">
+      <header className="relative mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-6 font-semibold">
         <Link href="/app" className="flex items-center gap-2.5 transition hover:opacity-75" title="메인 캘린더로">
           <LogoMark size={28} />
           <span>{BRAND.name}</span>
         </Link>
-        <span className="ml-auto flex items-center gap-2.5 text-[16px] text-mute">
+        {/* 취업전/채용/취업후 토글 — 헤더 정중앙 고정 */}
+        <div className="absolute left-1/2 -translate-x-1/2">
           <EmploymentToggle />
+        </div>
+        <span className="ml-auto flex items-center gap-2.5 text-[16px] text-mute">
           <span>
             {persona ? `${persona.emoji} ${persona.name}` : `🙋 ${displayName}`}님 ·{" "}
             <Link href="/app/start" className="underline">프로필 변경</Link>
