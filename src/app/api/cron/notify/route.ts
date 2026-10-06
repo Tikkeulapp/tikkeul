@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { notifyPolicyDeadlines } from "@/services/notifications";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 
 /** GET /api/cron/notify — 마감 임박 알림 (Vercel Cron 일 1회 / 수동 호출 가능).
  * /api/cron/discover와 같은 인증 패턴(CRON_SECRET). */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

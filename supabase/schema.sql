@@ -239,3 +239,27 @@ create table if not exists chat_messages (
   created_at  timestamptz default now()
 );
 create index if not exists idx_chat_messages_user on chat_messages(user_id, created_at);
+
+-- ============================================================================
+-- RLS — 모든 테이블 활성화, 정책은 두지 않는다 (2026-10-06)
+-- 앱·스크립트는 서버에서 service_role 키로만 접근하고 service_role은 RLS를 우회하므로 동작 영향 없음.
+-- 효과: anon/publishable 키로 Data API(PostgREST)에 붙는 접근은 전부 차단 (키 유출 대비 2차 방어선).
+-- 클라이언트에서 Supabase에 직접 붙는 기능을 만들면 그 테이블에 정책을 따로 추가해야 한다.
+-- ============================================================================
+alter table profile_survey          enable row level security;
+alter table mydata_account          enable row level security;
+alter table mydata_transaction      enable row level security;
+alter table mydata_card_approval    enable row level security;
+alter table mydata_loan             enable row level security;
+alter table mydata_insurance        enable row level security;
+alter table mydata_investment       enable row level security;
+alter table finance                 enable row level security;
+alter table users                   enable row level security;
+alter table profile_changes         enable row level security;
+alter table policy_discovery_queue  enable row level security;
+alter table policies                enable row level security;
+alter table user_calendar           enable row level security;
+alter table policy_eligibility      enable row level security;
+alter table user_policy_matches     enable row level security;
+alter table reminders               enable row level security;
+alter table chat_messages           enable row level security;

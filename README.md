@@ -146,5 +146,6 @@ supabase/schema.sql          테이블 생성 SQL (Supabase SQL Editor에서 실
 | `GROQ_API_KEY`, `GROQ_MODEL` | LLM 판정·매칭 |
 | `ONTONG_YOUTH_API_KEY` | 온통청년 정책 수집 (스크립트용) |
 | `DATA_GO_KR_API_KEY` | 행안부 공공서비스 수집 (스크립트용) |
+| `CRON_SECRET` | `/api/cron/*` 인증 — **Vercel 필수**, 없으면 크론이 401로 거부됨 |
 
 배포판(Vercel)에는 Settings → Environment Variables에 같은 이름으로 등록.

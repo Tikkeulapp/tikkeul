@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { groqJson } from "@/services/groq";
 import { refreshJobPostings } from "@/services/collectJobs";
+import { isAuthorizedCron } from "@/lib/cronAuth";
 
 export const maxDuration = 60;
 
@@ -78,9 +79,8 @@ async function fetchJson(url: string, attempts = 3) {
 }
 
 export async function GET(request: Request) {
-  // Vercel Cron 인증 (CRON_SECRET 설정 시)
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
+  // Vercel Cron 인증 — CRON_SECRET 미설정이면 거부 (fail-closed)
+  if (!isAuthorizedCron(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
