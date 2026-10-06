@@ -137,8 +137,28 @@ export function SimulateView({ session }: { session: SimSession }) {
             </label>
             <label className="block">
               <span className="font-bold">입사 예정 월</span>
-              <input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-[17px] outline-none focus:border-ink" />
+              {/* 브라우저 기본 month 선택기는 연도 변경 UI가 숨어 있어 올해만 고를 수 있는 것처럼
+                  보인다 — 연도·월을 명시적인 드롭다운으로 분리 */}
+              <span className="mt-1 grid grid-cols-2 gap-2">
+                <select
+                  value={startMonth.slice(0, 4)}
+                  onChange={(e) => setStartMonth(`${e.target.value}-${startMonth.slice(5, 7)}`)}
+                  className="w-full rounded-xl border border-line bg-card px-3 py-2.5 text-[17px] outline-none focus:border-ink"
+                >
+                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() + i).map((y) => (
+                    <option key={y} value={String(y)}>{y}년</option>
+                  ))}
+                </select>
+                <select
+                  value={startMonth.slice(5, 7)}
+                  onChange={(e) => setStartMonth(`${startMonth.slice(0, 4)}-${e.target.value}`)}
+                  className="w-full rounded-xl border border-line bg-card px-3 py-2.5 text-[17px] outline-none focus:border-ink"
+                >
+                  {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((m) => (
+                    <option key={m} value={m}>{Number(m)}월</option>
+                  ))}
+                </select>
+              </span>
             </label>
           </div>
 
