@@ -10,7 +10,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { resolveProfile } from "@/lib/profile";
 import { getPersona } from "@/data/personas";
 import { groqJson } from "@/lib/groq";
-import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, NCS_NAME_BY_CODE } from "@/data/ncs";
+import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, NCS_NAME_BY_CODE, isPublicOrg } from "@/data/ncs";
 
 export const maxDuration = 60;
 
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
   if (cands.length > 0) {
     try {
       const listForLlm = cands.map(({ r }) => ({
-        job_id: r.job_id, 제목: r.title, 회사: r.company, 구분: r.source === "pubinst" ? "공공기관" : "사기업", 지역: r.region_names.join(","),
+        job_id: r.job_id, 제목: r.title, 회사: r.company, 구분: isPublicOrg(r.source, r.company) ? "공공기관" : "사기업", 지역: r.region_names.join(","),
         직무분야: r.ncs_names.join(","), 채용구분: r.career, 학력: r.education, 급여: r.salary_text, 마감: r.deadline ?? "상시",
       }));
       const userMsg = `[사용자]\n${JSON.stringify({ 목표직무: targetJob || "미상", 직무분야추정: ncs.map((c) => NCS_NAME_BY_CODE.get(c)), 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 나이: prof.age, 학력: education })}\n\n[공고 후보]\n${JSON.stringify(listForLlm)}`;

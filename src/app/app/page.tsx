@@ -1,5 +1,7 @@
 "use client";
 
+import { isPublicOrg } from "@/data/ncs";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getPersona, type Persona } from "@/data/personas";
@@ -1014,7 +1016,7 @@ export default function AppPage() {
                   {(jobRecs ?? []).map((j) => (
                     <div key={j.id} className="rounded-[12px] border border-line p-3">
                       <p className="truncate text-[13px] font-bold text-leaf-deep">
-                        <span className={`mr-1 rounded px-1 py-0.5 text-[11px] ${j.source === "pubinst" ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{j.source === "pubinst" ? "공공" : "사기업"}</span>
+                        <span className={`mr-1 rounded px-1 py-0.5 text-[11px] ${isPublicOrg(j.source, j.company) ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{isPublicOrg(j.source, j.company) ? "공공" : "사기업"}</span>
                         {j.company ?? "기업 미상"}
                       </p>
                       <p className="text-[15px] font-bold leading-snug">{j.title}</p>

@@ -12,6 +12,7 @@ import { getPersona } from "@/data/personas";
 import { NCS_CATEGORIES, ncsCodesForTargetJob } from "@/data/ncs";
 import { SIDO_CANONICAL } from "@/lib/region";
 import type { SimSession } from "@/components/app/SimulateView";
+import { isPublicOrg } from "@/data/ncs";
 
 type Evidence = { term: string; before: string; after: string };
 type Job = {
@@ -30,7 +31,19 @@ const EDUCATIONS = [
 ];
 const CAREERS = [
   { value: "신입", label: "신입 지원 가능" },
-  { value: "", label: "전체(경력 포함)" },
+  { value: "경력", label: "경력 지원 가능" },
+  { value: "", label: "전체" },
+];
+const HIRES = [
+  { value: "", label: "전체" },
+  { value: "정규직", label: "정규직" },
+  { value: "계약·기간제", label: "계약·기간제" },
+  { value: "인턴·전환형", label: "인턴·전환형" },
+];
+const ORGS = [
+  { value: "", label: "전체" },
+  { value: "공공기관", label: "공공기관" },
+  { value: "사기업", label: "사기업" },
 ];
 
 function DdayBadge({ d }: { d: number | null }) {
@@ -54,6 +67,8 @@ export function JobsView({ session }: { session: SimSession }) {
   const [ncs, setNcs] = useState(defaultNcs);
   const [education, setEducation] = useState("");
   const [career, setCareer] = useState("신입");
+  const [hire, setHire] = useState("");
+  const [org, setOrg] = useState("");
   const [kwDraft, setKwDraft] = useState("");
   const [kwChips, setKwChips] = useState<string[]>([]);
 
@@ -71,11 +86,11 @@ export function JobsView({ session }: { session: SimSession }) {
   const [calSaved, setCalSaved] = useState<Set<string>>(new Set());
   const [calBusy, setCalBusy] = useState<string | null>(null);
 
-  const search = useCallback(async (params: { sido: string; ncs: string; education: string; career: string; keywords: string[] }) => {
+  const search = useCallback(async (params: { sido: string; ncs: string; education: string; career: string; hire: string; org: string; keywords: string[] }) => {
     setLoading(true);
     setError(null);
     try {
-      const base = { sido: params.sido || null, ncs: params.ncs || null, education: params.education || null, career: params.career || null };
+      const base = { sido: params.sido || null, ncs: params.ncs || null, education: params.education || null, career: params.career || null, hire: params.hire || null, org: params.org || null };
       const call = async (keyword: string | null) => {
         const res = await fetch("/api/jobs/search", {
           method: "POST",
@@ -132,9 +147,9 @@ export function JobsView({ session }: { session: SimSession }) {
     if (chips.length) {
       setKwChips(chips);
       setSido(""); setNcs(""); setCareer("");
-      void search({ sido: "", ncs: "", education: "", career: "", keywords: chips });
+      void search({ sido: "", ncs: "", education: "", career: "", hire: "", org: "", keywords: chips });
     } else {
-      void search({ sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", keywords: [] });
+      void search({ sido: defaultSido, ncs: defaultNcs, education: "", career: "신입", hire: "", org: "", keywords: [] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -149,7 +164,7 @@ export function JobsView({ session }: { session: SimSession }) {
   const runSearch = (chipsOverride?: string[]) => {
     const chips = chipsOverride ?? (kwDraft.trim() ? [...kwChips, cleanKw(kwDraft)].filter(Boolean).slice(0, 8) : kwChips);
     if (kwDraft.trim()) { setKwChips(chips); setKwDraft(""); }
-    void search({ sido, ncs, education, career, keywords: chips });
+    void search({ sido, ncs, education, career, hire, org, keywords: chips });
   };
 
   const toggleKw = (k: string) => setSelectedKw((prev) => {
@@ -228,10 +243,24 @@ export function JobsView({ session }: { session: SimSession }) {
               {EDUCATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <p className={label}>경력 구분</p>
+              <select className={input} value={career} onChange={(e) => setCareer(e.target.value)} aria-label="경력 구분">
+                {CAREERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className={label}>고용형태</p>
+              <select className={input} value={hire} onChange={(e) => setHire(e.target.value)} aria-label="고용형태">
+                {HIRES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
           <div>
-            <p className={label}>경력 구분</p>
-            <select className={input} value={career} onChange={(e) => setCareer(e.target.value)} aria-label="경력 구분">
-              {CAREERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            <p className={label}>기관 형태</p>
+            <select className={input} value={org} onChange={(e) => setOrg(e.target.value)} aria-label="기관 형태">
+              {ORGS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
           <div>
@@ -317,7 +346,7 @@ export function JobsView({ session }: { session: SimSession }) {
                 <li key={j.job_id} className="flex flex-col rounded-[14px] border border-line bg-card p-4">
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate text-[13.5px] font-bold text-leaf-deep">
-                      <span className={`mr-1.5 rounded px-1.5 py-0.5 text-[11.5px] ${j.source === "pubinst" ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{j.source === "pubinst" ? "공공기관" : "사기업"}</span>
+                      <span className={`mr-1.5 rounded px-1.5 py-0.5 text-[11.5px] ${isPublicOrg(j.source, j.company) ? "bg-mint-soft text-leaf-deep" : "bg-[#efe9fb] text-[#6b4fbb]"}`}>{isPublicOrg(j.source, j.company) ? "공공기관" : "사기업"}</span>
                       {j.company ?? "기업 미상"}
                     </p>
                     <DdayBadge d={j.dday} />

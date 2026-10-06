@@ -5,13 +5,13 @@
  */
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { careerOpenToNewcomer, dday, expandKeyword, findKeywordEvidence } from "@/data/ncs";
+import { careerMatchesFilter, dday, expandKeyword, findKeywordEvidence, hireBuckets, isPublicOrg } from "@/data/ncs";
 
 const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url, search_text";
 const COLS_T = COLS + ", deadline_time, summary, requirements";
 
 export async function POST(request: Request) {
-  let body: { sido?: string | null; ncs?: string | null; education?: string | null; career?: string | null; keyword?: string | null };
+  let body: { sido?: string | null; ncs?: string | null; education?: string | null; career?: string | null; hire?: string | null; org?: string | null; keyword?: string | null };
   try {
     body = await request.json();
   } catch {
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: `검색 실패: ${error.message}` }, { status: 500 });
 
   // select(cols)가 동적 문자열이라 supabase-js 타입 추론이 안 됨 — 사용하는 필드만 명시
-  type Out = { career: string | null; education: string | null; deadline: string | null; deadline_time?: string | null; search_text: string | null; match?: { term: string; before: string; after: string } | null } & Record<string, unknown>;
+  type Out = { source: string; career: string | null; hire_types: string[] | null; education: string | null; deadline: string | null; deadline_time?: string | null; search_text: string | null; match?: { term: string; before: string; after: string } | null } & Record<string, unknown>;
   let rows = (data ?? []) as unknown as Out[];
 
   // 키워드 검색이면 매칭 근거(어느 확장어가 어디에 걸렸는지)를 코드로 확정 —
@@ -47,7 +47,10 @@ export async function POST(request: Request) {
       .map((r) => ({ ...r, match: findKeywordEvidence(r.search_text, keywords) }))
       .filter((r) => r.match);
   }
-  if (body.career === "신입") rows = rows.filter((r) => careerOpenToNewcomer(r.career));
+  if (body.career) rows = rows.filter((r) => careerMatchesFilter(r.career, body.career!));
+  if (body.hire) rows = rows.filter((r) => (hireBuckets(r.hire_types, r.career) as string[]).includes(body.hire!));
+  if (body.org === "공공기관") rows = rows.filter((r) => isPublicOrg(r.source, r.company as string | null));
+  else if (body.org === "사기업") rows = rows.filter((r) => !isPublicOrg(r.source, r.company as string | null));
   if (body.education === "무관") rows = rows.filter((r) => !r.education || /무관|제한없음/.test(r.education));
   else if (body.education === "고졸") rows = rows.filter((r) => !r.education || !/대졸이상|학사이상|석사|박사/.test(r.education.replace(/\s/g, "")));
 

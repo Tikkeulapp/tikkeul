@@ -101,6 +101,42 @@ export function careerOpenToNewcomer(recruitTypeText: string | null | undefined)
   return !/^경력(직)?$/.test(t); // "경력" 단독 표기만 제외
 }
 
+/** 고용형태 정규화 — 소스별 원문 표기(정규직/정규/기간제/비정규직/무기계약직/청년인턴(체험형)/
+ *  정규직전환형 …)를 검색 필터용 3분류로 묶는다. 한 공고가 여러 형태를 동시에 모집하면
+ *  여러 분류에 속한다. work24는 '인턴'이 고용형태가 아니라 채용구분(career)에 적혀 와서 함께 본다. */
+export const HIRE_BUCKETS = ["정규직", "계약·기간제", "인턴·전환형"] as const;
+export type HireBucket = (typeof HIRE_BUCKETS)[number];
+export function hireBuckets(hireTypes: string[] | null | undefined, career?: string | null): HireBucket[] {
+  const set = new Set<HireBucket>();
+  for (const raw of hireTypes ?? []) {
+    const t = raw.replace(/\s/g, "");
+    if (/인턴|전환형/.test(t)) set.add("인턴·전환형");
+    else if (/^정규직?$/.test(t)) set.add("정규직");
+    else if (/계약|기간제|비정규/.test(t)) set.add("계약·기간제");
+  }
+  if (/인턴/.test((career ?? "").replace(/\s/g, ""))) set.add("인턴·전환형");
+  return [...set];
+}
+
+/** 공공기관 여부 — 잡알리오(pubinst) 수집분은 전부 공공이고, 고용24 공채속보에는
+ *  공단·공사 같은 공공기관이 사기업과 섞여 들어오므로 기관명으로 한 번 더 거른다. */
+export function isPublicOrg(source: string, company: string | null | undefined): boolean {
+  if (source === "pubinst") return true;
+  const c = (company ?? "").replace(/\s|\(주\)/g, "");
+  return /(공사|공단|의료원|교육청|진흥원)$|공공기관|국립|시립|도립|공무원|군무원/.test(c);
+}
+
+/** 채용구분 필터 — "신입"은 신입이 지원 가능한 공고, "경력"은 경력자가 지원 가능한 공고.
+ *  표기가 없는 공고(민간 다수)는 제한이 명시되지 않은 것으로 보고 양쪽 다 포함한다. */
+export function careerMatchesFilter(career: string | null | undefined, want: string): boolean {
+  if (want === "신입") return careerOpenToNewcomer(career);
+  if (want === "경력") {
+    const t = (career ?? "").replace(/\s/g, "");
+    return !t || /경력|무관|제한없음/.test(t);
+  }
+  return true;
+}
+
 /** 검색 키워드 확장 — 방향성 있는 개념 트리.
  *  규칙: ① aliases는 '같은 개념의 다른 표기'라 서로 치환 가능.
  *        ② 확장은 children(하위 개념) 방향으로만 내려간다 — 상위 개념으로는 절대 확장하지 않는다.
