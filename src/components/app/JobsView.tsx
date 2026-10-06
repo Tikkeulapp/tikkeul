@@ -310,7 +310,7 @@ export function JobsView({ session }: { session: SimSession }) {
       <section>
         {/* 나만의 강점으로 직무찾기 — 내 기술·강점 키워드로 공고를 찾는 기능 (동의어 확장 + 원문 근거 하이라이트) */}
         <div className="mb-4 rounded-[18px] border border-[#6b4fbb]/25 bg-gradient-to-r from-[#efe9fb] to-[#f8f5fe] p-4">
-          <p className="text-[16px] font-extrabold text-[#4a3a85]">🔍 나만의 강점으로 직무찾기</p>
+          <p className="text-[16px] font-extrabold text-[#4a3a85]">🔍 나만의 강점으로 직업찾기</p>
           {kwChips.length > 0 && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {kwChips.map((k) => (
