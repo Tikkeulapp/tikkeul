@@ -127,7 +127,7 @@ const CONCEPTS: Record<string, { aliases: string[]; children?: string[] }> = {
   보안: { aliases: ["보안", "정보보호", "security"] },
   금융: { aliases: ["금융", "finance"], children: ["은행", "카드사", "보험사", "증권사", "핀테크", "결제"] },
   은행: { aliases: ["은행", "뱅킹"] },
-  카드사: { aliases: ["카드사", "카드", "신용카드"], children: ["여신"] },
+  카드사: { aliases: ["카드사", "카드회사", "신용카드", "카드업"], children: ["여신"] }, // "카드" 단독은 복지카드·교통카드 등 무관 합성어에 걸려 제외
   여신: { aliases: ["여신", "여신심사"] },
   보험사: { aliases: ["보험사", "보험"] },
   증권사: { aliases: ["증권사", "증권"] },
