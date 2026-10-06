@@ -33,6 +33,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "date는 YYYY-MM-DD 형식이어야 합니다" }, { status: 400 });
   }
 
+  // 멱등 등록: 같은 (사용자, 날짜, 제목) 일정이 이미 있으면 새로 만들지 않고 그 행을 돌려준다 —
+  // 공고 '캘린더에 담기'를 새로고침 후 다시 눌러도 중복 행이 쌓이지 않게.
+  const { data: existing } = await supabaseAdmin()
+    .from("user_calendar")
+    .select("event_id, title, start_at, location, event_type, source, created_at")
+    .eq("user_id", userId)
+    .eq("start_at", date)
+    .eq("title", title.trim())
+    .limit(1)
+    .maybeSingle();
+  if (existing) return NextResponse.json({ event: existing, deduped: true });
+
   const { data, error } = await supabaseAdmin()
     .from("user_calendar")
     .insert({
@@ -57,6 +69,14 @@ export async function DELETE(request: Request) {
   const eventId = url.searchParams.get("eventId");
   const userId = url.searchParams.get("userId");
   if (!eventId || !userId) return NextResponse.json({ error: "eventId, userId가 필요합니다" }, { status: 400 });
+  // reminders.event_id가 user_calendar를 참조(FK)하므로, 알림이 붙은 일정(공고 마감 등)은
+  // 알림을 먼저 지워야 한다 — 안 지우면 409로 삭제가 실패해 일정이 지워지지 않는 버그가 된다.
+  const { error: remErr } = await supabaseAdmin()
+    .from("reminders")
+    .delete()
+    .eq("event_id", eventId)
+    .eq("user_id", userId);
+  if (remErr) return NextResponse.json({ error: remErr.message }, { status: 500 });
   const { error, count } = await supabaseAdmin()
     .from("user_calendar")
     .delete({ count: "exact" })

@@ -26,13 +26,13 @@ const STEPS: Step[] = [
   },
   {
     target: "#tour-mytikkeul",
-    title: "마이티끌 · 추천",
-    content: "관심 있는 정책을 담아두면 여기서 모아볼 수 있어요. 추천 탭에서는 AI가 내 프로필 기준으로 고른 정책도 볼 수 있어요.",
+    title: "마이티끌 · 추천티끌",
+    content: "관심 있는 정책을 담아두면 여기서 모아볼 수 있어요. 추천티끌 탭에서는 AI가 내 프로필 기준으로 고른 정책도 볼 수 있어요.",
     placement: "right",
   },
   {
     target: "#tour-calendar",
-    title: "일정 등록",
+    title: "마이 캘린더",
     content: "시험·면접 같은 일정을 등록하면 AI가 그 일정에 붙는 지원 혜택을 자동으로 찾아줘요.",
     placement: "top",
   },

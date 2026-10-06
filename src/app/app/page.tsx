@@ -125,7 +125,7 @@ const RECS: Record<string, Rec[]> = {
   ],
 };
 
-const TODAY = new Date().toISOString().slice(0, 10);
+const TODAY = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // KST 기준 오늘 — UTC 기준이면 한국 새벽에 날짜가 하루 어긋난다
 /** 저장 실패로 event_id가 없을 때 매칭 결과를 묶어둘 임시 키 (이벤트 핸들러에서만 호출) */
 const tempEventId = () => `tmp-${Date.now()}`;
 const WEEKDAY = ["일", "월", "화", "수", "목", "금", "토"];
@@ -217,7 +217,9 @@ export default function AppPage() {
   const chatQuestion = chatThread.length > 0 ? chatThread[chatThread.length - 1].question : null; // 최신 질문 (프로필 카드 자동 이어붙이기용)
 
   // 사이드바: 아코디언 (하나만 열림)
-  const [openTab, setOpenTab] = useState<"my" | "rec" | "jobs">("rec");
+  const [openTab, setOpenTab] = useState<"my" | "rec" | "jobs" | null>("rec");
+  /** 아코디언 헤더 클릭 — 이미 열려 있으면 닫는다 */
+  const toggleTab = (tab: "my" | "rec" | "jobs") => setOpenTab((prev) => (prev === tab ? null : tab));
   // 채용 탭: 공공기관 채용공고에서 프로필(직무·지역) 기준 AI 선별 + 마감 임박(D-7)
   type JobRec = { id: string; source: string; title: string; company: string | null; region: string; ncs: string; career: string | null; education: string | null; hireTypes: string; salary: string | null; summary: string | null; requirements: string | null; deadline: string | null; deadlineTime: string | null; pbancBegin: string | null; dday: number | null; url: string | null; score: number; reason: string };
   const [jobRecs, setJobRecs] = useState<JobRec[] | null>(null);
@@ -241,8 +243,8 @@ export default function AppPage() {
   const [judgeError, setJudgeError] = useState<string | null>(null);
 
   // 일정 등록 (달력)
-  const [ym, setYm] = useState({ y: 2026, m: 8 }); // 2026년 9월 (m: 0-11)
-  const [date, setDate] = useState("2026-09-18"); // 선택된 날짜
+  const [ym, setYm] = useState(() => { const t = new Date(Date.now() + 9 * 3600000); return { y: t.getUTCFullYear(), m: t.getUTCMonth() }; }); // 현재 달(KST)
+  const [date, setDate] = useState(() => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10)); // 선택된 날짜 = 오늘(KST)
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [calNotice, setCalNotice] = useState<string | null>(null);
@@ -793,7 +795,7 @@ export default function AppPage() {
       <OnboardingTour />
       <header className="relative mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-5 font-semibold">
         <LogoMark size={28} />
-        <span>{BRAND.name}</span>
+        <span className="text-[17px]">{BRAND.name}</span>
         {/* 취업전/채용/취업후 토글 — 헤더 정중앙 고정 */}
         <div className="absolute left-1/2 -translate-x-1/2">
           <EmploymentToggle />
@@ -906,7 +908,7 @@ export default function AppPage() {
             {/* 마이티끌 */}
             <section id="tour-mytikkeul" className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
-                onClick={() => setOpenTab("my")}
+                onClick={() => toggleTab("my")}
                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "my" ? "bg-leaf-deep text-white" : ""}`}
               >
                 마이티끌
@@ -916,7 +918,7 @@ export default function AppPage() {
                 <div className="flex flex-col gap-2 p-3">
                   {savedRecs.length === 0 && (
                     <p className="rounded-[10px] bg-mint-soft px-3 py-2.5 text-[14px] text-mute">
-                      아직 담은 정책이 없어요. [추천]에서 담아보세요.
+                      아직 담은 정책이 없어요. [추천티끌]에서 담아보세요.
                     </p>
                   )}
                   {savedRecs.map((r) => (
@@ -955,10 +957,10 @@ export default function AppPage() {
             {/* 추천 */}
             <section className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
-                onClick={() => setOpenTab("rec")}
+                onClick={() => toggleTab("rec")}
                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "rec" ? "bg-leaf-deep text-white" : ""}`}
               >
-                추천
+                추천티끌
                 <span className="text-[13.5px]">{unsavedRecs.length}건 {openTab === "rec" ? "▾" : "▸"}</span>
               </button>
               {openTab === "rec" && (
@@ -1002,7 +1004,7 @@ export default function AppPage() {
             {/* 채용 — 공공기관 채용공고에서 프로필(직무·지역) 기준 선별, 마감 임박 강조 */}
             <section className="overflow-hidden rounded-[18px] border border-line bg-card">
               <button
-                onClick={() => setOpenTab("jobs")}
+                onClick={() => toggleTab("jobs")}
                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-[16px] font-bold ${openTab === "jobs" ? "bg-leaf-deep text-white" : ""}`}
               >
                 채용 공고
@@ -1067,7 +1069,7 @@ export default function AppPage() {
           {/* 중앙: 일정 등록 — 노션식 월 달력 */}
           <section id="tour-calendar" className="rounded-[18px] border border-line bg-card p-5">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">일정 등록</h2>
+              <h2 className="text-lg font-bold">마이 캘린더</h2>
               <div className="flex items-center gap-2 text-[15.5px] font-bold">
                 <button onClick={() => setYm(prevMonth(ym))} className="grid h-8 w-8 place-items-center rounded-full border border-line hover:border-ink" aria-label="이전 달">‹</button>
                 <span className="min-w-[110px] text-center">{ym.y}년 {ym.m + 1}월</span>
