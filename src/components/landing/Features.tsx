@@ -49,10 +49,10 @@ export function Features() {
     <section id="features" className="bg-leaf-deep py-24 text-white">
       <div className="mx-auto w-full max-w-6xl px-5">
         <div className="max-w-xl">
-          <p className="text-[14px] font-semibold tracking-widest text-[#dceeb1]">
+          <p className="text-[15px] font-semibold tracking-widest text-[#dceeb1]">
             YOUR JOB-HUNT CO-PILOT
           </p>
-          <h2 className="mt-3 text-4xl font-light leading-tight sm:text-[48px] sm:leading-[1.1]">
+          <h2 className="mt-3 text-[40px] font-light leading-tight sm:text-[56px] sm:leading-[1.1]">
             검색 포털이 아니라,
             <br />
             먼저 움직이는 Agent
@@ -73,15 +73,15 @@ export function Features() {
                 }`}
               >
                 <span
-                  className={`text-base font-semibold ${
+                  className={`text-lg font-semibold ${
                     active === f.key ? "text-[#dceeb1]" : "text-white/60"
                   }`}
                 >
                   0{i + 1}
                 </span>
                 <span>
-                  <strong className="block text-[17px] font-semibold">{f.label}</strong>
-                  <small className={`text-[14.5px] ${active === f.key ? "text-mute" : "text-white/65"}`}>{f.small}</small>
+                  <strong className="block text-[20px] font-semibold">{f.label}</strong>
+                  <small className={`text-[16px] ${active === f.key ? "text-mute" : "text-white/65"}`}>{f.small}</small>
                 </span>
               </button>
             ))}
@@ -90,21 +90,21 @@ export function Features() {
           {/* 미리보기 — 탭마다 내용 길이가 달라도 카드 크기는 동일하게 고정 */}
           <div className="flex min-h-[480px] flex-col rounded-[24px] border border-line bg-card p-8 text-ink">
             <div className="flex items-center justify-between">
-              <span className="text-[17px] font-semibold text-leaf-deep">{current.preview.title}</span>
-              <small className="text-[13px] font-bold text-mute">미리보기</small>
+              <span className="text-[19px] font-semibold text-leaf-deep">{current.preview.title}</span>
+              <small className="text-[14px] font-bold text-mute">미리보기</small>
             </div>
             <p className="mt-6">
               <strong className="text-[56px] font-bold tracking-[-0.02em] text-[#dceeb1]">
                 {current.preview.stat}
               </strong>
-              <span className="ml-1.5 text-[17px] font-bold text-mute">{current.preview.unit}</span>
+              <span className="ml-1.5 text-[18px] font-bold text-mute">{current.preview.unit}</span>
             </p>
             <p
-              className="mt-4 text-[16.5px] leading-relaxed text-ink/85 [&_b]:text-leaf-deep"
+              className="mt-4 text-[18px] leading-relaxed text-ink/85 [&_b]:text-leaf-deep"
               dangerouslySetInnerHTML={{ __html: current.preview.copy }}
             />
             <div className="min-h-6 flex-1" />
-            <p className="rounded-[12px] bg-mint px-4 py-3 text-[15px] font-bold text-leaf-deep">
+            <p className="rounded-[12px] bg-mint px-4 py-3 text-[16.5px] font-bold text-leaf-deep">
               💡 {current.preview.insight}
             </p>
           </div>

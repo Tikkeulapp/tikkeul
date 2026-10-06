@@ -10,7 +10,7 @@ export function EmploymentToggle() {
   const isJobs = pathname?.startsWith("/app/jobs");
 
   const tab = (active: boolean) =>
-    `rounded-full px-4 py-1.5 text-[15px] font-bold transition ${
+    `rounded-full px-5 py-2 text-[17px] font-bold transition ${
       active ? "bg-leaf text-white" : "text-mute hover:text-ink"
     }`;
 
