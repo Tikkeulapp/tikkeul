@@ -296,13 +296,9 @@ export function JobsView({ session }: { session: SimSession }) {
 
       {/* ── 결과 ── */}
       <section>
-        {/* 키워드 검색 — 티끌 핵심 기능이라 결과 상단에 크게 배치 (동의어 확장 + 원문 근거 하이라이트) */}
+        {/* 나만의 강점으로 직무찾기 — 내 기술·강점 키워드로 공고를 찾는 기능 (동의어 확장 + 원문 근거 하이라이트) */}
         <div className="mb-4 rounded-[18px] border border-[#6b4fbb]/25 bg-gradient-to-r from-[#efe9fb] to-[#f8f5fe] p-4">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <p className="text-[16px] font-extrabold text-[#4a3a85]">🔍 키워드 검색</p>
-            <span className="rounded-full bg-[#6b4fbb] px-2.5 py-0.5 text-[11.5px] font-bold text-white">핵심 기능</span>
-            <p className="text-[12.5px] text-[#6b4fbb]/90">동의어까지 넓혀 찾고, 공고 원문 어디에 걸렸는지 근거를 보여드려요</p>
-          </div>
+          <p className="text-[16px] font-extrabold text-[#4a3a85]">🔍 나만의 강점으로 직무찾기</p>
           {kwChips.length > 0 && (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {kwChips.map((k) => (
@@ -325,11 +321,11 @@ export function JobsView({ session }: { session: SimSession }) {
                   else runSearch();
                 }
               }}
-              placeholder="예: RAG, 카드사 — Enter로 여러 개 추가"
+              placeholder="내 기술·강점을 적어보세요 — 예: RAG, Tool-Use (Enter로 여러 개 추가)"
               aria-label="키워드"
             />
             <button type="button" onClick={() => runSearch()} disabled={loading} className="shrink-0 rounded-full bg-[#6b4fbb] px-5 py-2 text-[14.5px] font-bold text-white transition hover:opacity-90 disabled:opacity-50">
-              {loading ? "검색 중…" : "키워드로 검색 →"}
+              {loading ? "검색 중…" : "강점으로 찾기 →"}
             </button>
           </div>
         </div>
