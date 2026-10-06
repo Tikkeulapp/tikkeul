@@ -27,18 +27,26 @@ export async function POST(request: Request) {
   // 키워드는 동의어로 확장해 OR 검색 (예: agent → AI·인공지능·에이전트·생성형)
   const keywords = expandKeyword(body.keyword);
 
-  // 상시·채용시 마감(deadline null)도 포함, 마감 임박순(상시는 뒤로)
-  let q = db.from("job_postings").select(cols).or(`deadline.is.null,deadline.gte.${today}`).order("deadline", { ascending: true }).limit(300);
-  if (body.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${body.sido}}`);
-  if (body.ncs) q = q.contains("ncs_codes", [body.ncs]);
-  if (keywords.length) q = q.or(keywords.map((k) => `search_text.ilike.*${k}*`).join(","));
-
-  const { data, error } = await q;
-  if (error) return NextResponse.json({ error: `검색 실패: ${error.message}` }, { status: 500 });
+  // 상시·채용시 마감(deadline null)도 포함, 마감 임박순(상시는 뒤로).
+  // 접수 중 공고 전체를 덮어야 JS 후처리 필터·페이지네이션이 전수 기준으로 동작한다 —
+  // Supabase는 요청당 1,000행까지만 주므로 1,000행씩 이어받는다 (안전 상한 4,000행).
+  const buildQuery = (from: number, to: number) => {
+    let q = db.from("job_postings").select(cols).or(`deadline.is.null,deadline.gte.${today}`).order("deadline", { ascending: true }).order("job_id", { ascending: true }).range(from, to);
+    if (body.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${body.sido}}`);
+    if (body.ncs) q = q.contains("ncs_codes", [body.ncs]);
+    if (keywords.length) q = q.or(keywords.map((k) => `search_text.ilike.*${k}*`).join(","));
+    return q;
+  };
 
   // select(cols)가 동적 문자열이라 supabase-js 타입 추론이 안 됨 — 사용하는 필드만 명시
   type Out = { source: string; career: string | null; hire_types: string[] | null; education: string | null; deadline: string | null; deadline_time?: string | null; search_text: string | null; match?: { term: string; before: string; after: string } | null } & Record<string, unknown>;
-  let rows = (data ?? []) as unknown as Out[];
+  let rows: Out[] = [];
+  for (let off = 0; off < 4000; off += 1000) {
+    const { data, error } = await buildQuery(off, off + 999);
+    if (error) return NextResponse.json({ error: `검색 실패: ${error.message}` }, { status: 500 });
+    rows = rows.concat((data ?? []) as unknown as Out[]);
+    if ((data ?? []).length < 1000) break;
+  }
 
   // 키워드 검색이면 매칭 근거(어느 확장어가 어디에 걸렸는지)를 코드로 확정 —
   // ilike는 짧은 영문 토큰(AI 등)이 단어 '속' 철자에도 걸리므로, 단어 경계 검사를 통과한 공고만 남긴다.
@@ -54,7 +62,8 @@ export async function POST(request: Request) {
   if (body.education === "무관") rows = rows.filter((r) => !r.education || /무관|제한없음/.test(r.education));
   else if (body.education === "고졸") rows = rows.filter((r) => !r.education || !/대졸이상|학사이상|석사|박사/.test(r.education.replace(/\s/g, "")));
 
-  // 원문 전체(search_text)는 응답에서 제거 — 근거 스니펫만 내려보낸다
-  const jobs = rows.slice(0, 100).map(({ search_text: _s, ...r }) => ({ deadline_time: null, ...r, dday: dday(r.deadline) }));
+  // 원문 전체(search_text)는 응답에서 제거 — 근거 스니펫만 내려보낸다.
+  // 클라이언트가 10건씩 페이지네이션하므로 필터 통과분 전체(쿼리 상한 300건)를 내려보낸다.
+  const jobs = rows.map(({ search_text: _s, ...r }) => ({ deadline_time: null, ...r, dday: dday(r.deadline) }));
   return NextResponse.json({ jobs, total: rows.length, keywords });
 }
