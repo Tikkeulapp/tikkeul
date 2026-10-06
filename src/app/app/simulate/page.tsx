@@ -32,7 +32,7 @@ export default function SimulatePage() {
       <header className="relative mx-auto flex h-[64px] w-full max-w-[1600px] items-center gap-2.5 px-6 font-semibold">
         <Link href="/app" className="flex items-center gap-2.5 transition hover:opacity-75" title="메인 캘린더로">
           <LogoMark size={28} />
-          <span className="text-[17px]">{BRAND.name}</span>
+          <span className="text-[21px] font-bold">{BRAND.name}</span>
         </Link>
         {/* 취업전/채용/취업후 토글 — 헤더 정중앙 고정 */}
         <div className="absolute left-1/2 -translate-x-1/2">
