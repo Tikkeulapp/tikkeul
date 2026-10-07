@@ -1,0 +1,23 @@
+{
+  "_readme": "수기 큐레이션 공채 목록 — 플랫폼(자소설·캐치 등) 크롤링 대신, 기업 '공식 채용 사이트'에서 확인한 공채를 사람이 등록한다. detail_url은 반드시 공식 채용 페이지. 추가 후 `npx tsx scripts/seed_curated_jobs.mts` 실행. slug는 영문 소문자-하이픈 (job_id가 curated:<slug>가 된다).",
+  "jobs": [
+    {
+      "slug": "shinhanlife-2026h2",
+      "company": "신한라이프생명보험",
+      "title": "신한라이프 2026 신입채용",
+      "region_names": ["서울 중구(본사)"],
+      "region_sidos": ["서울특별시"],
+      "hire_types": ["정규직"],
+      "career": "신입",
+      "education": null,
+      "summary": "영업전략(FC·DB·B2B) · 상품 · 계리 · 리스크관리 · 재무(가치분석) · 자산운용 · DX(ICT) 개발/운영 부문 신입사원 공개채용",
+      "requirements": "부문별 상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": "2026-10-07",
+      "deadline": "2026-10-16",
+      "deadline_time": "17:00",
+      "detail_url": "https://shinhan-life.recruiter.co.kr/career/home",
+      "verified_from": "공식 채용 사이트 shinhan-life.recruiter.co.kr (확인일 2026-10-07)",
+      "extra_keywords": ["생명보험", "생명보험업", "보험사", "금융권 공채", "신한금융그룹", "계리", "자산운용", "ICT"]
+    }
+  ]
+}

@@ -214,6 +214,7 @@ const GH_ORGS: { slug: string; name: string }[] = [
   { slug: "coupang", name: "쿠팡" },
   { slug: "krafton", name: "크래프톤" },
   { slug: "sendbird", name: "센드버드" },
+  { slug: "moloco", name: "몰로코" },
 ];
 
 /** 근무지 문자열(영/한)을 표준 시도로 — 확실한 것만 매핑, 모르면 빈 배열(지역 미상). */
@@ -365,6 +366,51 @@ async function collectCompany(now: string, log: (m: string) => void): Promise<Jo
         });
       }
       log(`company/네이버: ${kept}건`);
+    })(),
+    // (d) 우아한형제들 공식 채용 API — 목록 JSON (본문은 상세 페이지에만 있어 제목·직군 기준)
+    (async () => {
+      let kept = 0;
+      for (let page = 0; page < 10; page++) {
+        const res = await fetch(`https://career.woowahan.com/w1/recruits?page=${page}&size=50`, { headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0" } });
+        if (!res.ok) throw new Error(`woowahan ${res.status}`);
+        const json = await res.json();
+        const list: Record<string, unknown>[] = json?.data?.list ?? [];
+        for (const j of list) {
+          const title = s(j.recruitName);
+          const id = s(j.recruitSeq);
+          if (!title || !id) continue;
+          const minYears = Number(j.careerRestrictionMinYears ?? 0) || 0;
+          const end = s(j.recruitEndDate)?.slice(0, 10) ?? "";
+          kept++;
+          rows.push({
+            job_id: `company:woowa:${id}`,
+            source: "company",
+            title,
+            company: "우아한형제들",
+            region_names: ["서울(본사 등)"],
+            region_sidos: ["서울특별시"],
+            is_national: false,
+            ncs_codes: ncsCodesForCategoryText(title),
+            ncs_names: [],
+            hire_types: [],
+            career: minYears > 0 ? `경력 ${minYears}년↑` : null,
+            education: null,
+            salary_text: null,
+            headcount: null,
+            summary: null,
+            requirements: null,
+            pbanc_begin: ymd(s(j.recruitOpenDate)?.slice(0, 10)),
+            deadline: end.startsWith("9999") || end.startsWith("2999") ? null : ymd(end), // 9999 = 상시
+            deadline_time: null,
+            detail_url: `https://career.woowahan.com/recruitment/${id}/detail`,
+            search_text: [title, "우아한형제들", "배달의민족"].join(" | "),
+            collected_at: now,
+          });
+        }
+        const totalPage = Number(json?.data?.totalPageNumber ?? 1);
+        if (page + 1 >= totalPage || list.length === 0) break;
+      }
+      log(`company/우아한형제들: ${kept}건`);
     })(),
   ]);
   for (const r of results) if (r.status === "rejected") log(`⚠ company 일부 실패: ${(r.reason as Error).message}`);
