@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { llmJson } from "@/services/llm";
+import { NO_INFO } from "@/lib/jobDisplay";
 
 const SYSTEM = `당신은 한국 채용공고를 카드 형식으로 요약하는 도구입니다. 각 공고에 대해 아래 JSON만 출력하세요.
 {"items":[{"job_id":"...","summary":"핵심 업무 1줄(최대 60자, 명사형으로 끝맺음)","requirements":"핵심 지원 자격 1줄(최대 60자)"}]}
@@ -15,7 +16,8 @@ const SYSTEM = `당신은 한국 채용공고를 카드 형식으로 요약하�
 type Row = { job_id: string; title: string; company: string | null; summary: string | null; requirements: string | null; search_text: string | null };
 type Out = { items: { job_id: string; summary: string | null; requirements: string | null }[] };
 
-const needs = (r: Row) => !r.summary || r.summary.length > 90 || !r.requirements || r.requirements.length > 90;
+const bad = (v: string | null) => !v || (v !== NO_INFO && v.length > 90);
+const needs = (r: Row) => bad(r.summary) || bad(r.requirements);
 const trimLine = (s: unknown, max = 80) => {
   const t = typeof s === "string" ? s.replace(/\s+/g, " ").trim() : "";
   return t && t !== "null" ? t.slice(0, max) : null;
@@ -45,8 +47,9 @@ export async function normalizeJobCards(db: SupabaseClient, log: (m: string) => 
       for (const it of out.items ?? []) {
         const row = batch.find((r) => r.job_id === it.job_id);
         if (!row) continue;
-        const summary = trimLine(it.summary) ?? (row.summary ? row.summary.slice(0, 90) : null);
-        const requirements = trimLine(it.requirements) ?? (row.requirements ? row.requirements.slice(0, 90) : null);
+        // LLM이 null(원문에 없음)이면: 기존 텍스트가 있으면 90자로 자르고, 없으면 센티널 저장(재처리 방지)
+        const summary = trimLine(it.summary) ?? (row.summary ? row.summary.slice(0, 90) : NO_INFO);
+        const requirements = trimLine(it.requirements) ?? (row.requirements ? row.requirements.slice(0, 90) : NO_INFO);
         const { error: upErr } = await db.from("job_postings").update({ summary, requirements }).eq("job_id", row.job_id);
         if (!upErr) done++;
       }

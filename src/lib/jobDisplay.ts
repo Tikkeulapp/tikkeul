@@ -5,6 +5,10 @@
  * LLM 정규화(services/normalizeJobs)가 아직 안 돈 공고도 이 코드 경로로 균일하게 표시된다.
  */
 
+/** LLM 정규화가 "원문에 해당 정보 없음"으로 판정했을 때 저장하는 센티널 —
+ *  null로 두면 매 실행마다 다시 정규화 대상으로 뽑혀 같은 공고에 LLM을 반복 호출하게 된다. */
+export const NO_INFO = "정보 없음";
+
 export type CareerBucket = "신입" | "경력" | "신입·경력" | "인턴" | "경력무관";
 export type EducationBucket = "학력무관" | "고졸 이상" | "대졸 이상" | "석·박사";
 
@@ -47,7 +51,7 @@ function cleanText(raw: string): string {
 export function condenseLine(raw: string | null | undefined, max = 70): string | null {
   if (!raw) return null;
   const t = cleanText(raw);
-  if (!t) return null;
+  if (!t || t === NO_INFO) return null;
   if (t.length <= max) return t;
   const head = t.slice(0, max);
   // 절 경계 후보 중 가장 뒤쪽(최소 max의 절반 이상 위치)

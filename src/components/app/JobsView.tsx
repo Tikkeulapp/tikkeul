@@ -445,7 +445,8 @@ export function JobsView({ session }: { session: SimSession }) {
                       {m.after}”
                     </p>
                   ))}
-                  <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-line pt-2 text-[13.5px]">
+                  <div className="min-h-2 flex-1" />
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-line pt-2 text-[13.5px]">
                     <span className="text-mute">
                       {j.deadline ? (
                         <>접수 {j.pbanc_begin?.slice(5).replace("-", "/")} ~ <b className="text-ink">{j.deadline.slice(5).replace("-", "/")}{j.deadline_time ? ` ${j.deadline_time}` : ""}</b>
