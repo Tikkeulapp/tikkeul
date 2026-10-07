@@ -25,6 +25,7 @@ import {
 import type { CompanyType, GoalSpec, GoalType, SimInput, SpendingProfile } from "@/types/simulate";
 import { judgePrograms, type ProgramCtx } from "@/data/postjob_programs";
 import { HOUSE_REGIONS, type HouseRegion } from "@/data/postjob_reference";
+import { checkGrounding } from "@/lib/aiGrounding";
 
 export const maxDuration = 60;
 
@@ -35,16 +36,38 @@ type Body = {
   input?: Partial<Omit<SimInput, "goals">> & { goals?: Partial<GoalSpec>[]; monthlyCardSpendKrw?: number };
 };
 
-type AiComment = { summary: string; priorities: string[]; cautions: string[] };
+type AiComment = { summary: string; priorities: string[]; cautions: string[]; used_values?: string[] };
+/** AI 해설 검증 결과 — 화면에 "숫자 N개 검증 통과" 배지로 노출 */
+type AiCheck = { passed: boolean; attempts: number; claims: number; ungrounded: string[]; forbiddenMentions: string[]; fallback: boolean };
 
-const AI_SYSTEM = `너는 취업을 앞둔 청년의 재무 코치다. 제공된 계산 결과(JSON)를 바탕으로 한국어로 짧게 설명한다.
-규칙:
-1) 숫자(금액·금리·기간·비율)는 제공된 값만 인용한다. 새 숫자를 만들거나 계산하지 않는다.
-2) 제도·정책은 제공된 목록 안에서만 언급한다. 목록에 없는 제도를 추천하지 않는다.
-3) 단정 대신 "~로 보입니다" 톤. 최종 확인은 공식 기관에서 한다는 전제.
-4) 소비 카테고리를 언급할 때는 제공된 카테고리명만 쓴다. 목표가 여러 개면 순서대로 언급한다.
-5) 입력의 관심사는 사용자의 최근 행동에서 추정한 참고 정보다. 우선순위를 설명하는 순서에만 참고하고, 판정·숫자의 근거로 쓰거나 사용자의 행동을 구체적으로 언급하지 않는다.
-6) 반드시 JSON만 출력: {"summary": "3~4문장", "priorities": ["우선순위 1", "우선순위 2", "우선순위 3"], "cautions": ["주의 1", "주의 2"]}`;
+/** AI 해설 프롬프트 — 역할 · 입력 명세 · 작성 규칙 · 출력 계약 · 예시의 5단 구성.
+ *  프롬프트만 믿지 않고, 출력은 lib/aiGrounding.checkGrounding()이 입력과 대조해 검증한다. */
+const AI_SYSTEM = `[역할]
+너는 취업을 앞둔 청년의 재무 코치다. [입력]은 티끌의 계산 엔진(세금·복리)과 규칙 엔진(제도 판정)이 확정한 결과이며, 이것이 유일한 사실이다. 너의 일은 이 결과를 쉬운 한국어로 설명하는 것뿐이다.
+
+[입력 명세]
+- 입력: 사용자 조건(기업구분·연봉·입사예정·목표·세후월실수령)
+- 월지출 · 소비상위카테고리 · 월여유자금: 마이데이터 카드·계좌 집계값
+- 시나리오: 보수·기본·공격 저축률별 월저축과 목표별 도달 연월
+- 열리는제도: 규칙 엔진 판정. 판정값 LIKELY = 가능성 높음, NEEDS_CHECK = 요건 확인 필요
+- 대출 · 경고: 코드가 판정한 상환 우선순위와 위험 신호
+- 관심사(있을 때만): 사용자의 최근 행동에서 추정한 참고 정보
+
+[작성 규칙]
+1. 숫자(금액·연월·비율·기간)는 [입력]에 적힌 문자열을 그대로 옮긴다. 더하기·빼기·반올림·기간 환산("약 6년", "250만 원 정도") 금지.
+2. 제도는 '열리는제도'의 이름만 쓴다. LIKELY는 "가능해 보입니다", NEEDS_CHECK는 "요건 확인이 필요합니다"로만 표현한다. 목록에 없는 제도·상품은 언급하지 않는다.
+3. 특정 상품 가입을 단정하거나 권유하지 않는다. "~로 보입니다" 톤을 유지한다.
+4. 목표가 여러 개면 [입력] 순서대로 언급하고, 소비 카테고리는 입력의 카테고리명만 쓴다.
+5. 경고가 있으면 cautions에 반드시 반영한다.
+6. 분량: summary는 3~4문장. 제도는 LIKELY 위주로 최대 2개만 이름을 쓰고, 나머지 NEEDS_CHECK 제도는 이름을 나열하지 말고 "그 밖의 제도는 요건 확인이 필요합니다"로 묶는다. 개수를 세어 숫자로 쓰지 않는다. cautions는 최대 2개.
+7. 관심사는 우선순위를 설명하는 순서에만 참고하고, 판정·숫자의 근거로 쓰거나 사용자의 행동을 구체적으로 언급하지 않는다.
+
+[출력 계약] JSON 객체 하나만 출력한다.
+{"summary": "3~4문장", "priorities": ["우선순위 1", "우선순위 2", "우선순위 3"], "cautions": ["주의 1", "주의 2 (최대 2개)"], "used_values": ["인용한 입력 값 문자열을 그대로 나열"]}
+
+[예시]
+입력 일부: {"월여유자금": "150만 원", "시나리오": [{"이름": "기본", "월저축": "105만 원", "목표별도달": ["목돈 모으기 → 2031년 3월"]}], "열리는제도": [{"이름": "ISA (개인종합자산관리계좌)", "판정": "LIKELY"}, {"이름": "청년도약계좌", "판정": "NEEDS_CHECK"}]}
+출력: {"summary": "월여유자금 150만 원 가운데 105만 원을 저축하는 기본 시나리오라면 목돈 모으기는 2031년 3월에 달성될 것으로 보입니다. ISA (개인종합자산관리계좌)는 가입이 가능해 보이며, 청년도약계좌는 요건 확인이 필요합니다.", "priorities": ["기본 시나리오 저축액 105만 원 유지", "ISA (개인종합자산관리계좌) 가입 검토", "청년도약계좌 요건 확인"], "cautions": ["제도 요건은 각 기관 공고에서 최종 확인이 필요합니다"], "used_values": ["150만 원", "105만 원", "2031년 3월"]}`;
 
 const NON_VARIABLE_RE = /월세|통신비|보험료|구독|적금/;
 
@@ -247,6 +270,7 @@ export async function POST(request: Request) {
   let dbPolicies: DbPolicy[] = [];
   let dbError: string | null = candErr?.message ?? null;
   let ai: AiComment | null = null;
+  let aiCheck: AiCheck | null = null;
   let aiError: string | null = null;
   const pickTask = (async () => {
     if (!cands.length) return;
@@ -283,8 +307,27 @@ export async function POST(request: Request) {
       경고: result.warnings,
       열리는제도: [...programs.likely, ...programs.needsCheck].map((x) => ({ 이름: x.name, 판정: x.status, 이유: x.reason })),
     };
-    const out = await llmJson<AiComment>(AI_SYSTEM, JSON.stringify(payload), 1200);
-    ai = out && typeof out.summary === "string" ? out : null;
+    // 생성 → 근거 검증 → (실패 시) 피드백 재시도 1회 → 그래도 실패면 계산값 요약으로 대체
+    const source = JSON.stringify(payload);
+    const forbiddenNames = programs.unlikely.map((p) => p.name.replace(/\s*\(.*?\)\s*/g, "").trim());
+    const isComment = (o: AiComment | null): o is AiComment => !!o && typeof o.summary === "string" && Array.isArray(o.priorities) && Array.isArray(o.cautions);
+    let feedback = "";
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      const out = await llmJson<AiComment>(AI_SYSTEM, source + feedback, 1200);
+      if (!isComment(out)) { feedback = "\n\n[검증 실패] 출력 계약의 JSON 형식이 아닙니다. 형식을 지켜 다시 작성하라."; continue; }
+      const report = checkGrounding([out.summary, ...out.priorities, ...out.cautions], source, { forbiddenNames });
+      aiCheck = { passed: report.ok, attempts: attempt, claims: report.claims, ungrounded: report.ungrounded, forbiddenMentions: report.forbiddenMentions, fallback: false };
+      if (report.ok) { ai = out; return; }
+      feedback = `\n\n[검증 실패] 다음 값은 입력에 없다: ${[...report.ungrounded, ...report.forbiddenMentions].join(", ")}. 입력에 적힌 문자열만 그대로 사용해 다시 작성하라.`;
+    }
+    // 대체: 숫자는 전부 계산 결과에서 가져온 결정론적 요약
+    const base = result.scenarios[1];
+    ai = {
+      summary: `연봉 ${man(input.annualSalaryKrw)} 기준 월여유자금은 ${man(result.surplusMonthlyKrw)}입니다. 기본 시나리오(월 ${man(base.savingsMonthlyKrw)} 저축)라면 ${base.milestones.map((m) => `${m.label}은 ${ym(m.goalMonth)}`).join(", ")}에 도달합니다.`,
+      priorities: [...programs.likely, ...programs.needsCheck].slice(0, 3).map((x) => (x.status === "LIKELY" ? `${x.name} 가입 검토` : `${x.name} 요건 확인`)),
+      cautions: result.warnings.length ? result.warnings.slice(0, 2) : ["제도 요건은 각 기관 공고에서 최종 확인이 필요합니다"],
+    };
+    aiCheck = { ...(aiCheck ?? { passed: false, attempts: 2, claims: 0, ungrounded: [], forbiddenMentions: [] }), fallback: true };
   })().catch((e) => { aiError = e instanceof Error ? e.message : String(e); });
   await Promise.all([pickTask, commentTask]);
 
@@ -299,6 +342,7 @@ export async function POST(request: Request) {
     dbCandidates: cands.length,
     dbError,
     ai,
+    aiCheck,
     aiError,
     notes,
     disclaimer: "간이 계산·참고값 기준의 시뮬레이션입니다. 세금은 연말정산 결과와, 제도 요건은 각 기관 공고와 다를 수 있습니다.",

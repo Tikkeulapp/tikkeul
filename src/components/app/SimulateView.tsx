@@ -19,6 +19,7 @@ type ApiResponse = {
   dbCandidates: number;
   dbError: string | null;
   ai: { summary: string; priorities: string[]; cautions: string[] } | null;
+  aiCheck?: { passed: boolean; attempts: number; claims: number; ungrounded: string[]; forbiddenMentions: string[]; fallback: boolean } | null;
   aiError: string | null;
   notes: string[];
   disclaimer: string;
@@ -498,6 +499,13 @@ function Result({ data }: { data: ApiResponse }) {
       {/* AI */}
       <section className="rounded-3xl border border-line bg-card p-5 shadow-lift">
         <h3 className="text-[18px] font-extrabold">🤖 AI 코치 한마디 <span className="text-[15px] font-normal text-mute">계산값만 인용해 설명</span></h3>
+        {data.aiCheck && (
+          <p className={`mt-2 inline-block rounded-full px-3 py-1 text-[13.5px] font-bold ${data.aiCheck.fallback ? "bg-[#fff4d6] text-[#8a6400]" : "bg-mint-soft text-leaf-deep"}`}>
+            {data.aiCheck.fallback
+              ? "AI 문장이 근거 검증을 통과하지 못해 계산값 요약으로 대체했어요"
+              : `✓ 문장 속 숫자 ${data.aiCheck.claims}개 모두 계산 결과와 일치${data.aiCheck.attempts > 1 ? " (재작성 1회)" : ""}`}
+          </p>
+        )}
         {data.ai ? (
           <>
             <p className="mt-3 leading-relaxed">{data.ai.summary}</p>
