@@ -13,6 +13,8 @@ const COLS_T = COLS + ", deadline_time, summary, requirements";
 
 /** 사전 미등록 키워드의 LLM 연관어 확장 — 검색어 '후보'만 생성 (매칭·근거는 코드가 검증).
  *  서버리스 인스턴스 생존 동안 키워드별 캐시로 중복 호출을 줄인다. */
+/** 단독으로 쓰면 무관 공고가 쏟아지는 상위개념·범용어 — AI 확장 결과에서 제거 (정확 일치 기준) */
+const GENERIC_TERMS = new Set(["관리", "사무", "지원", "운영", "기획", "경영", "금융", "보험", "영업", "마케팅", "개발", "분석", "전략", "서비스", "시스템", "데이터", "IT", "비즈니스", "솔루션", "업무", "담당", "전문가", "직무", "채용", "신입", "경력"]);
 const aiExpandCache = new Map<string, string[]>();
 async function aiExpandKeyword(kw: string): Promise<string[]> {
   const hit = aiExpandCache.get(kw);
@@ -20,11 +22,18 @@ async function aiExpandKeyword(kw: string): Promise<string[]> {
   try {
     const out = await llmJson<{ terms: string[] }>(
       `한국 채용공고 검색어 확장기. 입력된 기술/자격/직무 키워드에 대해, 채용공고 '원문'에 실제로 쓰일 법한 연관 표기를 제안한다.
-규칙: ① 같은 개념의 다른 표기와 하위/인접 직무만 — 상위 개념이나 범용어(관리, 사무 등) 금지 ② 2글자 이상 한국어 또는 영문 용어 ③ 최대 6개 ④ JSON만 출력: {"terms": ["..."]}`,
+규칙(방향성 — 사전 확장과 동일한 원칙):
+① 허용: 같은 개념의 다른 표기(동의어·약어·영문), 하위 개념, 동일 계층의 인접 직무
+② 금지: 상위 개념·범용어로의 확장 — 예: "보험계리사"에 "금융"/"보험"(상위) ✗, "계리"/"액추어리"(동치·하위) ✓
+③ 2글자 이상, 최대 6개 ④ JSON만 출력: {"terms": ["..."]}`,
       `키워드: ${kw}`,
       300,
     );
-    const terms = (out.terms ?? []).map((t) => String(t).trim()).filter((t) => t.length >= 2 && t.length <= 20).slice(0, 6);
+    // 상위개념·범용어는 코드에서도 한 번 더 차단 — LLM이 규칙을 어겨도 확장되지 않게 (사전의 단방향 원칙과 동일)
+    const terms = (out.terms ?? [])
+      .map((t) => String(t).trim())
+      .filter((t) => t.length >= 2 && t.length <= 20 && !GENERIC_TERMS.has(t.replace(/\s/g, "")))
+      .slice(0, 6);
     aiExpandCache.set(kw, terms);
     return terms;
   } catch {

@@ -64,6 +64,7 @@ type JobsResult = {
   matchedBy: Record<string, string[]>; // job_id → 매칭된 키워드들
   evidence: Record<string, Record<string, Evidence>>; // job_id → {kw: 근거}
   expandedByKw: Record<string, string[]>;
+  aiByKw: Record<string, boolean>; // 키워드 → AI(LLM) 확장 여부 (사전 미등록어)
   singleTotal: number; // 키워드 없는 검색의 전체 건수
 };
 
@@ -78,22 +79,24 @@ async function fetchJobs(params: SearchParams): Promise<JobsResult> {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error ?? "검색 실패");
-    return json as { jobs: Job[]; total: number; keywords: string[] };
+    return json as { jobs: Job[]; total: number; keywords: string[]; aiExpanded?: boolean };
   };
 
   const jobsMap: Record<string, Job> = {};
   const matchedBy: Record<string, string[]> = {};
   const evidence: Record<string, Record<string, Evidence>> = {};
   const expandedByKw: Record<string, string[]> = {};
+  const aiByKw: Record<string, boolean> = {};
 
   if (params.keywords.length === 0) {
     const r = await call(null);
     for (const j of r.jobs) jobsMap[j.job_id] = j;
-    return { jobsMap, matchedBy, evidence, expandedByKw, singleTotal: r.total };
+    return { jobsMap, matchedBy, evidence, expandedByKw, aiByKw, singleTotal: r.total };
   }
   const results = await Promise.all(params.keywords.map(async (k) => ({ k, r: await call(k) })));
   for (const { k, r } of results) {
     expandedByKw[k] = r.keywords;
+    aiByKw[k] = !!r.aiExpanded;
     for (const j of r.jobs) {
       jobsMap[j.job_id] = j;
       const kws = (matchedBy[j.job_id] ??= []);
@@ -101,7 +104,7 @@ async function fetchJobs(params: SearchParams): Promise<JobsResult> {
       if (j.match) (evidence[j.job_id] ??= {})[k] = j.match;
     }
   }
-  return { jobsMap, matchedBy, evidence, expandedByKw, singleTotal: 0 };
+  return { jobsMap, matchedBy, evidence, expandedByKw, aiByKw, singleTotal: 0 };
 }
 
 function urlKwChips(): string[] {
@@ -127,6 +130,7 @@ export function JobsView({ session }: { session: SimSession }) {
   const [matchedBy, setMatchedBy] = useState<Record<string, string[]>>({}); // job_id → 매칭된 키워드들
   const [evidence, setEvidence] = useState<Record<string, Record<string, Evidence>>>({}); // job_id → {kw: 근거}
   const [expandedByKw, setExpandedByKw] = useState<Record<string, string[]>>({});
+  const [aiByKw, setAiByKw] = useState<Record<string, boolean>>({});
   const [resultKws, setResultKws] = useState<string[]>([]); // 마지막 검색에 쓴 키워드들 (토글 버튼)
   const [selectedKw, setSelectedKw] = useState<Set<string>>(new Set());
   const [singleTotal, setSingleTotal] = useState(0); // 키워드 없는 검색의 전체 건수
@@ -144,6 +148,7 @@ export function JobsView({ session }: { session: SimSession }) {
     setMatchedBy(r.matchedBy);
     setEvidence(r.evidence);
     setExpandedByKw(r.expandedByKw);
+    setAiByKw(r.aiByKw);
     setResultKws(params.keywords);
     setSelectedKw(new Set(params.keywords));
     setAppliedNcs(params.ncs);
@@ -183,6 +188,13 @@ export function JobsView({ session }: { session: SimSession }) {
   const runSearch = (chipsOverride?: string[]) => {
     const chips = chipsOverride ?? (kwDraft.trim() ? [...kwChips, cleanKw(kwDraft)].filter(Boolean).slice(0, 8) : kwChips);
     if (kwDraft.trim()) { setKwChips(chips); setKwDraft(""); }
+    void search({ sido, ncs, education, career, hire, org, keywords: chips });
+  };
+
+  /** 결과 토글에서 키워드 자체를 삭제 — 칩에서 빼고 남은 키워드로 재검색 */
+  const removeKeyword = (k: string) => {
+    const chips = kwChips.filter((x) => x !== k);
+    setKwChips(chips);
     void search({ sido, ncs, education, career, hire, org, keywords: chips });
   };
 
@@ -350,17 +362,20 @@ export function JobsView({ session }: { session: SimSession }) {
             {resultKws.map((k) => {
               const on = selectedKw.has(k);
               return (
-                <button
+                <span
                   key={k}
-                  onClick={() => toggleKw(k)}
-                  className={`rounded-full border px-4 py-1.5 text-[14px] font-bold transition ${on ? "border-[#6b4fbb] bg-[#efe9fb] text-[#6b4fbb]" : "border-line bg-card text-mute hover:text-ink"}`}
-                  title={expandedByKw[k]?.length > 1 ? `확장 검색어: ${expandedByKw[k].join(", ")}` : undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-bold transition ${on ? "border-[#6b4fbb] bg-[#efe9fb] text-[#6b4fbb]" : "border-line bg-card text-mute"}`}
+                  title={expandedByKw[k]?.length > 1 ? `확장 검색어: ${expandedByKw[k].join(", ")}${aiByKw[k] ? " (AI 연관어 확장)" : ""}` : undefined}
                 >
-                  {on ? "✓ " : ""}{k} <span className="font-normal">({countOf(k)})</span>
-                </button>
+                  <button onClick={() => toggleKw(k)} className="inline-flex items-center gap-1">
+                    {on ? "✓ " : ""}{k} <span className="font-normal">({countOf(k)})</span>
+                  </button>
+                  {aiByKw[k] && <span className="rounded bg-[#6b4fbb] px-1 text-[10px] font-bold text-white" title="사전에 없는 단어라 AI가 동일·하위 개념 연관어로 확장했어요">AI</span>}
+                  <button onClick={() => removeKeyword(k)} className="text-current opacity-50 hover:opacity-100" aria-label={`${k} 키워드 삭제`} title="이 키워드 삭제">✕</button>
+                </span>
               );
             })}
-            <span className="text-[12.5px] text-mute">버튼을 켜고 끄면 해당 키워드 공고만 보여요</span>
+            <span className="text-[12.5px] text-mute">버튼을 켜고 끄면 해당 키워드만 · ✕는 키워드 삭제</span>
           </div>
         )}
 
