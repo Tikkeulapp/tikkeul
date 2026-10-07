@@ -25,3 +25,26 @@ export const INTEREST_TAGS: InterestTagDef[] = [
   { id: "건강>심리", label: "마음건강", keywords: ["심리", "마음건강"] },
 ];
 
+
+/** 부모 태그 → 카드 머리 문장용 넓은 라벨 (덜 구체적으로 말하기 위해 자식 라벨 대신 사용). */
+export const INTEREST_PARENT_LABEL: Record<string, string> = {
+  시험: "시험 준비 비용",
+  면접: "면접 준비",
+  교통: "교통비",
+  주거: "주거",
+  훈련: "직업훈련·교육",
+  수당: "구직 수당",
+  일경험: "인턴·일경험",
+  상담: "취업 상담",
+  금융: "저축·대출",
+  건강: "마음건강",
+};
+
+/** 관심 근거(신호 종류) → 카드에 보여줄 말. 날짜·구체 내역은 쓰지 않는다. */
+export const INTEREST_SOURCE_LABEL: Partial<Record<string, string>> = {
+  save: "담은 정책",
+  calendar: "캘린더 일정",
+  spend: "취준 지출",
+  chat: "대화",
+  view: "살펴본 정책",
+};

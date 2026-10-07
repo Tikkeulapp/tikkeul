@@ -8,6 +8,11 @@ import {
   keywordsForTags,
   interestScoreForText,
   eventsFromTexts,
+  chatInterestEvents,
+  shouldExtractInterests,
+  explainInterests,
+  rollupParents,
+  summarizeInterests,
 } from "@/lib/interest";
 import type { InterestTagDef, InterestEvent } from "@/types/interest";
 
@@ -88,4 +93,75 @@ test("eventsFromTexts: 일정·지출 텍스트 → 태그가 걸린 것만 이�
     TAX,
   );
   assert.deepEqual(out, [{ signal: "spend", tags: ["시험>응시료"], occurredAt: "2026-09-01" }]);
+});
+
+test("shouldExtractInterests: 인사·짧은 말은 건너뛰고, 태그 키워드나 관심 표현이 있으면 추출", () => {
+  assert.equal(shouldExtractInterests("안녕", TAX), false);
+  assert.equal(shouldExtractInterests("고마워요!", TAX), false);
+  assert.equal(shouldExtractInterests("응시료가 너무 비싸요", TAX), true);
+  assert.equal(shouldExtractInterests("요즘 공부하느라 돈이 부담돼요", TAX), true);
+  assert.equal(shouldExtractInterests("오늘 날씨 어때요 진짜로", TAX), false);
+});
+
+test("chatInterestEvents: 화이트리스트·강도×지속성 가중치·일시적 관심 14일 만료·최대 3개", () => {
+  const out = chatInterestEvents(
+    { interests: [
+      { tag: "시험>응시료", strength: "strong", persistence: "persistent" },
+      { tag: "면접>정장", strength: "weak", persistence: "temporary" },
+      { tag: "가족>육아", strength: "strong", persistence: "persistent" },
+      { tag: "주거>월세", strength: "strong", persistence: "temporary" },
+      { tag: "주거>이사", strength: "weak", persistence: "persistent" },
+    ] },
+    NOW,
+    TAX.map((t) => t.id),
+  );
+  assert.equal(out.length, 3);
+  assert.deepEqual(out.map((e) => [e.tags[0], e.weight, e.expiresAt ?? null]), [
+    ["시험>응시료", 2, null],
+    ["면접>정장", 0.5, "2026-10-21T00:00:00.000Z"],
+    ["주거>월세", 1.5, "2026-10-21T00:00:00.000Z"],
+  ]);
+  assert.ok(out.every((e) => e.signal === "chat"));
+});
+
+test("chatInterestEvents: 형식이 깨진 LLM 출력은 빈 배열", () => {
+  assert.deepEqual(chatInterestEvents(null, NOW, ["시험>응시료"]), []);
+  assert.deepEqual(chatInterestEvents({ interests: "x" }, NOW, ["시험>응시료"]), []);
+  assert.deepEqual(chatInterestEvents({ interests: [{ tag: "시험>응시료", strength: "?", persistence: "persistent" }] }, NOW, ["시험>응시료"]), []);
+});
+
+test("SIGNAL_WEIGHT: reject는 강한 음수, 선톡 노출·수락은 0(추적용), 거절은 음수", () => {
+  assert.ok(SIGNAL_WEIGHT.reject <= -5);
+  assert.equal(SIGNAL_WEIGHT.starter_shown, 0);
+  assert.equal(SIGNAL_WEIGHT.starter_yes, 0);
+  assert.ok(SIGNAL_WEIGHT.starter_no < 0);
+});
+
+test("explainInterests: 상위 태그별 점수와 양수 기여 신호(큰 순), reject된 태그는 빠진다", () => {
+  const out = explainInterests(
+    [
+      ev({ signal: "spend", tags: ["시험>응시료"] }),
+      ev({ signal: "save", tags: ["시험>응시료"] }),
+      ev({ signal: "calendar", tags: ["면접>정장"] }),
+      ev({ signal: "save", tags: ["주거>월세"] }),
+      ev({ signal: "reject", tags: ["주거>월세"] }),
+    ],
+    NOW,
+    TAX,
+    5,
+  );
+  assert.deepEqual(out.map((x) => x.tag), ["시험>응시료", "면접>정장"]);
+  assert.deepEqual(out[0].sources, ["save", "spend"]);
+  assert.equal(out[0].label, "응시료");
+  assert.equal(out[0].score, 5);
+});
+
+test("rollupParents: 자식 태그의 양수 점수를 부모로 합산", () => {
+  assert.deepEqual(rollupParents({ "시험>응시료": 2, "시험>자격증": 1, "주거>월세": -1, "면접>정장": 0.5 }), { 시험: 3, 면접: 0.5 });
+});
+
+test("summarizeInterests: 라벨 0~2개로 덜 구체적인 한 문장", () => {
+  assert.equal(summarizeInterests([]), null);
+  assert.equal(summarizeInterests(["시험 응시료"]), "시험 응시료에 관심이 많아 보여요.");
+  assert.equal(summarizeInterests(["시험 응시료", "교통비", "면접 비용"]), "시험 응시료, 교통비에 관심이 많아 보여요.");
 });
