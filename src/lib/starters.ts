@@ -1,9 +1,9 @@
 /**
- * 먼저 건네는 질문 (카나나 관심사 선톡-lite) — "무엇을 물을지"는 코드가 정하고, 문장은 템플릿.
- * - buildStarters: 검색바 추천 질문 칩 (다가오는 일정 → 관심사 → 프로필 → 기본 순)
- * - weeklyProactive: 주 1회 선톡 (답했으면 그 주는 쉬고, 4주 안에 보낸 주제는 다시 안 보냄)
+ * 검색바 추천 질문 (카나나 관심사 선톡의 "무엇을 물을지"만 가져옴).
+ * - LLM 생성 질문은 filterGeneratedStarters로 검증 (Generate → Filter)
+ * - buildStarters: 생성이 실패하거나 모자랄 때 채우는 규칙 템플릿 (다가오는 일정 → 관심사 → 프로필 → 기본 순)
  */
-import type { InterestEvent, InterestTagDef, StarterPick, StarterTemplate } from "@/types/interest";
+import type { InterestTagDef, StarterPick, StarterTemplate } from "@/types/interest";
 import { matchTags } from "@/lib/interest";
 
 const DAY_MS = 86_400_000;
@@ -13,22 +13,22 @@ export type StarterInput = {
   topTags: string[];           // 관심 점수 상위 태그
   profileTags: string[];       // 프로필 상태에서 나온 태그 (월세 → 주거>월세 등)
   profileStarterIds: string[]; // 프로필 전용 질문 (미취업 → 국민취업지원제도 등)
-  blockedIds: string[];        // 최근 거절한 선톡
+  avoidTags: string[];         // "아니에요"·빼기로 점수가 음수가 된 주제
 };
 
 export function buildStarters(input: StarterInput, templates: StarterTemplate[], defaultIds: string[], n = 3): StarterPick[] {
   const out: StarterPick[] = [];
   const usedIds = new Set<string>();
   const usedTags = new Set<string>();
-  const blocked = new Set(input.blockedIds);
+  const avoid = new Set(input.avoidTags);
   const push = (t: StarterTemplate | undefined, reason: StarterPick["reason"]) => {
-    if (!t || out.length >= n || usedIds.has(t.id) || blocked.has(t.id)) return;
-    if (t.tag && usedTags.has(t.tag)) return;
+    if (!t || out.length >= n || usedIds.has(t.id)) return;
+    if (t.tag && (usedTags.has(t.tag) || avoid.has(t.tag))) return;
     usedIds.add(t.id);
     if (t.tag) usedTags.add(t.tag);
     out.push({ ...t, reason });
   };
-  const forTag = (tag: string) => templates.find((t) => t.tag === tag && !blocked.has(t.id) && !usedIds.has(t.id));
+  const forTag = (tag: string) => templates.find((t) => t.tag === tag && !usedIds.has(t.id));
 
   for (const tag of input.upcomingTags) push(forTag(tag), "event");
   for (const tag of input.topTags) push(forTag(tag), "interest");
@@ -38,54 +38,9 @@ export function buildStarters(input: StarterInput, templates: StarterTemplate[],
   return out;
 }
 
-/** 최근 days일 안에 "괜찮아요"로 거절한 선톡 id. */
-export function blockedStarterIds(history: InterestEvent[], now: Date, days = 28): Set<string> {
-  const since = now.getTime() - days * DAY_MS;
-  return new Set(
-    history
-      .filter((e) => e.signal === "starter_no" && e.starterId && new Date(e.occurredAt).getTime() >= since)
-      .map((e) => e.starterId!),
-  );
-}
-
-/**
- * 이번 주 선톡. 빈도는 규칙으로 정한다 (LinUCB 같은 발송 최적화는 데이터가 쌓인 뒤).
- * - 최근 7일 안에 답(yes/no)했으면 없음
- * - 최근 7일 안에 보여줬는데 답이 없으면 같은 선톡 유지 (isNew=false)
- * - 아니면 개인화 후보(일정·관심·프로필) 중 최근 28일 안에 안 보낸 첫 번째 (isNew=true). 기본 질문은 선톡하지 않는다.
- */
-export function weeklyProactive(
-  picks: StarterPick[],
-  history: InterestEvent[],
-  now: Date,
-  templates: StarterTemplate[],
-): { template: StarterTemplate; isNew: boolean } | null {
-  const within = (e: InterestEvent, days: number) => new Date(e.occurredAt).getTime() >= now.getTime() - days * DAY_MS;
-  const starters = history.filter((e) => e.starterId && e.signal.startsWith("starter_"));
-  if (starters.some((e) => (e.signal === "starter_yes" || e.signal === "starter_no") && within(e, 7))) return null;
-
-  const lastShown = starters
-    .filter((e) => e.signal === "starter_shown" && within(e, 7))
-    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0];
-  if (lastShown) {
-    const id = lastShown.starterId!;
-    // LLM 생성 선톡(gen:<태그>)은 오늘 다시 생성한 목록 → 없으면 같은 태그의 템플릿으로 유지
-    const t =
-      picks.find((p) => p.id === id) ??
-      templates.find((x) => x.id === id) ??
-      (id.startsWith("gen:") ? templates.find((x) => x.tag === id.slice(4) && x.opener) : undefined);
-    if (!t) return null;
-    const { reason: _r, ...template } = t as StarterPick;
-    void _r;
-    return { template, isNew: false };
-  }
-
-  const recent = new Set(starters.filter((e) => e.signal === "starter_shown" && within(e, 28)).map((e) => e.starterId));
-  const pick = picks.find((p) => p.reason !== "default" && p.opener && !recent.has(p.id));
-  if (!pick) return null;
-  const { reason: _r, ...template } = pick;
-  void _r;
-  return { template, isNew: true };
+/** 점수가 음수인 태그 — "아니에요"·빼기로 내려간 주제는 추천 질문에서도 피한다. */
+export function avoidTagsFromScores(scores: Record<string, number>): string[] {
+  return Object.entries(scores).filter(([, v]) => v < 0).map(([k]) => k);
 }
 
 /** 프로필 상태 → 질문 신호. 자격 판정이 아니라 "물어볼 만한 주제" 선별일 뿐이다. */
@@ -116,12 +71,6 @@ export function upcomingEventTags(
     for (const tag of matchTags(e.title, taxonomy)) if (!out.includes(tag)) out.push(tag);
   }
   return out;
-}
-
-/** 최근 days일 안에 거절한 선톡의 태그 — LLM 생성 질문에서도 그 주제를 피한다. */
-export function blockedStarterTags(history: InterestEvent[], now: Date, days = 28): Set<string> {
-  const since = now.getTime() - days * DAY_MS;
-  return new Set(history.filter((e) => e.signal === "starter_no" && new Date(e.occurredAt).getTime() >= since).flatMap((e) => e.tags));
 }
 
 // ── LLM 질문 생성 (카카오 선톡의 "Generate → Filter") ─────────────────────────
@@ -177,7 +126,7 @@ function hashId(s: string): string {
   return h.toString(36);
 }
 
-/** LLM 출력 {starters:[{tag,question,opener}]} → 검증된 질문. 규칙에 걸리면 버리고, 비슷한 문장(바이그램 Jaccard ≥ 0.6)은 하나만. */
+/** LLM 출력 {starters:[{tag,question}]} → 검증된 질문. 규칙에 걸리면 버리고, 비슷한 문장(바이그램 Jaccard ≥ 0.6)은 하나만. */
 export function filterGeneratedStarters(raw: unknown, validTags: string[], avoidTags: string[], n: number): StarterTemplate[] {
   const list = (raw as { starters?: unknown } | null)?.starters;
   if (!Array.isArray(list)) return [];
@@ -187,7 +136,7 @@ export function filterGeneratedStarters(raw: unknown, validTags: string[], avoid
   for (const it of list) {
     if (out.length >= n) break;
     if (!it || typeof it !== "object") continue;
-    const { tag: rawTag, question: rawQ, opener: rawO } = it as Record<string, unknown>;
+    const { tag: rawTag, question: rawQ } = it as Record<string, unknown>;
     const tag = rawTag == null ? null : typeof rawTag === "string" && validTags.includes(rawTag) ? rawTag : undefined;
     if (tag === undefined || (tag && (avoidTags.includes(tag) || usedTags.has(tag)))) continue;
     const question = typeof rawQ === "string" ? rawQ.trim() : "";
@@ -195,11 +144,9 @@ export function filterGeneratedStarters(raw: unknown, validTags: string[], avoid
     if (!ON_TOPIC.test(question) || HAS_NUMBER_FACT.test(question) || MULTI_TOPIC.test(question)) continue;
     const g = bigrams(question);
     if (grams.some((x) => jaccard(x, g) >= 0.6)) continue;
-    let opener = typeof rawO === "string" ? rawO.trim() : "";
-    if (opener.length > 80 || HAS_NUMBER_FACT.test(opener) || !/[?？]$/.test(opener)) opener = "";
     grams.push(g);
     if (tag) usedTags.add(tag);
-    out.push({ id: tag ? `gen:${tag}` : `gen:${hashId(question)}`, tag, question, opener });
+    out.push({ id: tag ? `gen:${tag}` : `gen:${hashId(question)}`, tag, question });
   }
   return out;
 }
