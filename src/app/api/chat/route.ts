@@ -13,6 +13,7 @@ import type { ProfileCtx } from "@/agents/policyTools";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 import { classifyPolicyForUser } from "@/services/policyMatch";
 import { recordChatInterests } from "@/services/interests";
+import { mergeChatReply, POLICY_FALLBACK_TEXT, isPolicyFallback } from "@/lib/chatReply";
 
 const HISTORY_LIMIT = 12;
 
@@ -184,7 +185,9 @@ export async function POST(request: Request) {
 
       const deferUntil = deterministic?.isFuture ? deterministic.effectiveFrom : null;
       const profileReply = await runProfileAgent(userId, profileRowId, messages, missingFields, deferUntil);
-      messages.push({ role: "assistant", content: profileReply });
+      // profileReply를 assistant 메시지로 대화에 넣지 않는다 — 넣으면 Policy Agent가 보기에 마지막 사용자
+      // 질문에 이미 답이 달린 상태라 빈 답만 내고(재시도해도 같음) 폴백 문구가 붙는다(배포 재현:
+      // "다음 달 관악구로 이사 가고 면접도 잡혔어요. 받을 수 있는 지원 있을까요?").
       reply = profileReply;
       if (deterministic?.cleaned) {
         const FIELD_LABELS: Record<string, string> = { region_sido: "거주지(시·도)", region_sigungu: "거주지(시·군·구)", employment_status: "취업상태", education_status: "학력", housing_type: "주거형태" };
@@ -222,8 +225,12 @@ export async function POST(request: Request) {
         });
       }
       const prior = plan.intents.includes("profile_update") ? reply : null; // 프로필 반영·이사 델타 답변은 유지
-      const FALLBACK_TEXT = "답변을 정리하는 중 문제가 생겼어요. 다시 한 번 말씀해 주시겠어요?";
-      const isEmptyReply = (s: string) => /답변을 정리하는 중 문제/.test(s);
+      if (prior) {
+        messages.push({
+          role: "system",
+          content: "이번 사용자 메시지 중 프로필 변경(이사·취업상태 등)은 이미 처리해 답했습니다. 그 부분은 다시 다루지 말고, 받을 수 있는 지원 정책 질문에만 답하세요.",
+        });
+      }
       // Policy Agent(ReAct)가 빈 답만 내는 게 아니라 아예 예외를 던지는 경우도 실제로 있다
       // (Groq 구조화 출력/도구 호출 파싱 실패) — extractReply의 "빈 답" 처리는 예외까진 못 잡으므로
       // 여기서 한 번 더 감싸 최대 2회(원 시도+재시도) 안에 실패하면 500대 에러 대신 안내문으로 대체.
@@ -231,12 +238,12 @@ export async function POST(request: Request) {
         for (let i = 0; i < 2; i++) {
           try {
             const r = await fn();
-            if (!isEmptyReply(r.reply)) return r;
+            if (!isPolicyFallback(r.reply)) return r;
           } catch (e) {
             console.error("Policy Agent 실행 실패:", e instanceof Error ? e.message : e);
           }
         }
-        return { reply: FALLBACK_TEXT, policies: [] };
+        return { reply: POLICY_FALLBACK_TEXT, policies: [] };
       };
       let policyResult: PolicyAgentResult;
       if (plan.policyMode === "compare") {
@@ -246,10 +253,8 @@ export async function POST(request: Request) {
       } else {
         policyResult = await runWithRetry(() => runPolicySearch(ctx, profile.sido, messages, plan.policyQuery));
       }
-      let policyReply = policyResult.reply;
       policies = policyResult.policies;
-      if (skipPolicySearchIfEmpty && /찾지 못했/.test(policyReply)) policyReply = ""; // 델타가 이미 답이므로 빈 결과로 덮어쓰지 않음
-      reply = [prior, policyReply].filter(Boolean).join("\n\n");
+      reply = mergeChatReply(prior, policyResult.reply, { deltaShown: skipPolicySearchIfEmpty });
 
       // user_policy_matches.missing_information에 기대고 싶었지만, 에이전트(LLM)가 매턴
       // save_lookup_result를 성실히 호출한다는 보장이 없어(직접 확인함 — insufficient_info인데

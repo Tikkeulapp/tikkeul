@@ -8,6 +8,7 @@ import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import type { ChatMessage, ChatPolicy } from "@/types/chat";
 import { chatPoliciesFromAgentRun, type AgentRunMessage } from "@/lib/chatPolicies";
+import { POLICY_FALLBACK_TEXT } from "@/lib/chatReply";
 import {
   buildBenefitInfoTool,
   buildCheckEligibilityTool,
@@ -121,7 +122,7 @@ export function extractReply(result: { messages: { content?: unknown }[] }): str
     .replace(/^.*정책\s*ID\s*[:：].*$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  return reply || "답변을 정리하는 중 문제가 생겼어요. 다시 한 번 말씀해 주시겠어요?";
+  return reply || POLICY_FALLBACK_TEXT;
 }
 
 /** 답변 + 답변에 언급된 DB 정책(마이티끌 담기 카드용) */
