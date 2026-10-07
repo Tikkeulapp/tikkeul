@@ -121,10 +121,10 @@ export function Hero() {
         </div>
 
         {/* 떠 있는 절약액 카드 */}
-        <div className="absolute bottom-0 -left-2 rounded-[24px] bg-leaf-deep px-6 py-4 text-white shadow-lift ring-4 ring-paper sm:-left-8">
-          <p className="text-[13px] font-bold text-white/70">이번 달 모은 티끌</p>
-          <p className="text-[30px] font-bold leading-tight tracking-tight text-lime">
-            +140,000<span className="ml-0.5 text-[16px] text-white">원</span>
+        <div className="absolute bottom-0 -left-2 rounded-[24px] bg-mint px-6 py-4 text-leaf-deep shadow-lift ring-4 ring-paper sm:-left-8">
+          <p className="text-[13px] font-bold text-leaf-deep/70">이번 달 모은 티끌</p>
+          <p className="text-[30px] font-bold leading-tight tracking-tight text-leaf-deep">
+            +140,000<span className="ml-0.5 text-[16px]">원</span>
           </p>
         </div>
       </div>
