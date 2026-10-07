@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getPersona } from "@/data/personas";
 import type { Persona } from "@/types/persona";
+import type { ChatPolicy } from "@/types/chat";
 import { BRAND } from "@/config/brand";
 import { LogoMark } from "@/components/landing/LogoMark";
 import { formatKrw } from "@/lib/derive";
@@ -215,7 +216,7 @@ export default function AppPage() {
   const [notice, setNotice] = useState<string | null>(null);
   // 질문 하나로 끝나지 않고 답변 아래에서 바로 추가 질문을 이어갈 수 있게 — 매번 위 검색창을
   // 다시 눌러야 했던 걸 실제 채팅처럼 스레드로 유지한다. reply가 null이면 아직 응답 대기 중.
-  type ChatTurn = { question: string; reply: string | null };
+  type ChatTurn = { question: string; reply: string | null; policies?: ChatPolicy[] };
   const [chatThread, setChatThread] = useState<ChatTurn[]>([]);
   const [followUp, setFollowUp] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -645,6 +646,14 @@ export default function AppPage() {
     return map;
   }, [events]);
 
+  /** 챗봇 답변 아래 정책 카드에서 마이티끌로 담기 — 카드 정보로 바로 목록에 보이게 한 뒤 서버 반영 */
+  const saveFromChat = (p: ChatPolicy) => {
+    const rec: Rec = { id: p.policyId, title: p.title, benefit: p.provider ?? "", amountMaxKrw: 0, region: p.region, provider: p.provider, url: p.applyUrl, source: "db", endDate: p.endDate, alwaysOpen: p.alwaysOpen };
+    setDbRecs((prev) => (prev[p.policyId] ? prev : { ...prev, [p.policyId]: rec }));
+    setSaved(p.policyId, "save");
+    setOpenTab("my");
+  };
+
   const openDetail = (r: Rec) => {
     setDetail(r);
     setVerdict(null);
@@ -726,7 +735,8 @@ export default function AppPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "요청 실패");
-      setChatThread((prev) => prev.map((t, i) => (i === prev.length - 1 ? { ...t, reply: json.reply } : t)));
+      const policies = (Array.isArray(json.policies) ? json.policies : []) as ChatPolicy[];
+      setChatThread((prev) => prev.map((t, i) => (i === prev.length - 1 ? { ...t, reply: json.reply, policies } : t)));
       setNeededFields(new Set(Array.isArray(json.missingFields) ? json.missingFields : []));
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
@@ -902,7 +912,33 @@ export default function AppPage() {
                     <div className="mt-2 flex items-start gap-2">
                       <span>🤖</span>
                       {turn.reply ? (
-                        <div className="min-w-0 flex-1 whitespace-pre-wrap">{renderChatMarkdown(turn.reply)}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="whitespace-pre-wrap">{renderChatMarkdown(turn.reply)}</div>
+                          {turn.policies && turn.policies.length > 0 && (
+                            <div className="mt-2.5 flex flex-col gap-1.5">
+                              <p className="text-[12px] font-bold text-mute">답변에 나온 정책</p>
+                              {turn.policies.map((p) => (
+                                <div key={p.policyId} className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[10px] bg-mint-soft/70 px-2.5 py-2">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[14px] font-bold leading-snug">{p.title}</p>
+                                    <p className="text-[12.5px] text-mute">
+                                      {[p.provider, p.region].filter(Boolean).join(" · ")}
+                                      {p.endDate ? ` · 마감 ${fmtMD(p.endDate)}` : p.alwaysOpen ? " · 상시" : ""}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    {p.applyUrl && <a href={p.applyUrl} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>}
+                                    {savedIds.includes(p.policyId) ? (
+                                      <span className="rounded-full bg-mint px-2.5 py-1 text-[12.5px] font-bold text-leaf-deep">✓ 마이티끌에 담김</span>
+                                    ) : (
+                                      <button onClick={() => saveFromChat(p)} className="rounded-full bg-leaf px-3 py-1 text-[12.5px] font-bold text-white transition hover:bg-[#333333]">+ 마이티끌에 담기</button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ) : isLast && chatLoading ? (
                         <p className="text-mute">생각 중… 프로필과 정책 DB를 대조하고 있어요 (5~20초)</p>
                       ) : (
