@@ -30,6 +30,16 @@ test("expandKeyword: 자격·직무명 표기 변형을 흡수한다 — 보험�
   assert.ok(expandKeyword("보험사").includes("계리")); // 보험사 → 계리 하위 확장
 });
 
+test("expandKeyword: 보안 용어는 사전으로 — 동음이의어 '바이러스'(생물학)로 새지 않는다", () => {
+  const t = expandKeyword("악성코드");
+  assert.ok(t.includes("멀웨어") && t.includes("랜섬웨어"));
+  assert.ok(!t.includes("바이러스")); // 실데이터: 바이오노트 '바이러스 중화항체' 연구직 오탐
+  const s = expandKeyword("보안관제");
+  assert.ok(s.includes("SOC") && s.includes("SIEM"));
+  assert.ok(!s.includes("관제")); // 실데이터: 철도 관제·물류 관제·배송 관제 오탐
+  assert.ok(expandKeyword("보안").includes("보안관제")); // 보안 → 하위 확장
+});
+
 test("findKeywordEvidence: 짧은 영문 토큰은 단어 경계를 요구한다", () => {
   assert.equal(findKeywordEvidence("sales training program", ["AI"]), null); // trAIning 오탐 방지
   assert.ok(findKeywordEvidence("생성형 AI 서비스 개발", ["AI"]));

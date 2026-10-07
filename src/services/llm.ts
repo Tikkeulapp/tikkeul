@@ -13,7 +13,13 @@ import { groqJson } from "@/services/groq";
 
 const DEFAULT_ANTHROPIC_MODEL = "claude-opus-5-5";
 
-export const llmProvider = () => (process.env.LLM_PROVIDER ?? "groq").toLowerCase();
+export type LlmPurpose = "chat" | "task";
+/** 용도별 제공자 — 대화(챗봇·에이전트)는 LLM_CHAT_PROVIDER(없으면 LLM_PROVIDER), 그 외 작업(공고 정규화·추천 선별·판정 해설 등)은
+ *  LLM_TASK_PROVIDER(없으면 groq). 즉 Vercel에 LLM_PROVIDER=anthropic만 있으면 "채팅은 Claude, 나머지는 Groq"가 된다. */
+export const llmProvider = (purpose: LlmPurpose = "task") =>
+  (purpose === "chat"
+    ? (process.env.LLM_CHAT_PROVIDER ?? process.env.LLM_PROVIDER ?? "groq")
+    : (process.env.LLM_TASK_PROVIDER ?? "groq")).toLowerCase();
 
 /** 응답 텍스트에서 JSON만 추출 — 모델이 ```json 펜스를 둘러도 파싱되게 */
 function extractJson(text: string): string {
@@ -60,15 +66,15 @@ async function anthropicJson<T>(system: string, user: string, maxTokens: number)
 }
 
 /** JSON 모드 LLM 호출 — 제공자(Groq/Anthropic)를 환경변수로 선택. 시그니처는 기존 groqJson과 동일. */
-export async function llmJson<T>(system: string, user: string, maxTokens = 1500): Promise<T> {
-  if (llmProvider() === "anthropic") return anthropicJson<T>(system, user, maxTokens);
+export async function llmJson<T>(system: string, user: string, maxTokens = 1500, opts: { purpose?: LlmPurpose } = {}): Promise<T> {
+  if (llmProvider(opts.purpose ?? "task") === "anthropic") return anthropicJson<T>(system, user, maxTokens);
   return groqJson<T>(system, user, maxTokens);
 }
 
 /** LangChain 채팅 모델 — 에이전트(orchestrator·policy·profile)용.
  *  temperature는 Groq에만 적용한다 — Claude Opus 5.5 계열은 temperature 변경 요청을 400으로 거부. */
 export function chatModel(temperature = 0) {
-  if (llmProvider() === "anthropic") {
+  if (llmProvider("chat") === "anthropic") {
     return new ChatAnthropic({
       model: process.env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
       maxTokens: 4096,

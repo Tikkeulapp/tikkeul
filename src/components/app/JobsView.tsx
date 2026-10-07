@@ -18,6 +18,7 @@ type Job = {
   job_id: string; source: string; title: string; company: string | null; region_names: string[]; is_national: boolean;
   ncs_codes: string[]; ncs_names: string[]; hire_types: string[]; career: string | null; education: string | null; salary_text: string | null;
   headcount: number | null; summary?: string | null; requirements?: string | null; pbanc_begin: string | null; deadline: string | null; deadline_time: string | null; detail_url: string | null; dday: number | null;
+  career_label?: string | null; education_label?: string | null; hire_label?: string | null; // 서버에서 표준화된 표시값
   match?: Evidence | null;
 };
 
@@ -269,7 +270,7 @@ export function JobsView({ session }: { session: SimSession }) {
       {/* ── 검색 조건 ── */}
       <form onSubmit={(e) => { e.preventDefault(); runSearch(); }} className="h-fit rounded-[18px] border border-line bg-card p-4 lg:sticky lg:top-4">
         <p className="text-[15px] font-bold">검색 조건</p>
-        <p className="mt-1 text-[12.5px] text-mute">조건을 고르면 접수 중 공고가 마감 임박순으로 나와요.</p>
+        <p className="mt-1 text-[12.5px] text-mute">조건을 고른 뒤 강점으로 찾기를 누르면 접수 중 공고가 마감 임박순으로 나와요.</p>
         <div className="mt-3 flex flex-col gap-3">
           <div>
             <p className={label}>근무 지역</p>
@@ -312,9 +313,7 @@ export function JobsView({ session }: { session: SimSession }) {
               {ORGS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-          <button type="submit" disabled={loading} className="rounded-full bg-ink px-5 py-2.5 text-[15px] font-bold text-white transition hover:opacity-90 disabled:opacity-50">
-            {loading ? "검색 중…" : "공고 검색 →"}
-          </button>
+          <p className="rounded-[10px] bg-paper px-3 py-2 text-[12.5px] text-mute">조건은 위 <b className="text-[#6b4fbb]">강점으로 찾기</b> 버튼을 누를 때 함께 적용돼요.</p>
         </div>
       </form>
 
@@ -419,21 +418,25 @@ export function JobsView({ session }: { session: SimSession }) {
                       ))}
                     </div>
                   )}
-                  <p className="mt-1.5 text-[13.5px] text-mute">
-                    {(j.is_national && j.region_names.length === 0 ? "전국" : j.region_names.join("·")) || "지역 미상"}
-                    {(() => { const o = orderedNcs(j); return o.names.length > 0 && (
-                      <> · {o.matchedFirst ? <b className="text-leaf-deep">✓ {o.names[0]}</b> : o.names[0]}{o.names.slice(1).map((n) => <span key={n}> · {n}</span>)}{o.more > 0 && <span> 외 {o.more}분야</span>}</>
-                    ); })()}
-                    {j.hire_types.length > 0 && <> · {j.hire_types.slice(0, 2).join("·")}</>}
-                  </p>
-                  <p className="text-[13.5px] text-mute">
-                    {j.career && <>{j.career}</>}
-                    {j.education && <> · {j.education}</>}
-                    {j.salary_text && <> · {j.salary_text}</>}
-                    {j.headcount ? <> · {j.headcount}명</> : null}
-                  </p>
-                  {j.summary && <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-ink/80">{j.summary}</p>}
-                  {j.requirements && <p className="mt-0.5 line-clamp-2 text-[12.5px] leading-snug text-mute">자격 · {j.requirements}</p>}
+                  {/* 카드 고정 폼 — 소스가 달라도 같은 4행으로 표시 (값은 서버에서 표준화) */}
+                  <dl className="mt-2 grid grid-cols-[56px_1fr] gap-x-2 gap-y-1 text-[13px] leading-snug">
+                    <dt className="text-[12px] font-bold text-mute">근무지</dt>
+                    <dd className="text-ink/85">
+                      {(j.is_national && j.region_names.length === 0 ? "전국" : j.region_names.join("·")) || "지역 미상"}
+                      {(() => { const o = orderedNcs(j); return o.names.length > 0 && (
+                        <> · {o.matchedFirst ? <b className="text-leaf-deep">✓ {o.names[0]}</b> : o.names[0]}{o.names.slice(1, 2).map((n) => <span key={n}> · {n}</span>)}{o.more + Math.max(0, o.names.length - 2) > 0 && <span className="text-mute"> 외</span>}</>
+                      ); })()}
+                    </dd>
+                    <dt className="text-[12px] font-bold text-mute">조건</dt>
+                    <dd className="text-ink/85">
+                      {[j.hire_label ?? "고용형태 미기재", j.career_label ?? "경력 미기재", j.education_label ?? "학력 미기재"].join(" · ")}
+                      {j.headcount ? ` · ${j.headcount}명` : ""}{j.salary_text ? ` · ${j.salary_text}` : ""}
+                    </dd>
+                    <dt className="text-[12px] font-bold text-mute">주요 업무</dt>
+                    <dd className={j.summary ? "text-ink/85" : "text-mute"}>{j.summary ?? "공고 원문 참조"}</dd>
+                    <dt className="text-[12px] font-bold text-mute">지원 자격</dt>
+                    <dd className={j.requirements ? "text-ink/85" : "text-mute"}>{j.requirements ?? "공고 원문 참조"}</dd>
+                  </dl>
                   {/* 키워드가 공고 원문 어디에 걸렸는지 — 근거 하이라이트 (켜진 키워드만, 최대 2개) */}
                   {Object.entries(evidence[j.job_id] ?? {}).filter(([k]) => selectedKw.has(k)).slice(0, 2).map(([k, m]) => (
                     <p key={k} className="mt-1 rounded-[8px] bg-paper px-2 py-1 text-[12.5px] leading-snug text-mute">

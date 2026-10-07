@@ -40,7 +40,7 @@ function effectiveDateFrom(message: string): string {
 async function applyProfilePatchDeterministically(userId: string, profileRowId: string, message: string) {
   let patch: ProfilePatch = { region_sido: null, region_sigungu: null, employment_status: null, education_status: null, housing_type: null };
   try {
-    patch = await llmJson<ProfilePatch>(PATCH_SYSTEM, `발화: "${message}"`, 600);
+    patch = await llmJson<ProfilePatch>(PATCH_SYSTEM, `발화: "${message}"`, 600, { purpose: "chat" });
   } catch { /* 아래 정규식 폴백 */ }
   // 정규식 폴백: "서울 영등포구로 이사", "경기도 안양으로 이주" — LLM이 놓쳐도 지역 변경은 잡는다
   if (!patch.region_sido) {
