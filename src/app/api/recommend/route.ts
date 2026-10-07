@@ -2,18 +2,22 @@
  * POST /api/recommend — 프로필 기반 추천 (추천 탭)
  * 입력: { userId, personaId | profileId }
  * 흐름: resolveProfile(이사 반영) → 취준 키워드별 거주지/전국 후보 풀(마감 지난 정책 제외) → 코드 점수화
- *       → 관심사 순위와 RRF 융합·피드백 다운랭크 → 40건 → LLM 6건 선별 → 테마 다양성 재배치
+ *       → 관심사 순위와 RRF 융합·피드백 다운랭크 → 40건 → 규칙엔진 자격 게이트(excluded 제외)
+ *       → LLM 6건 선별 → 테마 다양성 재배치
  * 관심사(담기·열람·일정·응시료 지출)는 순위에만 쓴다 — 자격 판정·금액과는 무관.
+ * 자격 판정은 규칙엔진만 한다(LLM 선별은 관련도). 구조화 조건이 없는 정책은 배지 없이(unjudged) 둔다.
  * 금액은 원문에 명시된 경우에만 추출(없으면 null) — 절약 위젯 합산용.
  */
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
+import { classifyPoliciesForUser } from "@/services/policyMatch";
 import { llmJson } from "@/services/llm";
 import { loadInterestContext, recordImpressions } from "@/services/interests";
 import { INTEREST_TAGS } from "@/data/interests";
 import { interestScoreForText, keywordsForTags } from "@/lib/interest";
 import { diversify, rrf } from "@/lib/rank";
+import { badgeLabel, gateByEligibility } from "@/lib/eligibilityGate";
 
 export const maxDuration = 60;
 
@@ -118,7 +122,10 @@ export async function POST(request: Request) {
   const fused = rrf([ranked.map((c) => c.policy_id), interestOrder]).map((x) => x.id);
   const fusedOrder = [...fused.filter((id) => !interest.stale.has(id)), ...fused.filter((id) => interest.stale.has(id))];
   const rankedById = new Map(ranked.map((c) => [c.policy_id, c]));
-  const cands = fusedOrder.slice(0, 40).map((id) => rankedById.get(id)!);
+  const top = fusedOrder.slice(0, 40).map((id) => rankedById.get(id)!);
+  // 규칙엔진 게이트 — 확인된 미충족(excluded)은 LLM에 보내기 전에 뺀다
+  const verdicts = await classifyPoliciesForUser(top.map((c) => c.policy_id), prof.profileRow, prof.financeRow);
+  const cands = gateByEligibility(top, (c) => c.policy_id, verdicts);
 
   const byId = new Map(cands.map((c) => [c.policy_id, c]));
   const list = cands.map((c) => ({
@@ -147,6 +154,7 @@ export async function POST(request: Request) {
       id: c.policy_id, title: c.title, benefit: p.benefit_summary, amountMaxKrw: amount, amountBasis: p.amount_basis ?? (amount ? "원문 금액 규칙 추출" : null),
       region: c.is_national ? "전국" : (c.region_sidos ?? []).join(", "), provider: c.provider, content: c.search_text?.slice(0, 600) ?? null,
       url: c.apply_url, source: "db" as const, sourceName: c.source, endDate: c.end_date, alwaysOpen: !!c.always_open, score: p.score, reason: p.reason,
+      eligibility: c.eligibility, eligibilityLabel: badgeLabel(c.eligibility),
     };
   });
 

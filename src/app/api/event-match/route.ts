@@ -4,13 +4,15 @@ import { llmJson } from "@/services/llm";
 import { resolveProfile } from "@/services/profile";
 import { normalizeSido } from "@/lib/region";
 import { isPolicyRelevantEvent } from "@/lib/calendarRules";
-import { saveMatchResult } from "@/services/policyMatch";
+import { classifyPoliciesForUser, saveMatchResult } from "@/services/policyMatch";
+import { badgeLabel, gateByEligibility, profileForMove, verdictFromBadge, type EligibilityBadge } from "@/lib/eligibilityGate";
 
 /**
  * POST /api/event-match — 일정 텍스트 → 관련 정책 추천 (서비스의 심장)
  * 1) LLM이 일정의 의미(유형·지역·키워드)를 추출
  * 2) policies 테이블에서 지역·키워드로 후보 압축 (SQL) — 일정 지역 우선
- * 3) LLM이 사용자 프로필과 대조해 상위 추천 + 이유
+ * 2-1) 규칙엔진 자격 게이트 — excluded는 LLM에 보내기 전에 제외 (이사면 목적지 시도 기준)
+ * 3) LLM이 사용자 프로필과 대조해 상위 추천 + 이유 (관련도만 — 판정은 2-1의 규칙엔진 결과)
  * + 이사(MOVE)로 거주지가 바뀌면: 프로필 변경 제안 + 델타 리포트(열리는/사라지는 혜택)
  */
 
@@ -149,13 +151,17 @@ export async function POST(request: Request) {
     };
     const normTitle = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
     const seenTitle = new Set<string>();
-    const candidates: Cand[] = raw
+    const scored: Cand[] = raw
       .map((c) => ({ c, sc: scoreOf(c) }))
       .filter((x) => x.sc > 0)
       .sort((a, b) => b.sc - a.sc)
       .filter((x) => { const t = normTitle(x.c.title); if (seenTitle.has(t)) return false; seenTitle.add(t); return true; }) // 같은 정책 중복 제거
       .slice(0, 25)
       .map((x) => x.c);
+    // ── 2-1) 규칙엔진 게이트 — 이사 일정이면 목적지 시도로 옮긴 프로필로 판정한다 ──
+    const judgeRow = extracted.event_type === "MOVE" ? profileForMove(profile.profileRow, extracted.region_sido) : profile.profileRow;
+    const verdicts = await classifyPoliciesForUser(scored.map((c) => c.policy_id), judgeRow, profile.financeRow);
+    const candidates = gateByEligibility(scored, (c) => c.policy_id, verdicts);
 
     const compact = (list: Cand[]) => list.map((c) => ({
       policy_id: c.policy_id,
@@ -190,26 +196,17 @@ export async function POST(request: Request) {
       recommendations = (ranked.recommendations ?? [])
         .filter((r) => byId.has(r.policy_id) && r.score >= 60)
         .slice(0, 3)
-        .map((r) => ({ ...shape(byId.get(r.policy_id)!), score: r.score, reason: r.reason, benefit_summary: r.benefit_summary }));
+        .map((r) => {
+          const c = byId.get(r.policy_id)!;
+          return { ...shape(c), score: r.score, reason: r.reason, benefit_summary: r.benefit_summary, eligibility: c.eligibility, eligibilityLabel: badgeLabel(c.eligibility) };
+        });
 
-      // search 모드 영속화. eligibility_status는 항상 insufficient_info로 남긴다 —
-      // 이 랭킹은 "관련도" 판단이지 policy_eligibility 규칙엔진을 거친 자격 확정이 아니기 때문
-      // (eligibility_json 백필 전까지는 대부분의 실제 정책에 조건이 없다).
+      // search 모드 영속화. 판정은 2-1 규칙엔진 결과(배지)를 그대로 쓴다 — LLM 랭킹은 관련도일 뿐이다.
+      // 구조화 조건이 없는 정책은 insufficient_info + sentinel로 남는다(채팅 Profile Agent가 걸러냄).
       if (userId) {
         await Promise.all(
-          (recommendations as { policy_id: string; score: number; reason: string }[]).map((r) =>
-            saveMatchResult({
-              userId,
-              policyId: r.policy_id,
-              matchMode: "search",
-              verdict: {
-                score: r.score,
-                eligibility: "NEEDS_CHECK",
-                reasons: [r.reason],
-                missing_information: ["규칙엔진 자격조건 미확인 — eligibility_json 백필 전"],
-                evidence_todo: [],
-              },
-            }),
+          (recommendations as { policy_id: string; score: number; reason: string; eligibility: EligibilityBadge }[]).map((r) =>
+            saveMatchResult({ userId, policyId: r.policy_id, matchMode: "search", verdict: verdictFromBadge(r.eligibility, r.score, r.reason) }),
           ),
         );
       }
@@ -229,8 +226,13 @@ export async function POST(request: Request) {
           : Promise.resolve({ data: [] as Cand[] }),
         db.from("policies").select("*", { count: "exact", head: true }).contains("region_sidos", [newSido]),
       ]);
-      const open = (openRows ?? []) as Cand[];
-      const close = (closeRows ?? []) as Cand[];
+      // 새 지역 혜택은 이사 후 프로필로, 사라지는 혜택은 현재 프로필로 판정 — 지금도 자격이 안 되는 정책은 "잃는 것"이 아니다
+      const [openVerdicts, closeVerdicts] = await Promise.all([
+        classifyPoliciesForUser(((openRows ?? []) as Cand[]).map((c) => c.policy_id), profileForMove(profile.profileRow, newSido), profile.financeRow),
+        classifyPoliciesForUser(((closeRows ?? []) as Cand[]).map((c) => c.policy_id), profile.profileRow, profile.financeRow),
+      ]);
+      const open = gateByEligibility((openRows ?? []) as Cand[], (c) => c.policy_id, openVerdicts);
+      const close = gateByEligibility((closeRows ?? []) as Cand[], (c) => c.policy_id, closeVerdicts);
       let delta: Delta = { opening: [], closing: [] };
       if (open.length + close.length > 0) {
         delta = await llmJson<Delta>(
@@ -247,7 +249,7 @@ export async function POST(request: Request) {
         to: newSido,
         effectiveFrom: date ?? new Date().toISOString().slice(0, 10),
         opening: (delta.opening ?? []).filter((o) => openById.has(o.policy_id) && o.score >= 60).filter((o, idx, arr) => { const t = normTitle(openById.get(o.policy_id)!.title); return arr.findIndex((x) => normTitle(openById.get(x.policy_id)!.title) === t) === idx; }).slice(0, 6)
-          .map((o) => ({ ...shape(openById.get(o.policy_id)!), score: o.score, reason: o.reason })),
+          .map((o) => { const c = openById.get(o.policy_id)!; return { ...shape(c), score: o.score, reason: o.reason, eligibility: c.eligibility, eligibilityLabel: badgeLabel(c.eligibility) }; }),
         closing: (delta.closing ?? []).filter((c) => closeById.has(c.policy_id)).slice(0, 4)
           .map((c) => ({ ...shape(closeById.get(c.policy_id)!), reason: c.reason })),
         openingTotal: openingTotal ?? open.length,
