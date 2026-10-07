@@ -1052,7 +1052,7 @@ export default function AppPage() {
                             ? <span className="text-[13px] font-bold text-leaf-deep">✓ 캘린더에 담김</span>
                             : <button onClick={() => void addJobToCalendar(j)} className="text-[13px] font-bold text-leaf-deep underline">📅 캘린더에 담기</button>
                         )}
-                        {j.url && (
+                        {j.url?.startsWith("http") && (
                           <a href={j.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-leaf-deep underline">공고 원문 ↗</a>
                         )}
                       </div>

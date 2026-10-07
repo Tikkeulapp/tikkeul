@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeSido } from "@/lib/region";
+import { sanitizeDetailUrl } from "@/lib/url";
 import { NCS_NAME_BY_CODE, ncsCodesForCategoryText } from "@/data/ncs";
 
 export type JobRow = {
@@ -191,7 +192,8 @@ async function collectPubinst(now: string, log: (m: string) => void): Promise<Jo
         pbanc_begin: ymd(it.pbancBgngYmd),
         deadline: ymd(it.pbancEndYmd),
         deadline_time: null, // 잡알리오 API는 마감 '시각'을 제공하지 않음 — 원문 확인 필요
-        detail_url: s(it.srcUrl) ?? `https://job.alio.go.kr/recruitview.do?idx=${sn}`,
+        // srcUrl은 기관이 손으로 적은 값이라 '.', '없음', 'www.도메인' 등이 섞여 있다 — 정규화 필수
+        detail_url: sanitizeDetailUrl(s(it.srcUrl), `https://job.alio.go.kr/recruitview.do?idx=${sn}`),
         search_text: [title, s(it.instNm), ncsNames.join(" "), s(it.recrutSeNm), education, cutWord(it.aplyQlfcCn, 400), cutWord(it.prefCondCn, 200)].filter(Boolean).join(" | "),
         collected_at: now,
       });
@@ -424,7 +426,7 @@ async function collectWork24(now: string, log: (m: string) => void): Promise<Job
         pbanc_begin: ymd(tag(block, "empWantedStdt")),
         deadline: ymd(tag(block, "empWantedEndt")),
         deadline_time: null,
-        detail_url: tag(block, "empWantedHomepgDetail") ?? tag(block, "empWantedMobileUrl"),
+        detail_url: sanitizeDetailUrl(tag(block, "empWantedHomepgDetail") ?? tag(block, "empWantedMobileUrl"), null),
         search_text: [title, company, coType, typeNm].filter(Boolean).join(" | "),
         collected_at: now,
       });

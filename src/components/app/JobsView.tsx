@@ -442,7 +442,7 @@ export function JobsView({ session }: { session: SimSession }) {
                               {calBusy === j.job_id ? "담는 중…" : "📅 캘린더에 담기"}
                             </button>
                       )}
-                      {j.detail_url && <a href={j.detail_url} target="_blank" rel="noreferrer" className="font-bold underline">공고 원문 ↗</a>}
+                      {j.detail_url?.startsWith("http") && <a href={j.detail_url} target="_blank" rel="noreferrer" className="font-bold underline">공고 원문 ↗</a>}
                     </span>
                   </div>
                 </li>
