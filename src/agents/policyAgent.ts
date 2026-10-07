@@ -104,7 +104,13 @@ function makeLlm() {
 /** ReAct 루프의 마지막 메시지가 가끔 빈 내용으로 끝난다(도구 호출만 하고 요약 텍스트 없이
  * 종료하는 경우) — 사용자에게 빈 응답을 보내는 대신 재시도 안내로 대체. */
 export function extractReply(result: { messages: { content?: unknown }[] }): string {
-  let reply = String(result.messages.at(-1)?.content ?? "").trim();
+  // Anthropic(Claude) 모델은 content가 문자열이 아니라 블록 배열([{type:"text",text:...},…])로
+  // 온다 — String()으로 캐스팅하면 "[object Object]"가 되므로 텍스트 블록만 이어 붙인다.
+  const raw = result.messages.at(-1)?.content;
+  const asText = Array.isArray(raw)
+    ? raw.map((b) => (typeof b === "string" ? b : (b as { type?: string; text?: string }).type === "text" ? (b as { text?: string }).text ?? "" : "")).join("")
+    : String(raw ?? "");
+  let reply = asText.trim();
   // 에이전트가 도구를 호출하는 대신 호출 인자 JSON을 본문에 써버리는 경우가 실제로 있다
   // (배포 재현: "저장 ```json {\"policyId\": ...}```") — 프롬프트로 금지하되, 새어 나온
   // 내부 산출물은 여기서 한 번 더 걷어낸다.
