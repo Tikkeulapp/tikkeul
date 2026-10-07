@@ -2,6 +2,8 @@
  * POST /api/simulate — 취업 후 시뮬레이션
  * 입력: { personaId | profileId, userId, input: { companyType, annualSalaryKrw, goals[], startMonth, monthlyCardSpendKrw? } }
  * 흐름: 프로필·마이데이터(카드·대출·계좌) 해석 → simulate() 결정론 계산 → 제도 규칙 판정 → LLM은 해설만
+ * 개인화: 관심사(저축·주거 등)로 같은 판정 그룹 안의 제도 순서와 정책 목록 순서를 조정하고, LLM에는 관심사 라벨만 참고로 준다.
+ *         계산·판정(LIKELY/NEEDS_CHECK/UNLIKELY)은 관심사와 무관.
  */
 import { NextResponse } from "next/server";
 import { getPersona } from "@/data/personas";
@@ -9,6 +11,10 @@ import type { Loan } from "@/types/persona";
 import { derive } from "@/lib/derive";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
+import { loadInterestContext } from "@/services/interests";
+import { INTEREST_TAGS } from "@/data/interests";
+import { interestScoreForText, orderByInterest } from "@/lib/interest";
+import { fuseWithInterest } from "@/lib/rank";
 import { llmJson } from "@/services/llm";
 import {
   aggregateCards,
@@ -37,7 +43,8 @@ const AI_SYSTEM = `너는 취업을 앞둔 청년의 재무 코치다. 제공된
 2) 제도·정책은 제공된 목록 안에서만 언급한다. 목록에 없는 제도를 추천하지 않는다.
 3) 단정 대신 "~로 보입니다" 톤. 최종 확인은 공식 기관에서 한다는 전제.
 4) 소비 카테고리를 언급할 때는 제공된 카테고리명만 쓴다. 목표가 여러 개면 순서대로 언급한다.
-5) 반드시 JSON만 출력: {"summary": "3~4문장", "priorities": ["우선순위 1", "우선순위 2", "우선순위 3"], "cautions": ["주의 1", "주의 2"]}`;
+5) 입력의 관심사는 사용자의 최근 행동에서 추정한 참고 정보다. 우선순위를 설명하는 순서에만 참고하고, 판정·숫자의 근거로 쓰거나 사용자의 행동을 구체적으로 언급하지 않는다.
+6) 반드시 JSON만 출력: {"summary": "3~4문장", "priorities": ["우선순위 1", "우선순위 2", "우선순위 3"], "cautions": ["주의 1", "주의 2"]}`;
 
 const NON_VARIABLE_RE = /월세|통신비|보험료|구독|적금/;
 
@@ -56,7 +63,8 @@ const DB_PICK_SYSTEM = `당신은 한국 청년 정책 어시스턴트입니다.
 - 후보 원문에 소득 상한이 있고 사용자의 연봉이 그 상한을 넘으면 제외(예: "연소득 3,500만 원 이하"인데 연봉 4,800만 원 → 제외).
 - 개인이 아니라 기업·사업주에게 지급되는 장려금·보조금(고용장려금 등)은 제외.
 - 나이·거주지 요건이 명백히 어긋나면 제외. 사용자의 시·군·구가 아닌 다른 시·군·구 전용 정책은 제외. 같은 정책이 여러 후보로 있으면 하나만.
-- score 60 미만 제외. 무관하면 빈 배열.`;
+- score 60 미만 제외. 무관하면 빈 배열.
+- 사용자의 관심사는 최근 행동에서 추정한 참고 정보입니다. 비슷한 후보끼리의 우선순위에만 쓰고, 자격 판단 근거로 쓰지 마세요.`;
 const POSTJOB_KW = ["재직", "근로자", "직장인", "자산형성", "저축", "통장", "청약", "전세", "월세", "주거", "신혼", "결혼", "근속", "공제", "이차보전", "대출"];
 
 export async function POST(request: Request) {
@@ -96,7 +104,11 @@ export async function POST(request: Request) {
 
   // ── 프로필 + 지출 구조 ──
   const db = supabaseAdmin();
-  const prof = await resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId });
+  const [prof, interest] = await Promise.all([
+    resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId }),
+    loadInterestContext({ userId: body.userId, personaId: body.personaId }),
+  ]);
+  const 관심사 = interest.topTags.map((t) => INTEREST_TAGS.find((x) => x.id === t)?.label ?? t);
   let sp: SpendingProfile;
   let housing: ProgramCtx["housing"] = null;
   const notes: string[] = [];
@@ -159,7 +171,7 @@ export async function POST(request: Request) {
 
   // ── 계산 (결정론) ──
   const result = simulate(input, sp, { age: prof.age });
-  const programs = judgePrograms({
+  const judged = judgePrograms({
     age: prof.age,
     annualSalaryKrw: input.annualSalaryKrw,
     companyType,
@@ -168,6 +180,13 @@ export async function POST(request: Request) {
     homeless: housing === "본가" ? null : housing ? true : null,
     loans: sp.loans.map((l) => ({ type: l.type, interestRate: l.interestRate })),
   });
+  // 판정 그룹(LIKELY/NEEDS_CHECK)은 그대로 두고, 그룹 안 순서만 관심사로 — 예: 저축 관심이 높으면 자산형성 상품이 위로
+  const programText = (x: { name: string; summary: string; benefit: string }) => `${x.name} ${x.summary} ${x.benefit}`;
+  const programs = {
+    ...judged,
+    likely: orderByInterest(judged.likely, programText, interest.scores, INTEREST_TAGS),
+    needsCheck: orderByInterest(judged.needsCheck, programText, interest.scores, INTEREST_TAGS),
+  };
 
   // ── 정책 DB에서 "취업 후" 정책 후보 조회 (실제 수집 데이터) ──
   type CandRow = { policy_id: string; source: string; title: string; provider: string | null; theme: string | null; region_sidos: string[] | null; is_national: boolean | null; end_date: string | null; always_open: boolean | null; apply_url: string | null; search_text: string | null };
@@ -221,6 +240,7 @@ export async function POST(request: Request) {
   const userBrief = {
     나이: prof.age, 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 주거형태: housing, 기업구분: companyType, 연봉: man(input.annualSalaryKrw),
     입사예정: ym(result.startMonth), 목표: result.goals.map((g) => `${g.type}:${g.label} ${man(g.targetKrw)}`), 세후월실수령: man(result.net.netMonthlyKrw),
+    ...(관심사.length ? { 관심사 } : {}),
   };
 
   // ── LLM 2건 병렬: (a) 정책 DB 선별 (b) 해설 — 둘 다 실패해도 계산 결과는 그대로 반환 ──
@@ -238,9 +258,11 @@ export async function POST(request: Request) {
     console.log(`[simulate] db picks: ${out?.picks?.length ?? 0} / cands ${list.length}`);
     const seenTitle = new Set<string>();
     const seenReason = new Set<string>();
-    dbPolicies = (out.picks ?? [])
-      .filter((p) => candById.has(p.policy_id) && Number(p.score) >= 60)
-      .sort((a, b) => b.score - a.score)
+    const valid = (out.picks ?? []).filter((p) => candById.has(p.policy_id) && Number(p.score) >= 60).sort((a, b) => b.score - a.score);
+    // LLM 점수 순위와 관심사 순위를 RRF로 합친다 (관심사가 없으면 LLM 순서 그대로)
+    const fusedIds = fuseWithInterest(valid.map((p) => p.policy_id), (id) => { const c = candById.get(id)!; return interestScoreForText(`${c.title} ${(c.search_text ?? "").slice(0, 300)}`, interest.scores, INTEREST_TAGS); });
+    const pickById = new Map(valid.map((p) => [p.policy_id, p]));
+    dbPolicies = fusedIds.map((id) => pickById.get(id)!)
       .filter((p) => { const t = candById.get(p.policy_id)!.title.replace(/\s|\(.*?\)/g, ""); if (seenTitle.has(t)) return false; seenTitle.add(t); return true; })
       .filter((p) => { const r = (p.reason ?? "").trim(); if (r && seenReason.has(r)) return false; seenReason.add(r); return true; }) // 같은 설명이 복붙된 항목은 환각 가능성 → 제외
       .slice(0, 8)
@@ -273,6 +295,7 @@ export async function POST(request: Request) {
     result,
     programs,
     dbPolicies,
+    interests: 관심사,
     dbCandidates: cands.length,
     dbError,
     ai,

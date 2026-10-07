@@ -26,6 +26,11 @@ type CalendarEvent = {
 
 type Session = { personaId: string | null; profileId?: string; userId: string; name?: string };
 
+/** 채용 관심 신호 (공고 담기·원문 열람) — 공고 추천 순위용, 실패해도 무시 */
+const sendJobSignal = (userId: string, signal: "save" | "view", jobId: string) => {
+  void fetch("/api/job-signals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, signal, jobId }) }).catch(() => {});
+};
+
 type Rec = {
   id: string;
   title: string;
@@ -283,7 +288,8 @@ export default function AppPage() {
   // 검색바 추천 질문 칩과 "티끌이 이해한 나" 카드
   type StarterQ = { id: string; question: string };
   const [starters, setStarters] = useState<{ questions: StarterQ[] }>({ questions: [] });
-  const [interestCard, setInterestCard] = useState<{ summary: string | null; items: { tag: string; label: string; sources: string[] }[] } | null>(null);
+  type InterestItem = { tag: string; label: string; sources: string[] };
+  const [interestCard, setInterestCard] = useState<{ summary: string | null; items: InterestItem[]; jobItems: InterestItem[] } | null>(null);
   /** 추천 질문은 LLM(Groq)이 생성하므로 하루 1회 브라우저 캐시. force=true면 다시 생성 (관심사 거절 등) */
   const loadStarters = useCallback(async (s: Session, force = false) => {
     const key = `tikkeul.starters.${s.userId}`;
@@ -305,7 +311,7 @@ export default function AppPage() {
     try {
       const qs = new URLSearchParams({ userId: s.userId, ...(s.personaId ? { personaId: s.personaId } : {}) });
       const data = await fetch(`/api/interests?${qs}`).then((r) => r.json());
-      setInterestCard(Array.isArray(data.items) ? data : null);
+      setInterestCard(Array.isArray(data.items) ? { summary: data.summary ?? null, items: data.items, jobItems: data.jobItems ?? [] } : null);
     } catch { /* 카드 숨김 */ }
   }, []);
 
@@ -493,6 +499,7 @@ export default function AppPage() {
     if (results.every((r) => r.ok)) {
       setJobCalSaved((prev) => new Set(prev).add(j.id));
       void loadEvents(session.userId); // 달력에 즉시 반영
+      sendJobSignal(session.userId, "save", j.id); // 채용 선호 신호 (추천 순위용)
     }
   }, [session, loadEvents]);
 
@@ -762,9 +769,11 @@ export default function AppPage() {
   /** "티끌이 이해한 나"에서 "아니에요" — 관심사를 내리고 추천을 다시 계산 */
   const rejectInterest = async (tag: string) => {
     if (!session) return;
-    setInterestCard((prev) => (prev ? { ...prev, items: prev.items.filter((x) => x.tag !== tag) } : prev));
+    const isJob = tag.includes(":");
+    setInterestCard((prev) => (prev ? { ...prev, items: prev.items.filter((x) => x.tag !== tag), jobItems: prev.jobItems.filter((x) => x.tag !== tag) } : prev));
     await fetch("/api/interests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.userId, tag }) });
     void loadInterestCard(session);
+    if (isJob) { void loadJobs(session, true); return; } // 채용 선호는 공고 추천만 다시 계산
     void loadStarters(session, true);
     void loadRecs(session, true);
   };
@@ -1112,7 +1121,7 @@ export default function AppPage() {
                             : <button onClick={() => void addJobToCalendar(j)} className="text-[13px] font-bold text-leaf-deep underline">📅 캘린더에 담기</button>
                         )}
                         {j.url?.startsWith("http") && (
-                          <a href={j.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-leaf-deep underline">공고 원문 ↗</a>
+                          <a href={j.url} target="_blank" rel="noreferrer" onClick={() => session && sendJobSignal(session.userId, "view", j.id)} className="text-[13px] font-bold text-leaf-deep underline">공고 원문 ↗</a>
                         )}
                       </div>
                     </div>
@@ -1508,15 +1517,15 @@ export default function AppPage() {
             )}
 
             {/* 티끌이 이해한 나 — 관심사와 근거(신호 종류만). "아니에요"로 바로잡으면 추천이 다시 계산된다 */}
-            {interestCard && interestCard.items.length > 0 && (
+            {interestCard && (interestCard.items.length > 0 || interestCard.jobItems.length > 0) && (
               <div className="rounded-[18px] border border-line bg-card p-4">
                 <p className="text-[12.5px] font-bold text-mute">티끌이 이해한 나</p>
                 {interestCard.summary && <p className="mt-1.5 text-[13.5px] font-semibold leading-snug">{interestCard.summary}</p>}
                 <ul className="mt-2 flex flex-col gap-1.5">
-                  {interestCard.items.map((it) => (
+                  {[...interestCard.items, ...interestCard.jobItems.map((x) => ({ ...x, job: true }))].map((it) => (
                     <li key={it.tag} className="flex items-start justify-between gap-2 rounded-[10px] bg-mint-soft/70 px-2.5 py-1.5">
                       <div className="min-w-0">
-                        <p className="text-[13px] font-bold">{it.label}</p>
+                        <p className="text-[13px] font-bold">{"job" in it && <span className="mr-1 rounded bg-[#efe9fb] px-1 py-0.5 text-[10.5px] font-bold text-[#6b4fbb]">채용</span>}{it.label}</p>
                         {it.sources.length > 0 && <p className="text-[11.5px] text-mute">{it.sources.join(" · ")}에서</p>}
                       </div>
                       <button onClick={() => void rejectInterest(it.tag)} className="shrink-0 text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink" title="이 관심사를 추천에서 빼요">

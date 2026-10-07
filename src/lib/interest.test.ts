@@ -13,6 +13,9 @@ import {
   explainInterests,
   rollupParents,
   summarizeInterests,
+  explainBy,
+  scoreForTags,
+  orderByInterest,
 } from "@/lib/interest";
 import type { InterestTagDef, InterestEvent } from "@/types/interest";
 
@@ -161,4 +164,28 @@ test("summarizeInterests: 라벨 0~2개로 덜 구체적인 한 문장", () => {
   assert.equal(summarizeInterests([]), null);
   assert.equal(summarizeInterests(["시험 응시료"]), "시험 응시료에 관심이 많아 보여요.");
   assert.equal(summarizeInterests(["시험 응시료", "교통비", "면접 비용"]), "시험 응시료, 교통비에 관심이 많아 보여요.");
+});
+
+test("explainInterests: 택소노미에 없는 태그(채용 ncs:·org: 등)는 정책 관심사에서 빠진다", () => {
+  const out = explainInterests([ev({ signal: "job_save", tags: ["ncs:20", "org:public"] }), ev({ signal: "save", tags: ["주거>월세"] })], NOW, TAX, 5);
+  assert.deepEqual(out.map((x) => x.tag), ["주거>월세"]);
+});
+
+test("explainBy: 라벨 함수가 있는 태그만, 근거 신호 포함", () => {
+  const out = explainBy([ev({ signal: "job_save", tags: ["org:public"] }), ev({ signal: "job_view", tags: ["org:public", "주거>월세"] })], NOW, 3, (t) => (t.startsWith("org:") ? "공공기관" : null));
+  assert.deepEqual(out, [{ tag: "org:public", label: "공공기관", score: 4, sources: ["job_save", "job_view"] }]);
+});
+
+test("SIGNAL_WEIGHT: 공고 담기 3, 열람 1, 강점 키워드 1, 노출 0", () => {
+  assert.deepEqual([SIGNAL_WEIGHT.job_save, SIGNAL_WEIGHT.job_view, SIGNAL_WEIGHT.job_keyword, SIGNAL_WEIGHT.job_impression], [3, 1, 1, 0]);
+});
+
+test("scoreForTags: 태그들의 양수 점수 합", () => {
+  assert.equal(scoreForTags(["a", "b", "c"], { a: 2, b: -1 }), 2);
+});
+
+test("orderByInterest: 관심 점수 높은 순으로 안정 정렬 (동점·무관은 원래 순서)", () => {
+  const items = [{ n: "적금 상품" }, { n: "월세 지원" }, { n: "청약" }, { n: "주거비 보조" }];
+  const out = orderByInterest(items, (x) => x.n, { "주거>월세": 2, "시험>응시료": 5 }, TAX);
+  assert.deepEqual(out.map((x) => x.n), ["월세 지원", "주거비 보조", "적금 상품", "청약"]);
 });

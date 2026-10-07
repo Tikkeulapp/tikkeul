@@ -15,6 +15,10 @@ export const SIGNAL_WEIGHT: Record<InterestSignal, number> = {
   impression: 0,
   remove: -2,
   reject: -10,
+  job_save: 3,
+  job_view: 1,
+  job_keyword: 1,
+  job_impression: 0,
 };
 
 const DAY_MS = 86_400_000;
@@ -129,7 +133,46 @@ export function chatInterestEvents(raw: unknown, now: Date, validTags: string[])
 
 // ── "티끌이 이해한 나" (Persona-lite) ────────────────────────────────────────
 
-/** 상위 관심 태그별 점수와 근거(양수로 기여한 신호 종류, 큰 순). 근거는 신호 종류까지만 — 날짜·내역은 노출하지 않는다. */
+/** 라벨이 있는 태그만 골라 상위 n개의 점수와 근거(양수로 기여한 신호 종류, 큰 순).
+ * 근거는 신호 종류까지만 — 날짜·내역은 노출하지 않는다. 정책 관심사와 채용 선호를 같은 방식으로 설명한다. */
+export function explainBy(
+  events: InterestEvent[],
+  now: Date,
+  n: number,
+  labelOf: (tag: string) => string | null,
+  opts: { halfLifeDays?: number } = {},
+): InterestExplanation[] {
+  const halfLife = opts.halfLifeDays ?? 30;
+  const labels = new Map<string, string>();
+  const scores: Record<string, number> = {};
+  const bySignal: Record<string, Partial<Record<InterestEvent["signal"], number>>> = {};
+  for (const e of events) {
+    const v = decayedValue(e, now, halfLife);
+    if (!v) continue;
+    for (const tag of e.tags) {
+      if (!labels.has(tag)) {
+        const l = labelOf(tag);
+        if (l === null) continue;
+        labels.set(tag, l);
+      }
+      scores[tag] = (scores[tag] ?? 0) + v;
+      if (v > 0) {
+        const m = (bySignal[tag] ??= {});
+        m[e.signal] = (m[e.signal] ?? 0) + v;
+      }
+    }
+  }
+  return topInterests(scores, n).map((tag) => ({
+    tag,
+    label: labels.get(tag)!,
+    score: Math.round(scores[tag] * 100) / 100,
+    sources: Object.entries(bySignal[tag] ?? {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([sig]) => sig as InterestEvent["signal"]),
+  }));
+}
+
+/** 정책 관심사 설명 — 택소노미 태그만 (채용 네임스페이스 태그는 제외). */
 export function explainInterests(
   events: InterestEvent[],
   now: Date,
@@ -137,25 +180,20 @@ export function explainInterests(
   n: number,
   opts: { halfLifeDays?: number } = {},
 ): InterestExplanation[] {
-  const halfLife = opts.halfLifeDays ?? 30;
-  const scores = scoreInterests(events, now, opts);
-  const bySignal: Record<string, Partial<Record<InterestEvent["signal"], number>>> = {};
-  for (const e of events) {
-    const v = decayedValue(e, now, halfLife);
-    if (v <= 0) continue;
-    for (const tag of e.tags) {
-      const m = (bySignal[tag] ??= {});
-      m[e.signal] = (m[e.signal] ?? 0) + v;
-    }
-  }
-  return topInterests(scores, n).map((tag) => ({
-    tag,
-    label: taxonomy.find((t) => t.id === tag)?.label ?? tag,
-    score: Math.round(scores[tag] * 100) / 100,
-    sources: Object.entries(bySignal[tag] ?? {})
-      .sort((a, b) => b[1] - a[1])
-      .map(([sig]) => sig as InterestEvent["signal"]),
-  }));
+  return explainBy(events, now, n, (tag) => taxonomy.find((t) => t.id === tag)?.label ?? null, opts);
+}
+
+/** 태그들의 양수 관심 점수 합. */
+export function scoreForTags(tags: string[], scores: Record<string, number>): number {
+  return tags.reduce((s, t) => s + Math.max(0, scores[t] ?? 0), 0);
+}
+
+/** 관심 점수 높은 순으로 안정 정렬 — 동점·무관 항목은 원래 순서 유지 (판정 그룹 안에서의 표시 순서용). */
+export function orderByInterest<T>(items: T[], textOf: (t: T) => string, scores: Record<string, number>, taxonomy: InterestTagDef[]): T[] {
+  return items
+    .map((item, i) => ({ item, i, s: interestScoreForText(textOf(item), scores, taxonomy) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((x) => x.item);
 }
 
 /** 자식 태그("시험>응시료")의 양수 점수를 부모("시험")로 합산. */

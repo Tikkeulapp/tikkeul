@@ -6,14 +6,17 @@ export type InterestTagDef = {
 };
 
 /** 관심 신호 종류 — 가중치는 src/lib/interest.ts의 SIGNAL_WEIGHT가 정한다.
- * reject = "티끌이 이해한 나" 카드에서 "아니에요". */
-export type InterestSignal = "save" | "remove" | "view" | "impression" | "calendar" | "spend" | "chat" | "reject";
+ * reject = "티끌이 이해한 나" 카드에서 "아니에요". job_* = 채용공고 신호 (태그는 ncs:·org:·hire:·region:·kw: 네임스페이스). */
+export type InterestSignal =
+  | "save" | "remove" | "view" | "impression" | "calendar" | "spend" | "chat" | "reject"
+  | "job_save" | "job_view" | "job_impression" | "job_keyword";
 
 /** 관심 점수 계산 입력 (DB 이벤트 + 일정·지출에서 런타임 도출한 이벤트 공통). */
 export type InterestEvent = {
   signal: InterestSignal;
   tags: string[];
   policyId?: string | null;
+  jobId?: string | null;
   weight?: number | null;      // 지정 시 SIGNAL_WEIGHT 대신 사용 (chat 강도·지속성 등)
   occurredAt: string;          // ISO 날짜/시각
   expiresAt?: string | null;   // 이후엔 무시 (일시적 관심)
