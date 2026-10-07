@@ -240,6 +240,22 @@ create table if not exists chat_messages (
 );
 create index if not exists idx_chat_messages_user on chat_messages(user_id, created_at);
 
+-- ── USER_INTEREST_EVENTS: 관심 신호 (개인화 추천 순위용, 2026-10-07) ──
+-- 담기·빼기·상세열람·추천노출·대화 관심을 쌓는다. 점수는 src/lib/interest.ts가 time-decay로 계산.
+-- 일정(user_calendar)·마이데이터 지출은 이미 있는 데이터라 여기 복제하지 않고 추천 시점에 태그로 변환한다.
+-- 관심사는 순위에만 쓰고 자격 판정·금액에는 쓰지 않는다.
+create table if not exists user_interest_events (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references users(user_id) on delete cascade,
+  signal       text not null check (signal in ('save', 'remove', 'view', 'impression', 'chat')),
+  tags         text[] not null default '{}',   -- src/data/interests.ts 태그 id
+  policy_id    text,                           -- FK 없음: 데모 정책·삭제된 정책도 이력은 남긴다
+  weight       numeric,                        -- null이면 SIGNAL_WEIGHT 기본값
+  occurred_at  timestamptz not null default now(),
+  expires_at   timestamptz                     -- 일시적 관심 (null = 감쇠만)
+);
+create index if not exists idx_interest_events_user on user_interest_events(user_id, occurred_at desc);
+
 -- ============================================================================
 -- RLS — 모든 테이블 활성화, 정책은 두지 않는다 (2026-10-06)
 -- 앱·스크립트는 서버에서 service_role 키로만 접근하고 service_role은 RLS를 우회하므로 동작 영향 없음.
@@ -263,3 +279,4 @@ alter table policy_eligibility      enable row level security;
 alter table user_policy_matches     enable row level security;
 alter table reminders               enable row level security;
 alter table chat_messages           enable row level security;
+alter table user_interest_events    enable row level security;

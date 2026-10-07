@@ -1,13 +1,19 @@
 /**
  * POST /api/recommend — 프로필 기반 추천 (추천 탭)
  * 입력: { userId, personaId | profileId }
- * 흐름: resolveProfile(이사 반영) → 취준 키워드별 거주지/전국 후보 풀(마감 지난 정책 제외) → 코드 점수화 40건 → LLM 6건 선별
+ * 흐름: resolveProfile(이사 반영) → 취준 키워드별 거주지/전국 후보 풀(마감 지난 정책 제외) → 코드 점수화
+ *       → 관심사 순위와 RRF 융합·피드백 다운랭크 → 40건 → LLM 6건 선별 → 테마 다양성 재배치
+ * 관심사(담기·열람·일정·응시료 지출)는 순위에만 쓴다 — 자격 판정·금액과는 무관.
  * 금액은 원문에 명시된 경우에만 추출(없으면 null) — 절약 위젯 합산용.
  */
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
 import { llmJson } from "@/services/llm";
+import { loadInterestContext, recordImpressions } from "@/services/interests";
+import { INTEREST_TAGS } from "@/data/interests";
+import { interestScoreForText, keywordsForTags } from "@/lib/interest";
+import { diversify, rrf } from "@/lib/rank";
 
 export const maxDuration = 60;
 
@@ -38,7 +44,8 @@ const SYSTEM = `당신은 한국 취업준비생 정책 어시스턴트입니다
 - 후보에 없는 policy_id 금지. reason·benefit_summary·amount는 그 후보의 요약 원문에만 근거. 원문에 없는 금액·조건을 만들지 마세요.
 - 사용자의 거주지(시·도, 시·군·구)·나이·취업상태에 명백히 어긋나면 제외. 다른 시·군·구 전용 정책은 제외.
 - 재직자 전용·기업(사업주) 지급 장려금·창업·농업·결혼·출산 정책은 제외.
-- 같은 정책이 여러 후보로 있으면 하나만. score 60 미만 제외. 무관하면 빈 배열.`;
+- 같은 정책이 여러 후보로 있으면 하나만. score 60 미만 제외. 무관하면 빈 배열.
+- [사용자]의 관심사는 최근 행동에서 추정한 참고 정보입니다. 비슷한 후보끼리의 우선순위에만 쓰고, 자격 판단 근거로 쓰거나 reason에서 행동을 구체적으로 언급하지 마세요.`;
 
 export async function POST(request: Request) {
   let body: { userId?: string | null; personaId?: string | null; profileId?: string | null };
@@ -50,17 +57,21 @@ export async function POST(request: Request) {
   if (!body.personaId && !body.profileId) return NextResponse.json({ error: "personaId 또는 profileId가 필요합니다" }, { status: 400 });
 
   const db = supabaseAdmin();
-  const prof = await resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId });
+  const [prof, interest] = await Promise.all([
+    resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId }),
+    loadInterestContext({ userId: body.userId, personaId: body.personaId }),
+  ]);
   const today = new Date().toISOString().slice(0, 10);
   const openOr = `end_date.is.null,end_date.gte.${today},always_open.eq.true`;
 
-  // 프로필에 따라 키워드 보강
+  // 프로필·관심사에 따라 키워드 보강 — 개인화 키워드를 앞에 두어야 slice에서 잘리지 않는다
   const summary = prof.summary as Record<string, unknown>;
-  const kws = [...BASE_KW];
+  const kws: string[] = [];
   if (String(summary["주거형태"] ?? "").includes("월세")) kws.push("월세", "주거");
   const benefits = (summary["수급중수당"] as string[] | undefined) ?? [];
   if (benefits.some((b) => /구직급여|실업급여/.test(b))) kws.push("재취업", "실업급여");
-  const focus = [...new Set(kws)].slice(0, 12);
+  for (const tag of interest.topTags) kws.push(...keywordsForTags([tag], INTEREST_TAGS).slice(0, 2));
+  const focus = [...new Set([...kws, ...BASE_KW])].slice(0, 16);
 
   type Res = { data: Cand[] | null; error: { message: string } | null };
   const pools: Promise<Res>[] = [];
@@ -91,20 +102,31 @@ export async function POST(request: Request) {
   };
   const norm = (t: string) => t.replace(/\s|\(.*?\)|\[.*?\]|\d{4}년?|지원사업|지원|사업|모집|시험/g, "");
   const seenTitle = new Set<string>();
-  const cands = raw
+  const ranked = raw
+    .filter((c) => !interest.removed.has(c.policy_id)) // 사용자가 마이티끌에서 뺀 정책
     .map((c) => ({ c, sc: scoreOf(c) }))
     .filter((x) => x.sc > 0)
     .sort((a, b) => b.sc - a.sc)
     .filter((x) => { const t = norm(x.c.title); if (seenTitle.has(t)) return false; seenTitle.add(t); return true; })
-    .slice(0, 40)
     .map((x) => x.c);
+  // 코드 점수 순위 + 관심사 순위를 RRF로 합치고, 반복 노출에 반응 없던 정책은 뒤로 보낸다
+  const interestOrder = ranked
+    .map((c) => ({ id: c.policy_id, s: interestScoreForText(`${c.title} ${(c.search_text ?? "").slice(0, 300)}`, interest.scores, INTEREST_TAGS) }))
+    .filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s)
+    .map((x) => x.id);
+  const fused = rrf([ranked.map((c) => c.policy_id), interestOrder]).map((x) => x.id);
+  const fusedOrder = [...fused.filter((id) => !interest.stale.has(id)), ...fused.filter((id) => interest.stale.has(id))];
+  const rankedById = new Map(ranked.map((c) => [c.policy_id, c]));
+  const cands = fusedOrder.slice(0, 40).map((id) => rankedById.get(id)!);
 
   const byId = new Map(cands.map((c) => [c.policy_id, c]));
   const list = cands.map((c) => ({
     policy_id: c.policy_id, title: c.title, 기관: c.provider, 지역: c.is_national ? "전국" : (c.region_sidos ?? []).join(","),
     마감: c.end_date ?? (c.always_open ? "상시" : null), 요약: (c.search_text ?? "").slice(0, 300),
   }));
-  const userMsg = `[사용자]\n${JSON.stringify({ ...summary, 나이: age, 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim() })}\n\n[정책 후보]\n${JSON.stringify(list)}`;
+  const 관심사 = interest.topTags.map((id) => INTEREST_TAGS.find((t) => t.id === id)?.label ?? id);
+  const userMsg = `[사용자]\n${JSON.stringify({ ...summary, 나이: age, 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), ...(관심사.length ? { 관심사 } : {}) })}\n\n[정책 후보]\n${JSON.stringify(list)}`;
 
   let picks: Pick[] = [];
   let aiError: string | null = null;
@@ -116,7 +138,7 @@ export async function POST(request: Request) {
     aiError = e instanceof Error ? e.message : String(e);
   }
 
-  const recommendations = picks.map((p) => {
+  const recommendations = diversify(picks, (p) => byId.get(p.policy_id)?.theme ?? null).map((p) => {
     const c = byId.get(p.policy_id)!;
     const llmAmount = typeof p.amount_krw === "number" && p.amount_krw > 0 && p.amount_krw < 100_000_000 ? Math.round(p.amount_krw) : 0;
     const parsed = llmAmount || parseAmountKrw(p.benefit_summary) || parseAmountKrw((c.search_text ?? "").slice(0, 400));
@@ -128,5 +150,7 @@ export async function POST(request: Request) {
     };
   });
 
-  return NextResponse.json({ recommendations, candidates: cands.length, aiError, profile: { sido: prof.sido, sigungu: prof.sigungu, age } });
+  if (body.userId) await recordImpressions(body.userId, recommendations.map((r) => r.id));
+
+  return NextResponse.json({ recommendations, candidates: cands.length, aiError, interests: 관심사, profile: { sido: prof.sido, sigungu: prof.sigungu, age } });
 }
