@@ -5,9 +5,15 @@
       "slug": "shinhanlife-2026h2",
       "company": "신한라이프생명보험",
       "title": "신한라이프 2026 신입채용",
-      "region_names": ["서울 중구(본사)"],
-      "region_sidos": ["서울특별시"],
-      "hire_types": ["정규직"],
+      "region_names": [
+        "서울 중구(본사)"
+      ],
+      "region_sidos": [
+        "서울특별시"
+      ],
+      "hire_types": [
+        "정규직"
+      ],
       "career": "신입",
       "education": null,
       "summary": "영업전략(FC·DB·B2B) · 상품 · 계리 · 리스크관리 · 재무(가치분석) · 자산운용 · DX(ICT) 개발/운영 부문 신입사원 공개채용",
@@ -17,7 +23,163 @@
       "deadline_time": "17:00",
       "detail_url": "https://shinhan-life.recruiter.co.kr/career/home",
       "verified_from": "공식 채용 사이트 shinhan-life.recruiter.co.kr (확인일 2026-10-07)",
-      "extra_keywords": ["생명보험", "생명보험업", "보험사", "금융권 공채", "신한금융그룹", "계리", "자산운용", "ICT"]
+      "extra_keywords": [
+        "생명보험",
+        "생명보험업",
+        "보험사",
+        "금융권 공채",
+        "신한금융그룹",
+        "계리",
+        "자산운용",
+        "ICT"
+      ]
+    },
+    {
+      "slug": "cj-logistics-2026h2",
+      "company": "CJ대한통운",
+      "title": "2026 하반기 CJ대한통운 물류공채 신입사원 모집",
+      "region_names": [
+        "서울 등 전국 사업장"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "summary": "더운반 운송운영 · 항만운영 · F/C운영 등 물류 직무 신입 공채",
+      "requirements": "부문별 상세 자격요건은 CJ그룹 채용 사이트 공고 참조",
+      "pbanc_begin": "2026-09-29",
+      "deadline": "2026-10-15",
+      "deadline_time": null,
+      "detail_url": "https://recruit.cj.net",
+      "verified_from": "CJ그룹 공식 채용 사이트 recruit.cj.net (확인일 2026-10-07)",
+      "extra_keywords": [
+        "물류",
+        "물류공채",
+        "운송",
+        "항만",
+        "풀필먼트",
+        "SCM",
+        "CJ그룹"
+      ]
+    },
+    {
+      "slug": "cha-bio-2026h2",
+      "company": "차병원·차바이오그룹",
+      "title": "2026 차병원·차바이오그룹 신입/Junior 공채",
+      "region_names": [
+        "서울·경기(성남 판교 등)"
+      ],
+      "region_sidos": [
+        "서울특별시",
+        "경기도"
+      ],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "summary": "병원·바이오·제약 계열 신입 및 주니어 공개채용",
+      "requirements": "부문별 상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline": "2026-10-15",
+      "deadline_time": null,
+      "detail_url": "https://recruit.chamc.co.kr",
+      "verified_from": "차병원·차바이오그룹 공식 채용 사이트 recruit.chamc.co.kr (확인일 2026-10-07)",
+      "extra_keywords": [
+        "바이오",
+        "제약",
+        "병원",
+        "헬스케어",
+        "연구개발"
+      ]
+    },
+    {
+      "slug": "spc-pariscroissant-2026h2",
+      "company": "파리크라상(SPC)",
+      "title": "SPC 파리크라상 2026 하반기 대졸 신입사원 모집",
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": "대졸",
+      "summary": "영업관리 · 회계 · 총무 · SI 부문 대졸 신입 모집 (SPC그룹)",
+      "requirements": "부문별 상세 자격요건은 SPC 채용 페이지 공고 참조",
+      "pbanc_begin": null,
+      "deadline": "2026-10-14",
+      "deadline_time": null,
+      "detail_url": "https://www.spc.co.kr/careers/",
+      "verified_from": "SPC 공식 채용 페이지 spc.co.kr/careers (확인일 2026-10-07)",
+      "extra_keywords": [
+        "SPC",
+        "식품",
+        "프랜차이즈",
+        "영업관리",
+        "회계"
+      ]
+    },
+    {
+      "slug": "hanwha-galleria-2026h2",
+      "company": "한화갤러리아",
+      "title": "2026 한화그룹 테크&라이프부문 신입사원 채용 (한화갤러리아 전략기획)",
+      "region_names": [
+        "서울"
+      ],
+      "region_sidos": [
+        "서울특별시"
+      ],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "summary": "한화그룹 테크&라이프부문 통합 채용 중 한화갤러리아 전략기획 부문",
+      "requirements": "상세 자격요건은 한화 채용 포털 공고 참조",
+      "pbanc_begin": null,
+      "deadline": "2026-10-11",
+      "deadline_time": null,
+      "detail_url": "https://www.hanwhain.com",
+      "verified_from": "한화그룹 공식 채용 포털 hanwhain.com (확인일 2026-10-07)",
+      "extra_keywords": [
+        "한화그룹",
+        "유통",
+        "백화점",
+        "전략기획"
+      ]
+    },
+    {
+      "slug": "elandpark-intern-31",
+      "company": "이랜드파크",
+      "title": "이랜드파크 2026 하반기 서비스인턴십 31기",
+      "region_names": [
+        "서울 등 전국"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "인턴"
+      ],
+      "career": "신입",
+      "education": null,
+      "summary": "외식·호텔 서비스 인턴십(전환 가능형) 31기 모집",
+      "requirements": "상세 자격요건은 이랜드 채용 공고 참조",
+      "pbanc_begin": null,
+      "deadline": "2026-10-23",
+      "deadline_time": null,
+      "detail_url": "https://www.eland.co.kr",
+      "verified_from": "이랜드그룹 공식 사이트 eland.co.kr (확인일 2026-10-07)",
+      "extra_keywords": [
+        "이랜드",
+        "외식",
+        "호텔",
+        "서비스",
+        "인턴십",
+        "전환형"
+      ]
     }
   ]
 }
