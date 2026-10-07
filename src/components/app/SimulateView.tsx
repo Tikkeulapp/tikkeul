@@ -66,6 +66,7 @@ export function SimulateView({ session }: { session: SimSession }) {
   const [companyType, setCompanyType] = useState<CompanyType>("중소기업");
   const [salaryMan, setSalaryMan] = useState("3600");
   const [goals, setGoals] = useState<GoalType[]>(["LUMP_SUM"]);
+  const [targetYears, setTargetYears] = useState<string>(""); // "" = 기간 미설정
   const [targetMan, setTargetMan] = useState("10000");
   const [region, setRegion] = useState<HouseRegion>("수도권");
   const [startMonth, setStartMonth] = useState(nextMonth());
@@ -91,6 +92,7 @@ export function SimulateView({ session }: { session: SimSession }) {
           input: {
             companyType,
             annualSalaryKrw: Number(salaryMan) * 10000,
+            targetYears: targetYears ? Number(targetYears) : null,
             goals: goals.map((g) =>
               g === "LUMP_SUM" ? { type: g, targetKrw: Number(targetMan) * 10000 } : g === "HOUSE" ? { type: g, houseRegion: region } : { type: g },
             ),
@@ -196,6 +198,15 @@ export function SimulateView({ session }: { session: SimSession }) {
                 );
               })}
             </div>
+            <label className="mt-3 flex items-center gap-2 text-[15.5px]">
+              <span className="font-bold">목표 기간</span>
+              <select value={targetYears} onChange={(e) => setTargetYears(e.target.value)} aria-label="목표 기간"
+                className="rounded-lg border border-line bg-card px-2 py-1.5 outline-none focus:border-ink">
+                <option value="">미설정 (도달 시점만 계산)</option>
+                {[1, 2, 3, 4, 5, 7, 10, 15, 20].map((y) => <option key={y} value={y}>{y}년 안에</option>)}
+              </select>
+              <span className="text-[14px] text-mute">설정하면 기간 내 달성 여부와 필요 월 저축액을 계산해요</span>
+            </label>
           </div>
 
           {!isPersona && (
@@ -341,6 +352,14 @@ function Result({ data }: { data: ApiResponse }) {
           </h3>
           <span className="text-[15px] text-mute">현재 예·적금 {man(r.startingAssetsKrw)}에서 시작</span>
         </div>
+        {r.targetMonths !== null && r.requiredMonthlyForTargetKrw !== null && (
+          <p className="mt-2 rounded-xl bg-mint px-4 py-2.5 text-[15.5px] font-bold text-leaf-deep">
+            🎯 목표 기간 <span className={EM}>{Math.round(r.targetMonths / 12)}년</span> — 기간 내 달성하려면 월 <span className={EM}>{man(r.requiredMonthlyForTargetKrw)}</span> 저축 필요
+            {r.requiredMonthlyForTargetKrw <= r.scenarios[1].savingsMonthlyKrw
+              ? " · 기본 시나리오 저축액으로 달성 가능해요"
+              : ` (기본 시나리오보다 월 ${man(r.requiredMonthlyForTargetKrw - r.scenarios[1].savingsMonthlyKrw)} 더 필요)`}
+          </p>
+        )}
         <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {r.goals.map((g) => (
             <li key={g.type} className="rounded-2xl bg-mint-soft p-3">
@@ -358,7 +377,14 @@ function Result({ data }: { data: ApiResponse }) {
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           {r.scenarios.map((s) => (
             <div key={s.key} className={`rounded-2xl border p-4 ${s.key === "기본" ? "border-ink" : "border-line"}`}>
-              <p className="text-[15px] text-mute">{s.key} · {s.label}</p>
+              <p className="flex items-center justify-between text-[15px] text-mute">
+                <span>{s.key} · {s.label}</span>
+                {s.withinTarget != null && (
+                  <span className={`rounded-full px-2 py-0.5 text-[12px] font-bold ${s.withinTarget ? "bg-mint text-leaf-deep" : "bg-[#fde8e8] text-[#c0392b]"}`}>
+                    {s.withinTarget ? "기간 내 달성" : "기간 초과"}
+                  </span>
+                )}
+              </p>
               <p className="mt-1 text-[20px]">월 <span className={EM}>{man(s.savingsMonthlyKrw)}</span> 저축</p>
               {s.spendingCutKrw > 0 && <p className="text-[14.5px] text-mute">소비 절감 {won(s.spendingCutKrw)} 포함</p>}
               <ol className="mt-3 space-y-1.5 border-t border-line pt-3 text-[15.5px]">

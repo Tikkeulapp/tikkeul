@@ -115,13 +115,25 @@ export function aggregateCards(cards: CardApproval[]) {
 }
 
 /* ── 목표 도달 개월 수: A(1+i)^n + S((1+i)^n−1)/i = T ─────── */
-function monthsToReach(assets: number, monthlySave: number, target: number, annualRate = SAVINGS_ANNUAL_RATE): number | null {
+export function monthsToReach(assets: number, monthlySave: number, target: number, annualRate = SAVINGS_ANNUAL_RATE): number | null {
   if (assets >= target) return 0;
   if (monthlySave <= 0) return null;
   const i = annualRate / 12;
   const n = Math.log((target * i + monthlySave) / (assets * i + monthlySave)) / Math.log(1 + i);
   if (!isFinite(n) || n < 0) return null;
   return Math.ceil(n);
+}
+
+/** 목표 기간(개월) 안에 target에 도달하기 위한 월 저축액 (적금 복리 역산).
+ *  assets가 이미 target 이상이면 0, months<=0이면 null. */
+export function requiredMonthlySaving(assets: number, target: number, months: number, annualRate = SAVINGS_ANNUAL_RATE): number | null {
+  if (months <= 0) return null;
+  if (assets >= target) return 0;
+  const i = annualRate / 12;
+  if (i === 0) return Math.ceil((target - assets) / months);
+  const growth = Math.pow(1 + i, months);
+  const need = ((target - assets * growth) * i) / (growth - 1);
+  return Math.max(0, Math.ceil(need));
 }
 
 const addMonths = (ym: string, n: number) => {
@@ -213,6 +225,14 @@ export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: numbe
   };
   const scenarios = [mk("보수", "여유자금의 50% 저축", 0.5, 0), mk("기본", "여유자금의 70% 저축", 0.7, 0), mk("공격", "90% 저축 + 소비 15% 절감", 0.9, 0.15)];
 
+  // ── 목표 기간 (선택) — 기간 내 달성 여부 판정 + 필요 월 저축액 역산 ──
+  const targetMonths = input.targetYears && input.targetYears > 0 ? Math.round(input.targetYears * 12) : null;
+  const requiredMonthlyForTargetKrw = targetMonths !== null ? requiredMonthlySaving(startingAssets, totalTargetKrw, targetMonths) : null;
+  if (targetMonths !== null) {
+    for (const sc of scenarios) sc.withinTarget = sc.monthsToAll !== null && sc.monthsToAll <= targetMonths;
+    assumptions.push(`목표 기간 ${input.targetYears}년 — 기간 내 달성에 필요한 월 저축액은 복리 역산값`);
+  }
+
   // ── 배분 (기본 시나리오) ──
   const baseSave = scenarios[1].savingsMonthlyKrw;
   const spare = Math.max(0, net.netMonthlyKrw - totalKrw - baseSave);
@@ -252,6 +272,8 @@ export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: numbe
   if (sp.rentMonthlyKrw && sp.rentMonthlyKrw / net.netMonthlyKrw > 0.3) warnings.push(`월세가 실수령의 ${Math.round((sp.rentMonthlyKrw / net.netMonthlyKrw) * 100)}%입니다. 통상 권고선(30%)을 넘습니다.`);
   if (sp.source === "직접 입력") warnings.push("카드 소비는 직접 입력값입니다. 실서비스에서는 마이데이터 카드 승인내역으로 자동 집계됩니다.");
   if (scenarios[1].monthsToAll !== null && scenarios[1].monthsToAll > 240) warnings.push("기본 시나리오로 모든 목표까지 20년 이상 걸립니다. 목표 지역·금액을 조정하거나 정책 대출·청약을 함께 검토하세요.");
+  if (requiredMonthlyForTargetKrw !== null && requiredMonthlyForTargetKrw > Math.max(0, surplus))
+    warnings.push(`목표 기간 ${input.targetYears}년 안에 이루려면 월 ${Math.round(requiredMonthlyForTargetKrw / 10000).toLocaleString("ko-KR")}만 원 저축이 필요한데, 현재 여유자금(월 ${Math.round(Math.max(0, surplus) / 10000).toLocaleString("ko-KR")}만 원)을 넘습니다. 기간·목표 조정이나 소비 절감을 검토하세요.`);
 
   return {
     startMonth,
@@ -262,6 +284,8 @@ export function simulate(input: SimInput, sp: SpendingProfile, ctx: { age: numbe
     scenarios,
     goals,
     totalTargetKrw,
+    targetMonths,
+    requiredMonthlyForTargetKrw,
     startingAssetsKrw: startingAssets,
     assumptions,
     debt,

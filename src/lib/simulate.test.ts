@@ -75,3 +75,21 @@ test("simulate — 잘못된 startMonth는 무시하고 YYYY-MM 반환", () => {
   const r = simulate({ companyType: "대기업", annualSalaryKrw: 40_000_000, goals: [], startMonth: "next" }, sp, { age: 27 });
   assert.match(r.startMonth, /^\d{4}-\d{2}$/);
 });
+
+test("requiredMonthlySaving: 목표 기간 내 달성에 필요한 월 저축액", () => {
+  const { requiredMonthlySaving } = require("./simulate") as typeof import("./simulate");
+  // 이율 0%면 단순 나눗셈: 1,200만 원을 12개월 → 월 100만 원
+  assert.equal(requiredMonthlySaving(0, 12_000_000, 12, 0), 1_000_000);
+  // 이율이 있으면(복리) 필요액이 그보다 약간 작아야 한다
+  const withRate = requiredMonthlySaving(0, 12_000_000, 12, 0.03)!;
+  assert.ok(withRate < 1_000_000 && withRate > 950_000);
+  // 시작 자산이 이미 목표 이상이면 0원
+  assert.equal(requiredMonthlySaving(20_000_000, 12_000_000, 12), 0);
+  // 기간이 0 이하면 null
+  assert.equal(requiredMonthlySaving(0, 12_000_000, 0), null);
+  // 검산: 그 금액으로 저축하면 기간 안에 도달해야 한다 (monthsToReach와 정합)
+  const { monthsToReach } = require("./simulate") as typeof import("./simulate");
+  const need = requiredMonthlySaving(5_000_000, 50_000_000, 36)!;
+  const n = monthsToReach(5_000_000, need, 50_000_000)!;
+  assert.ok(n <= 36, `필요액으로 ${n}개월 — 36개월 이내여야 함`);
+});

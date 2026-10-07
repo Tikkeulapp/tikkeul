@@ -8,6 +8,8 @@ export type GoalType = "LUMP_SUM" | "HOUSE" | "MARRIAGE";
 export type GoalSpec = { type: GoalType; targetKrw?: number; houseRegion?: HouseRegion };
 
 export type SimInput = {
+  /** 목표 기간(년, 선택) — 모든 목표 합계 기준 */
+  targetYears?: number | null;
   companyType: CompanyType;
   annualSalaryKrw: number;
   /** 여러 목적을 동시에 선택할 수 있다 — 합산 목표와 순차 도달 시점을 함께 계산 */
@@ -72,6 +74,8 @@ export type Scenario = {
   milestones: Milestone[];
   monthsToAll: number | null;
   goalMonthAll: string | null;
+  /** 목표 기간이 설정된 경우: 기간 내 달성 여부 */
+  withinTarget?: boolean | null;
 };
 
 export type SimResult = {
@@ -89,6 +93,8 @@ export type SimResult = {
   scenarios: Scenario[];
   goals: GoalItem[];
   totalTargetKrw: number;
+  targetMonths: number | null;
+  requiredMonthlyForTargetKrw: number | null;
   startingAssetsKrw: number;
   assumptions: string[];
   debt: {

@@ -90,7 +90,9 @@ export async function POST(request: Request) {
     } else goals.push({ type });
   }
 
-  const input: SimInput = { companyType, annualSalaryKrw: Math.round(annual), goals, startMonth: raw.startMonth };
+    const ty = Number(raw.targetYears);
+  const targetYears = isFinite(ty) && ty >= 1 && ty <= 30 ? Math.round(ty) : null;
+  const input: SimInput = { companyType, annualSalaryKrw: Math.round(annual), goals, startMonth: raw.startMonth, targetYears };
 
   // ── 프로필 + 지출 구조 ──
   const db = supabaseAdmin();
