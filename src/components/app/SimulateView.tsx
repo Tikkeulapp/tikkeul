@@ -198,14 +198,13 @@ export function SimulateView({ session }: { session: SimSession }) {
                 );
               })}
             </div>
-            <label className="mt-3 flex items-center gap-2 text-[15.5px]">
+            <label className="mt-3 flex flex-wrap items-center gap-2 text-[15.5px]">
               <span className="font-bold">목표 기간</span>
-              <select value={targetYears} onChange={(e) => setTargetYears(e.target.value)} aria-label="목표 기간"
-                className="rounded-lg border border-line bg-card px-2 py-1.5 outline-none focus:border-ink">
-                <option value="">미설정 (도달 시점만 계산)</option>
-                {[1, 2, 3, 4, 5, 7, 10, 15, 20].map((y) => <option key={y} value={y}>{y}년 안에</option>)}
-              </select>
-              <span className="text-[14px] text-mute">설정하면 기간 내 달성 여부와 필요 월 저축액을 계산해요</span>
+              <input type="number" min={1} max={30} step={1} value={targetYears} placeholder="예: 3"
+                onChange={(e) => setTargetYears(e.target.value)} aria-label="목표 기간(년)"
+                className="w-20 rounded-lg border border-line bg-card px-2 py-1.5 outline-none focus:border-ink" />
+              <span>년 안에</span>
+              <span className="text-[14px] text-mute">비워두면 도달 시점만 계산 · 입력하면 기간 내 달성 여부와 필요 월 저축액까지</span>
             </label>
           </div>
 
