@@ -13,7 +13,7 @@ export type StarterInput = {
   topTags: string[];           // 관심 점수 상위 태그
   profileTags: string[];       // 프로필 상태에서 나온 태그 (월세 → 주거>월세 등)
   profileStarterIds: string[]; // 프로필 전용 질문 (미취업 → 국민취업지원제도 등)
-  avoidTags: string[];         // "아니에요"·빼기로 점수가 음수가 된 주제
+  avoidTags: string[];         // 거절·빼기로 점수가 음수가 된 주제
 };
 
 export function buildStarters(input: StarterInput, templates: StarterTemplate[], defaultIds: string[], n = 3): StarterPick[] {
@@ -38,7 +38,7 @@ export function buildStarters(input: StarterInput, templates: StarterTemplate[],
   return out;
 }
 
-/** 점수가 음수인 태그 — "아니에요"·빼기로 내려간 주제는 추천 질문에서도 피한다. */
+/** 점수가 음수인 태그 — 거절·빼기로 내려간 주제는 추천 질문에서도 피한다. */
 export function avoidTagsFromScores(scores: Record<string, number>): string[] {
   return Object.entries(scores).filter(([, v]) => v < 0).map(([k]) => k);
 }

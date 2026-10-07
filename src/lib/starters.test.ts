@@ -19,7 +19,7 @@ test("buildStarters: 다가오는 일정 → 관심사 → 프로필 → 기본 
   assert.deepEqual(out.map((x) => [x.id, x.reason]), [["suit", "event"], ["fee", "interest"], ["rent", "profile"], ["profile:kookchwi", "profile"]]);
 });
 
-test("buildStarters: \"아니에요\"로 내린 주제(avoidTags)는 일정·프로필에서 나와도 빼고 다음 후보로", () => {
+test("buildStarters: 거절·빼기로 내린 주제(avoidTags)는 일정·프로필에서 나와도 빼고 다음 후보로", () => {
   const out = buildStarters({ ...NONE, upcomingTags: ["면접>정장"], profileTags: ["주거>월세"], avoidTags: ["면접>정장", "주거>월세"] }, T, DEFAULTS, 2);
   assert.deepEqual(out.map((x) => x.id), ["default:kookchwi", "default:rent"]);
 });

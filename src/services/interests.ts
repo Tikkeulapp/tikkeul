@@ -84,13 +84,6 @@ export async function recordJobImpressions(userId: string, jobIds: string[]): Pr
   await insertEvents(jobIds.map((job_id) => ({ user_id: userId, signal: "job_impression", job_id, tags: [] })), "공고 노출");
 }
 
-/** "티끌이 이해한 나" 카드의 "아니에요" — 해당 태그(정책 관심사 또는 채용 선호)를 강하게 내린다. */
-export async function rejectInterest(userId: string, tag: string): Promise<boolean> {
-  if (!INTEREST_TAGS.some((t) => t.id === tag) && !isJobTag(tag)) return false;
-  await insertEvents([{ user_id: userId, signal: "reject", tags: [tag] }], "관심사 거절");
-  return true;
-}
-
 const CHAT_INTEREST_SYSTEM = `사용자 발화에서 "사용자 본인의 관심사"로 직접 드러난 것만 아래 [태그 목록]에서 골라 JSON 하나로 출력하세요.
 {"interests": [{"tag": "목록의 id 그대로", "strength": "strong" | "weak", "persistence": "persistent" | "temporary"}]}
 규칙:
@@ -201,7 +194,7 @@ async function generateStarters(report: ReturnType<typeof buildProfileReport>, a
 }
 
 /** 검색바 추천 질문 — LLM이 프로필 보고서를 보고 생성(Generate) → 코드가 검증(Filter), 모자라면 규칙 템플릿으로 채운다.
- * "아니에요"·빼기로 점수가 음수가 된 주제는 생성·템플릿 양쪽에서 피한다. */
+ * 거절·빼기로 점수가 음수가 된 주제는 생성·템플릿 양쪽에서 피한다. */
 export async function loadStarters(opts: { userId: string; personaId?: string | null; profileId?: string | null }): Promise<{
   questions: StarterPick[];
   generated: boolean;

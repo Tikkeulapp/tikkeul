@@ -5,7 +5,7 @@
 import type { InterestEvent, InterestExplanation, InterestSignal, InterestTagDef } from "@/types/interest";
 
 /** 신호별 기본 가중치. impression은 노출 기록(다운랭크용)일 뿐 관심이 아니다.
- * reject("아니에요")는 반감기가 몇 번 지나도 다시 떠오르지 않을 만큼 강한 음수. */
+ * reject(관심사 거절)는 반감기가 몇 번 지나도 다시 떠오르지 않을 만큼 강한 음수. */
 export const SIGNAL_WEIGHT: Record<InterestSignal, number> = {
   save: 3,
   calendar: 2,
@@ -131,7 +131,7 @@ export function chatInterestEvents(raw: unknown, now: Date, validTags: string[])
   return out;
 }
 
-// ── "티끌이 이해한 나" (Persona-lite) ────────────────────────────────────────
+// ── 관심사 설명 (추천 질문 생성 입력) ────────────────────────────────────────
 
 /** 라벨이 있는 태그만 골라 상위 n개의 점수와 근거(양수로 기여한 신호 종류, 큰 순).
  * 근거는 신호 종류까지만 — 날짜·내역은 노출하지 않는다. 정책 관심사와 채용 선호를 같은 방식으로 설명한다. */
@@ -196,19 +196,3 @@ export function orderByInterest<T>(items: T[], textOf: (t: T) => string, scores:
     .map((x) => x.item);
 }
 
-/** 자식 태그("시험>응시료")의 양수 점수를 부모("시험")로 합산. */
-export function rollupParents(scores: Record<string, number>): Record<string, number> {
-  const out: Record<string, number> = {};
-  for (const [tag, v] of Object.entries(scores)) {
-    if (v <= 0) continue;
-    const parent = tag.split(">")[0];
-    out[parent] = (out[parent] ?? 0) + v;
-  }
-  return out;
-}
-
-/** 카드 머리 문장 — 상위 라벨 2개까지만, 근거·내역 없이. */
-export function summarizeInterests(labels: string[]): string | null {
-  if (!labels.length) return null;
-  return `${labels.slice(0, 2).join(", ")}에 관심이 많아 보여요.`; // 라벨 안에 "·"가 있어 구분자는 쉼표
-}

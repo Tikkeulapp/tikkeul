@@ -11,8 +11,6 @@ import {
   chatInterestEvents,
   shouldExtractInterests,
   explainInterests,
-  rollupParents,
-  summarizeInterests,
   explainBy,
   scoreForTags,
   orderByInterest,
@@ -154,16 +152,6 @@ test("explainInterests: 상위 태그별 점수와 양수 기여 신호(큰 순)
   assert.deepEqual(out[0].sources, ["save", "spend"]);
   assert.equal(out[0].label, "응시료");
   assert.equal(out[0].score, 5);
-});
-
-test("rollupParents: 자식 태그의 양수 점수를 부모로 합산", () => {
-  assert.deepEqual(rollupParents({ "시험>응시료": 2, "시험>자격증": 1, "주거>월세": -1, "면접>정장": 0.5 }), { 시험: 3, 면접: 0.5 });
-});
-
-test("summarizeInterests: 라벨 0~2개로 덜 구체적인 한 문장", () => {
-  assert.equal(summarizeInterests([]), null);
-  assert.equal(summarizeInterests(["시험 응시료"]), "시험 응시료에 관심이 많아 보여요.");
-  assert.equal(summarizeInterests(["시험 응시료", "교통비", "면접 비용"]), "시험 응시료, 교통비에 관심이 많아 보여요.");
 });
 
 test("explainInterests: 택소노미에 없는 태그(채용 ncs:·org: 등)는 정책 관심사에서 빠진다", () => {

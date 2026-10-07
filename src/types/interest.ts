@@ -6,7 +6,7 @@ export type InterestTagDef = {
 };
 
 /** 관심 신호 종류 — 가중치는 src/lib/interest.ts의 SIGNAL_WEIGHT가 정한다.
- * reject = "티끌이 이해한 나" 카드에서 "아니에요". job_* = 채용공고 신호 (태그는 ncs:·org:·hire:·region:·kw: 네임스페이스). */
+ * reject = 관심사 거절 (거절 카드는 제거됐지만 DB에 남은 기록은 계속 반영). job_* = 채용공고 신호 (태그는 ncs:·org:·hire:·region:·kw: 네임스페이스). */
 export type InterestSignal =
   | "save" | "remove" | "view" | "impression" | "calendar" | "spend" | "chat" | "reject"
   | "job_save" | "job_view" | "job_impression" | "job_keyword";
@@ -22,7 +22,7 @@ export type InterestEvent = {
   expiresAt?: string | null;   // 이후엔 무시 (일시적 관심)
 };
 
-/** "티끌이 이해한 나" 카드 한 줄 — 근거는 신호 종류 수준으로만 (날짜·구체 내역 노출 금지). */
+/** 관심사 설명 한 줄 (추천 질문 생성 입력) — 근거는 신호 종류 수준으로만 (날짜·구체 내역 노출 금지). */
 export type InterestExplanation = {
   tag: string;
   label: string;
