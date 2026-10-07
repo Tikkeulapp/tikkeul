@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aggregateCards, estimateNetPay, simulate } from "@/lib/simulate";
+import { aggregateCards, estimateNetPay, monthsToReach, requiredMonthlySaving, simulate } from "@/lib/simulate";
 import type { SpendingProfile } from "@/types/simulate";
 
 test("실수령은 세전보다 작고 0보다 크다", () => {
@@ -77,7 +77,6 @@ test("simulate — 잘못된 startMonth는 무시하고 YYYY-MM 반환", () => {
 });
 
 test("requiredMonthlySaving: 목표 기간 내 달성에 필요한 월 저축액", () => {
-  const { requiredMonthlySaving } = require("./simulate") as typeof import("./simulate");
   // 이율 0%면 단순 나눗셈: 1,200만 원을 12개월 → 월 100만 원
   assert.equal(requiredMonthlySaving(0, 12_000_000, 12, 0), 1_000_000);
   // 이율이 있으면(복리) 필요액이 그보다 약간 작아야 한다
@@ -88,7 +87,6 @@ test("requiredMonthlySaving: 목표 기간 내 달성에 필요한 월 저축액
   // 기간이 0 이하면 null
   assert.equal(requiredMonthlySaving(0, 12_000_000, 0), null);
   // 검산: 그 금액으로 저축하면 기간 안에 도달해야 한다 (monthsToReach와 정합)
-  const { monthsToReach } = require("./simulate") as typeof import("./simulate");
   const need = requiredMonthlySaving(5_000_000, 50_000_000, 36)!;
   const n = monthsToReach(5_000_000, need, 50_000_000)!;
   assert.ok(n <= 36, `필요액으로 ${n}개월 — 36개월 이내여야 함`);

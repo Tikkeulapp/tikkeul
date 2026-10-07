@@ -3,6 +3,7 @@ import { getPersona } from "@/data/personas";
 import { derive } from "@/lib/derive";
 import { resolveProfile } from "@/services/profile";
 import { judgePolicy, saveMatchResult } from "@/services/policyMatch";
+import { recordPolicySignal } from "@/services/interests";
 
 export async function POST(request: Request) {
   let body: {
@@ -80,6 +81,9 @@ export async function POST(request: Request) {
     void _u;
     userProfile = { 출처: "설문 + 직접 입력 금융정보", 설문: surveyAttrs, 금융: finAttrs };
   }
+
+  // 상세 열람 = 약한 관심 신호 (추천 순위용, 판정과 무관)
+  if (userId && policyId) await recordPolicySignal({ userId, policyId, signal: "view", text: `${policy.title} ${policy.content ?? ""}`.slice(0, 400) });
 
   try {
     const verdict = await judgePolicy({

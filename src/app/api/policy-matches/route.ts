@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
+import { recordPolicySignal } from "@/services/interests";
 
 type MatchRow = {
   match_id: string;
@@ -79,6 +80,7 @@ export async function POST(request: Request) {
       .eq("policy_id", policyId)
       .neq("status", "dismissed");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await recordPolicySignal({ userId, policyId, signal: "remove" });
     return NextResponse.json({ ok: true });
   }
 
@@ -91,6 +93,7 @@ export async function POST(request: Request) {
       .update({ status: "recommended", match_mode: "lookup_and_check" })
       .eq("match_id", existing.match_id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await recordPolicySignal({ userId, policyId, signal: "save" });
     return NextResponse.json({ ok: true });
   }
   const { error } = await db.from("user_policy_matches").insert({
@@ -103,5 +106,6 @@ export async function POST(request: Request) {
     missing_information: [],
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await recordPolicySignal({ userId, policyId, signal: "save" });
   return NextResponse.json({ ok: true });
 }
