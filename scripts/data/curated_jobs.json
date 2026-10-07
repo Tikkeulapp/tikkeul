@@ -180,6 +180,196 @@
         "인턴십",
         "전환형"
       ]
+    },
+    {
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "은행",
+        "금융권 공채",
+        "농협",
+        "6급",
+        "텔러",
+        "여신"
+      ],
+      "slug": "nhbank-2026-l6",
+      "company": "NH농협은행",
+      "title": "NH농협은행 2026년 6급 신규직원 채용",
+      "summary": "전국 영업점 6급 신규직원 공개채용",
+      "deadline": "2026-10-12",
+      "detail_url": "https://nhbank.recruiter.co.kr",
+      "verified_from": "NH농협은행 공식 채용 사이트 nhbank.recruiter.co.kr (확인일 2026-10-07)"
+    },
+    {
+      "region_names": [
+        "부산 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "저축은행",
+        "은행",
+        "금융권 공채",
+        "여신",
+        "BNK금융그룹"
+      ],
+      "slug": "bnk-savings-2026",
+      "company": "BNK저축은행",
+      "title": "BNK저축은행 2026년 신입행원 채용",
+      "summary": "신입행원 공개채용 (BNK금융그룹)",
+      "deadline": "2026-10-16",
+      "detail_url": "https://www.bnksb.com",
+      "verified_from": "BNK저축은행 공식 사이트 bnksb.com (확인일 2026-10-07)"
+    },
+    {
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "에너지",
+        "도시가스"
+      ],
+      "slug": "samchully-2027",
+      "company": "삼천리",
+      "title": "삼천리 2027년 신입사원 모집",
+      "summary": "도시가스·에너지 전 부문 신입 공채",
+      "deadline": "2026-10-14",
+      "detail_url": "https://www.samchully.co.kr",
+      "verified_from": "삼천리 공식 사이트 samchully.co.kr (확인일 2026-10-07)"
+    },
+    {
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "LG그룹",
+        "IT기획",
+        "세무",
+        "경영지원"
+      ],
+      "slug": "lg-dno-2026",
+      "company": "디앤오(LG그룹)",
+      "title": "[LG그룹] 디앤오 지원 부문 인재 채용",
+      "summary": "LG그룹 디앤오(D&O) 본사 IT기획·세무 등 지원 부문 채용",
+      "deadline": "2026-10-15",
+      "detail_url": "https://careers.lg.com",
+      "verified_from": "LG그룹 공식 채용 포털 careers.lg.com (확인일 2026-10-07)"
+    },
+    {
+      "region_names": [
+        "서울"
+      ],
+      "region_sidos": [
+        "서울특별시"
+      ],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "블록체인",
+        "블록체인 노드",
+        "인프라",
+        "핀테크",
+        "두나무"
+      ],
+      "slug": "lambda256-node-ops",
+      "company": "람다256",
+      "title": "람다256 Blockchain Node Operations Specialist (신입)",
+      "summary": "블록체인 노드 운영 신입 포지션 (두나무 자회사)",
+      "deadline": "2026-10-18",
+      "detail_url": "https://www.lambda256.io",
+      "verified_from": "람다256 공식 사이트 lambda256.io (확인일 2026-10-07)"
+    },
+    {
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": "대졸",
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "에너지",
+        "도시가스"
+      ],
+      "slug": "coone-2026h2",
+      "company": "코원에너지서비스",
+      "title": "코원에너지서비스 2026 하반기 대졸 신입사원(G3) 모집",
+      "summary": "도시가스(SK E&S 계열) 대졸 신입 모집",
+      "deadline": "2026-10-21",
+      "detail_url": "https://www.coone.co.kr",
+      "verified_from": "코원에너지서비스 공식 사이트 coone.co.kr (확인일 2026-10-07)"
+    },
+    {
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "requirements": "상세 자격요건은 공식 채용 사이트 공고 참조",
+      "pbanc_begin": null,
+      "deadline_time": null,
+      "extra_keywords": [
+        "반도체",
+        "반도체 장비",
+        "엔지니어"
+      ],
+      "slug": "amat-korea-2026",
+      "company": "어플라이드 머티어리얼즈 코리아",
+      "title": "어플라이드 머티어리얼즈 코리아 신입 채용",
+      "summary": "반도체 장비 글로벌 기업 한국법인 신입 엔지니어 채용",
+      "deadline": "2026-10-12",
+      "detail_url": "https://www.appliedmaterials.com/kr/ko/careers.html",
+      "verified_from": "Applied Materials 공식 채용 페이지 (확인일 2026-10-07)"
     }
   ]
 }
