@@ -24,6 +24,12 @@ test("expandKeyword: 사전에 없는 단어는 입력 그대로만 검색한다
   assert.deepEqual(expandKeyword("쿠버네티스"), ["쿠버네티스"]);
 });
 
+test("expandKeyword: 자격·직무명 표기 변형을 흡수한다 — 보험계리사", () => {
+  const t = expandKeyword("보험계리사");
+  assert.ok(t.includes("계리")); // 공고 원문은 보통 '계리'로만 표기
+  assert.ok(expandKeyword("보험사").includes("계리")); // 보험사 → 계리 하위 확장
+});
+
 test("findKeywordEvidence: 짧은 영문 토큰은 단어 경계를 요구한다", () => {
   assert.equal(findKeywordEvidence("sales training program", ["AI"]), null); // trAIning 오탐 방지
   assert.ok(findKeywordEvidence("생성형 AI 서비스 개발", ["AI"]));

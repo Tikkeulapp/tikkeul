@@ -370,6 +370,64 @@
       "deadline": "2026-10-12",
       "detail_url": "https://www.appliedmaterials.com/kr/ko/careers.html",
       "verified_from": "Applied Materials 공식 채용 페이지 (확인일 2026-10-07)"
+    },
+    {
+      "slug": "hanwha-vision-2026h2",
+      "company": "한화비전",
+      "title": "2026 한화그룹 테크&라이프부문 신입사원 채용 (한화비전)",
+      "region_names": [
+        "서울·판교"
+      ],
+      "region_sidos": [
+        "서울특별시",
+        "경기도"
+      ],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "summary": "영상보안·AI 솔루션 기업 한화비전 신입 채용 (한화 테크&라이프 통합)",
+      "requirements": "상세 자격요건은 한화 채용 포털 공고 참조",
+      "pbanc_begin": null,
+      "deadline": "2026-10-11",
+      "deadline_time": null,
+      "detail_url": "https://www.hanwhavision.com/ko/",
+      "verified_from": "한화비전 공식 사이트 (확인일 2026-10-07)",
+      "extra_keywords": [
+        "한화그룹",
+        "영상보안",
+        "AI",
+        "카메라",
+        "엔지니어"
+      ]
+    },
+    {
+      "slug": "hs-hyosung-2026h2",
+      "company": "HS효성그룹",
+      "title": "HS효성그룹 2026년 하반기 신입공채",
+      "region_names": [
+        "서울 등"
+      ],
+      "region_sidos": [],
+      "hire_types": [
+        "정규직"
+      ],
+      "career": "신입",
+      "education": null,
+      "summary": "HS효성 계열사 통합 하반기 신입 공개채용",
+      "requirements": "상세 자격요건은 공식 사이트 채용 공고 참조",
+      "pbanc_begin": null,
+      "deadline": "2026-10-11",
+      "deadline_time": null,
+      "detail_url": "https://www.hshyosung.com",
+      "verified_from": "HS효성 공식 사이트 hshyosung.com (확인일 2026-10-07)",
+      "extra_keywords": [
+        "효성",
+        "중공업",
+        "화학",
+        "그룹 공채"
+      ]
     }
   ]
 }
