@@ -284,11 +284,21 @@ export default function AppPage() {
   type StarterQ = { id: string; question: string };
   const [starters, setStarters] = useState<{ questions: StarterQ[]; proactive: (StarterQ & { opener: string }) | null }>({ questions: [], proactive: null });
   const [interestCard, setInterestCard] = useState<{ summary: string | null; items: { tag: string; label: string; sources: string[] }[] } | null>(null);
-  const loadStarters = useCallback(async (s: Session) => {
+  /** 추천 질문은 LLM(Groq)이 생성하므로 하루 1회 브라우저 캐시. force=true면 다시 생성 (관심사 거절 등) */
+  const loadStarters = useCallback(async (s: Session, force = false) => {
+    const key = `tikkeul.starters.${s.userId}`;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) { const c = JSON.parse(raw) as { date: string; data: typeof starters }; if (c.date === TODAY) { setStarters(c.data); return; } }
+      } catch { /* 캐시 없음 */ }
+    }
     try {
       const qs = new URLSearchParams({ userId: s.userId, ...(s.personaId ? { personaId: s.personaId } : {}), ...(s.profileId ? { profileId: s.profileId } : {}) });
-      const data = await fetch(`/api/starters?${qs}`).then((r) => r.json());
-      setStarters({ questions: data.questions ?? [], proactive: data.proactive ?? null });
+      const json = await fetch(`/api/starters?${qs}`).then((r) => r.json());
+      const data = { questions: json.questions ?? [], proactive: json.proactive ?? null };
+      setStarters(data);
+      try { localStorage.setItem(key, JSON.stringify({ date: TODAY, data })); } catch { /* 무시 */ }
     } catch { /* 기본 문구로 둔다 */ }
   }, []);
   const loadInterestCard = useCallback(async (s: Session) => {
@@ -725,8 +735,8 @@ export default function AppPage() {
       setNeededFields(new Set(Array.isArray(json.missingFields) ? json.missingFields : []));
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
-      // 대화에서 관심사가 새로 잡혔을 수 있으니 관심사 카드·추천 질문도 갱신
-      if (session) { void loadInterestCard(session); void loadStarters(session); }
+      // 대화에서 관심사가 새로 잡혔을 수 있으니 관심사 카드 갱신 (추천 질문은 하루 캐시 — 매 채팅마다 재생성하지 않음)
+      if (session) void loadInterestCard(session);
       // 채팅으로 프로필(거주지 등)이 바뀌었으면 헤더 배지와 추천 탭을 새 프로필 기준으로 갱신
       if (session && Array.isArray(json.plan?.intents) && json.plan.intents.includes("profile_update")) {
         void loadRecs(session, true);
@@ -753,7 +763,11 @@ export default function AppPage() {
   const answerProactive = async (answer: "yes" | "no") => {
     const p = starters.proactive;
     if (!session || !p) return;
-    setStarters((prev) => ({ ...prev, proactive: null }));
+    setStarters((prev) => {
+      const next = { ...prev, proactive: null };
+      try { localStorage.setItem(`tikkeul.starters.${session.userId}`, JSON.stringify({ date: TODAY, data: next })); } catch { /* 무시 */ }
+      return next;
+    });
     void fetch("/api/starters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.userId, starterId: p.id, answer }) });
     if (answer === "yes") await sendChatMessage(p.question);
   };
@@ -764,7 +778,7 @@ export default function AppPage() {
     setInterestCard((prev) => (prev ? { ...prev, items: prev.items.filter((x) => x.tag !== tag) } : prev));
     await fetch("/api/interests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.userId, tag }) });
     void loadInterestCard(session);
-    void loadStarters(session);
+    void loadStarters(session, true);
     void loadRecs(session, true);
   };
 
