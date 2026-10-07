@@ -130,11 +130,8 @@ test("chatInterestEvents: 형식이 깨진 LLM 출력은 빈 배열", () => {
   assert.deepEqual(chatInterestEvents({ interests: [{ tag: "시험>응시료", strength: "?", persistence: "persistent" }] }, NOW, ["시험>응시료"]), []);
 });
 
-test("SIGNAL_WEIGHT: reject는 강한 음수, 선톡 노출·수락은 0(추적용), 거절은 음수", () => {
+test("SIGNAL_WEIGHT: reject는 강한 음수", () => {
   assert.ok(SIGNAL_WEIGHT.reject <= -5);
-  assert.equal(SIGNAL_WEIGHT.starter_shown, 0);
-  assert.equal(SIGNAL_WEIGHT.starter_yes, 0);
-  assert.ok(SIGNAL_WEIGHT.starter_no < 0);
 });
 
 test("explainInterests: 상위 태그별 점수와 양수 기여 신호(큰 순), reject된 태그는 빠진다", () => {

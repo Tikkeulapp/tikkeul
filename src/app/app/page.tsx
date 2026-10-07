@@ -280,9 +280,9 @@ export default function AppPage() {
     } catch { /* 무시 — 카드가 비어 보이는 정도 */ }
   }, []);
 
-  // 먼저 건네는 질문(검색바 추천 질문 칩 + 주간 선톡)과 "티끌이 이해한 나" 카드
+  // 검색바 추천 질문 칩과 "티끌이 이해한 나" 카드
   type StarterQ = { id: string; question: string };
-  const [starters, setStarters] = useState<{ questions: StarterQ[]; proactive: (StarterQ & { opener: string }) | null }>({ questions: [], proactive: null });
+  const [starters, setStarters] = useState<{ questions: StarterQ[] }>({ questions: [] });
   const [interestCard, setInterestCard] = useState<{ summary: string | null; items: { tag: string; label: string; sources: string[] }[] } | null>(null);
   /** 추천 질문은 LLM(Groq)이 생성하므로 하루 1회 브라우저 캐시. force=true면 다시 생성 (관심사 거절 등) */
   const loadStarters = useCallback(async (s: Session, force = false) => {
@@ -296,7 +296,7 @@ export default function AppPage() {
     try {
       const qs = new URLSearchParams({ userId: s.userId, ...(s.personaId ? { personaId: s.personaId } : {}), ...(s.profileId ? { profileId: s.profileId } : {}) });
       const json = await fetch(`/api/starters?${qs}`).then((r) => r.json());
-      const data = { questions: json.questions ?? [], proactive: json.proactive ?? null };
+      const data = { questions: json.questions ?? [] };
       setStarters(data);
       try { localStorage.setItem(key, JSON.stringify({ date: TODAY, data })); } catch { /* 무시 */ }
     } catch { /* 기본 문구로 둔다 */ }
@@ -759,19 +759,6 @@ export default function AppPage() {
     await sendChatMessage(message);
   };
 
-  /** 이번 주 선톡에 답하기 — "물어볼게요"면 그 질문을 바로 채팅으로 보낸다 */
-  const answerProactive = async (answer: "yes" | "no") => {
-    const p = starters.proactive;
-    if (!session || !p) return;
-    setStarters((prev) => {
-      const next = { ...prev, proactive: null };
-      try { localStorage.setItem(`tikkeul.starters.${session.userId}`, JSON.stringify({ date: TODAY, data: next })); } catch { /* 무시 */ }
-      return next;
-    });
-    void fetch("/api/starters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.userId, starterId: p.id, answer }) });
-    if (answer === "yes") await sendChatMessage(p.question);
-  };
-
   /** "티끌이 이해한 나"에서 "아니에요" — 관심사를 내리고 추천을 다시 계산 */
   const rejectInterest = async (tag: string) => {
     if (!session) return;
@@ -896,17 +883,6 @@ export default function AppPage() {
         </form>
         </div>
         {notice && <p className="mt-2 rounded-[10px] bg-mint px-3 py-2 text-[14.5px] font-bold text-leaf-deep">💬 {notice}</p>}
-        {/* 이번 주 선톡 — AI가 먼저 말을 건다 (주 1회, 답하면 그 주는 쉼) */}
-        {chatThread.length === 0 && starters.proactive && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-[12px] border border-line bg-white px-3 py-2.5 text-[14.5px] text-ink">
-            <span>🌱</span>
-            <p className="min-w-0 flex-1"><span className="mr-1.5 text-[12.5px] font-bold text-leaf-deep">이번 주 티끌</span>{starters.proactive.opener}</p>
-            <span className="flex shrink-0 gap-1.5">
-              <button onClick={() => void answerProactive("yes")} disabled={chatLoading} className="rounded-[8px] bg-leaf px-3 py-1 text-[13.5px] font-bold text-white transition hover:bg-[#333333] disabled:opacity-50">물어볼게요</button>
-              <button onClick={() => void answerProactive("no")} className="rounded-[8px] border border-line px-3 py-1 text-[13.5px] font-bold text-mute transition hover:border-ink">괜찮아요</button>
-            </span>
-          </div>
-        )}
         {/* 추천 질문 — 일정·관심사·프로필에 맞춘 질문 (신호가 없으면 기본 질문) */}
         {chatThread.length === 0 && starters.questions.length > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">

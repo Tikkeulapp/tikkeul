@@ -4,8 +4,7 @@
  */
 import type { InterestEvent, InterestExplanation, InterestSignal, InterestTagDef } from "@/types/interest";
 
-/** 신호별 기본 가중치. impression·선톡 노출/수락은 기록(다운랭크·주간 빈도 판단)일 뿐 관심이 아니다.
- * 선톡 수락은 이어지는 채팅 발화가 chat 신호로 관심을 남기므로 여기서 또 더하지 않는다.
+/** 신호별 기본 가중치. impression은 노출 기록(다운랭크용)일 뿐 관심이 아니다.
  * reject("아니에요")는 반감기가 몇 번 지나도 다시 떠오르지 않을 만큼 강한 음수. */
 export const SIGNAL_WEIGHT: Record<InterestSignal, number> = {
   save: 3,
@@ -14,9 +13,6 @@ export const SIGNAL_WEIGHT: Record<InterestSignal, number> = {
   chat: 1,
   view: 1,
   impression: 0,
-  starter_shown: 0,
-  starter_yes: 0,
-  starter_no: -1,
   remove: -2,
   reject: -10,
 };

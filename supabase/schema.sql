@@ -241,26 +241,26 @@ create table if not exists chat_messages (
 create index if not exists idx_chat_messages_user on chat_messages(user_id, created_at);
 
 -- ── USER_INTEREST_EVENTS: 관심 신호 (개인화 추천 순위용, 2026-10-07) ──
--- 담기·빼기·상세열람·추천노출·대화 관심·선톡 응답·관심사 거절("아니에요")을 쌓는다. 점수는 src/lib/interest.ts가 time-decay로 계산.
+-- 담기·빼기·상세열람·추천노출·대화 관심·관심사 거절("아니에요")을 쌓는다. 점수는 src/lib/interest.ts가 time-decay로 계산.
 -- 일정(user_calendar)·마이데이터 지출은 이미 있는 데이터라 여기 복제하지 않고 추천 시점에 태그로 변환한다.
 -- 관심사는 순위에만 쓰고 자격 판정·금액에는 쓰지 않는다.
 create table if not exists user_interest_events (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references users(user_id) on delete cascade,
-  signal       text not null check (signal in ('save', 'remove', 'view', 'impression', 'chat', 'starter_shown', 'starter_yes', 'starter_no', 'reject')),
+  signal       text not null check (signal in ('save', 'remove', 'view', 'impression', 'chat', 'reject')),
   tags         text[] not null default '{}',   -- src/data/interests.ts 태그 id
   policy_id    text,                           -- FK 없음: 데모 정책·삭제된 정책도 이력은 남긴다
-  starter_id   text,                           -- 선톡 id (src/data/starters.ts), starter_* 신호용
   weight       numeric,                        -- null이면 SIGNAL_WEIGHT 기본값
   occurred_at  timestamptz not null default now(),
   expires_at   timestamptz                     -- 일시적 관심 (null = 감쇠만)
 );
 create index if not exists idx_interest_events_user on user_interest_events(user_id, occurred_at desc);
--- 첫 버전(신호 5종, starter_id 없음)으로 이미 만든 DB용 패치 — 여러 번 실행해도 안전
-alter table user_interest_events add column if not exists starter_id text;
+-- 이전 버전으로 이미 만든 DB용 패치 — 여러 번 실행해도 안전
+-- (첫 버전엔 'reject'가 없었고, 중간 버전의 선톡 신호 starter_*·starter_id 컬럼은 기능 제거로 더 이상 쓰지 않음)
+alter table user_interest_events drop column if exists starter_id;
 alter table user_interest_events drop constraint if exists user_interest_events_signal_check;
 alter table user_interest_events add constraint user_interest_events_signal_check
-  check (signal in ('save', 'remove', 'view', 'impression', 'chat', 'starter_shown', 'starter_yes', 'starter_no', 'reject'));
+  check (signal in ('save', 'remove', 'view', 'impression', 'chat', 'reject')) not valid;
 
 -- ============================================================================
 -- RLS — 모든 테이블 활성화, 정책은 두지 않는다 (2026-10-06)
