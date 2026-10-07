@@ -79,6 +79,32 @@ export async function classifyPolicyForUser(
   };
 }
 
+/** classifyPolicyForUser의 일괄판 — 후보 N건을 쿼리 1번으로 판정한다 (추천티끌·일정 매칭 게이트용).
+ * 조건이 없는 정책은 null. 조회 실패 시 빈 Map을 반환해 호출자가 전부 unjudged로 다루게 한다
+ * (판정은 부가 정보지 추천 자체의 전제조건이 아니다). */
+export async function classifyPoliciesForUser(
+  policyIds: string[],
+  profileRow: Record<string, unknown> | null,
+  financeRow: Record<string, unknown> | null,
+): Promise<Map<string, EligibilityResult | null>> {
+  const out = new Map<string, EligibilityResult | null>();
+  if (policyIds.length === 0) return out;
+  const { data, error } = await supabaseAdmin()
+    .from("policy_eligibility")
+    .select("policy_id, conditions")
+    .in("policy_id", policyIds);
+  if (error) {
+    console.error("policy_eligibility 일괄 조회 실패:", error.message);
+    return out;
+  }
+  const now = new Date();
+  for (const row of data ?? []) {
+    const conditions = (row.conditions ?? []) as EligibilityCondition[];
+    out.set(row.policy_id, conditions.length ? classifyConditions(conditions, profileRow, financeRow, now) : null);
+  }
+  return out;
+}
+
 export async function judgePolicy(opts: {
   /** 기존 방식대로 LLM에 보여줄 한국어 라벨 프로필 요약 (폴백 경로에서 사용) */
   profileSummary: Record<string, unknown>;

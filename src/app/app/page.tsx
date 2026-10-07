@@ -52,6 +52,8 @@ type Rec = {
   reason?: string;
   amountBasis?: string | null;
   sourceName?: string;
+  /** 규칙엔진 자격 배지 문구 (구조화 조건 없는 정책은 null) */
+  eligibilityLabel?: string | null;
 };
 
 /** 마이티끌에 담을 때 함께 기억하는 맥락 (연결 일정·시험비·혜택 요약) — 브라우저 저장 */
@@ -255,7 +257,7 @@ export default function AppPage() {
   const [saving, setSaving] = useState(false);
   const [calNotice, setCalNotice] = useState<string | null>(null);
   // 거주지 변경(이사) 감지 결과 + 적용 상태
-  type DeltaItem = { policy_id: string; title: string; provider: string | null; region: string; apply_url: string | null; score?: number; reason: string };
+  type DeltaItem = { policy_id: string; title: string; provider: string | null; region: string; apply_url: string | null; score?: number; reason: string; eligibilityLabel?: string | null };
   type RegionChange = { field: string; from: string | null; to: string; effectiveFrom: string; opening: DeltaItem[]; closing: DeltaItem[]; openingTotal: number };
   const [applyingChange, setApplyingChange] = useState(false);
   const [profileNote, setProfileNote] = useState<string | null>(null); // 헤더 배지용 (거주지 변경 이력)
@@ -400,7 +402,7 @@ export default function AppPage() {
   };
 
   // 일정 → AI 정책 매칭 결과 — 일정(event_id)별로 보관해 하루에 여러 일정이어도 각각 확인·유지 (브라우저 저장)
-  type MatchRec = { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean };
+  type MatchRec = { policy_id: string; title: string; provider: string | null; region: string; score: number; reason: string; benefit_summary: string; apply_url: string | null; end_date?: string | null; always_open?: boolean; eligibilityLabel?: string | null };
   type MatchEntry = { title: string; date: string; loading: boolean; recs: MatchRec[] | null; regionChange: RegionChange | null; applied: string | null; at: string };
   const [matchMap, setMatchMap] = useState<Record<string, MatchEntry>>({});
   const persistMatches = (userId: string, map: Record<string, MatchEntry>) => {
@@ -1058,6 +1060,7 @@ export default function AppPage() {
                     <div key={r.id} className="rounded-[12px] border border-line p-3">
                       <p className="text-[15px] font-bold leading-snug">{r.title}</p>
                       <p className="mt-0.5 text-[13.5px] text-mute">{r.benefit} · {r.region}{typeof r.score === "number" ? ` · 관련도 ${r.score}` : ""}</p>
+                      {r.eligibilityLabel && <p className="mt-1 text-[12.5px] font-bold text-leaf-deep">{r.eligibilityLabel}</p>}
                       {r.reason && <p className="mt-1 text-[13px] leading-snug text-ink/80">{r.reason}</p>}
                       {(r.endDate || r.alwaysOpen) && (
                         <p className={`mt-0.5 text-[12.5px] ${r.endDate && daysUntil(r.endDate) >= 0 && daysUntil(r.endDate) <= 3 ? "font-bold text-[#b45309]" : "text-mute"}`}>
@@ -1348,6 +1351,7 @@ export default function AppPage() {
                     <div key={r.policy_id} className="mt-2 rounded-[10px] bg-mint-soft/70 p-2.5">
                       <p className="text-[14.5px] font-bold leading-snug">{r.title}</p>
                       <p className="mt-0.5 text-[13px] text-mute">{r.provider} · {r.region} · 관련도 {r.score}점</p>
+                      {r.eligibilityLabel && <p className="mt-1 text-[12.5px] font-bold text-leaf-deep">{r.eligibilityLabel}</p>}
                       <p className="mt-1 text-[14px]">{r.reason}</p>
                       <p className="mt-0.5 text-[13.5px] font-bold text-leaf-deep">🎁 {r.benefit_summary}</p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
@@ -1396,6 +1400,7 @@ export default function AppPage() {
                       {rc.opening.map((o) => (
                         <div key={o.policy_id} className="mt-1.5 rounded-[10px] bg-mint-soft/70 p-2.5">
                           <p className="text-[14.5px] font-bold leading-snug">{o.title} <span className="text-[12.5px] font-semibold text-mute">· {o.provider} · {o.score}점</span></p>
+                          {o.eligibilityLabel && <p className="mt-0.5 text-[12.5px] font-bold text-leaf-deep">{o.eligibilityLabel}</p>}
                           <p className="mt-0.5 text-[13.5px]">{o.reason}</p>
                           {o.apply_url && <a href={o.apply_url} target="_blank" rel="noreferrer" className="text-[13px] font-bold underline">신청 페이지 ↗</a>}
                         </div>
