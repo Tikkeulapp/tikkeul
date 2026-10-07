@@ -6,7 +6,8 @@
 import { chatModel } from "@/services/llm";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, ChatPolicy } from "@/types/chat";
+import { chatPoliciesFromAgentRun, type AgentRunMessage } from "@/lib/chatPolicies";
 import {
   buildBenefitInfoTool,
   buildCheckEligibilityTool,
@@ -123,12 +124,20 @@ export function extractReply(result: { messages: { content?: unknown }[] }): str
   return reply || "답변을 정리하는 중 문제가 생겼어요. 다시 한 번 말씀해 주시겠어요?";
 }
 
+/** 답변 + 답변에 언급된 DB 정책(마이티끌 담기 카드용) */
+export type PolicyAgentResult = { reply: string; policies: ChatPolicy[] };
+
+function finish(result: { messages: { content?: unknown }[] }): PolicyAgentResult {
+  const reply = extractReply(result);
+  return { reply, policies: chatPoliciesFromAgentRun(result.messages as AgentRunMessage[], reply) };
+}
+
 export async function runPolicySearch(
   ctx: ProfileCtx,
   regionSido: string | null,
   messages: ChatMessage[],
   policyQuery: string | null | undefined,
-): Promise<string> {
+): Promise<PolicyAgentResult> {
   const agent = createReactAgent({
     llm: makeLlm(),
     tools: [
@@ -142,7 +151,7 @@ export async function runPolicySearch(
   const turnMessages = [...messages];
   if (policyQuery) turnMessages.push({ role: "system", content: `검색 질의: ${policyQuery}` });
   const result = await agent.invoke({ messages: turnMessages });
-  return extractReply(result);
+  return finish(result);
 }
 
 export async function runPolicyLookup(
@@ -151,7 +160,7 @@ export async function runPolicyLookup(
   messages: ChatMessage[],
   policyQuery: string | null | undefined,
   referenceMatchId: string | null | undefined,
-): Promise<string> {
+): Promise<PolicyAgentResult> {
   const regionSigungu = typeof ctx.profileRow?.region_sigungu === "string" ? ctx.profileRow.region_sigungu : null;
   const agent = createReactAgent({
     llm: makeLlm(),
@@ -169,14 +178,14 @@ export async function runPolicyLookup(
   if (referenceMatchId) hint = `${hint} referenceMatchId=${referenceMatchId}`.trim();
   if (hint) turnMessages.push({ role: "system", content: hint });
   const result = await agent.invoke({ messages: turnMessages });
-  return extractReply(result);
+  return finish(result);
 }
 
 export async function runPolicyCompare(
   ctx: ProfileCtx,
   messages: ChatMessage[],
   compareTargets: string[],
-): Promise<string> {
+): Promise<PolicyAgentResult> {
   const regionSido = typeof ctx.profileRow?.region_sido === "string" ? ctx.profileRow.region_sido : null;
   const regionSigungu = typeof ctx.profileRow?.region_sigungu === "string" ? ctx.profileRow.region_sigungu : null;
   const agent = createReactAgent({
@@ -198,5 +207,5 @@ export async function runPolicyCompare(
   });
   const turnMessages = [...messages, { role: "system" as const, content: `비교 대상: ${JSON.stringify(parsed)}` }];
   const result = await agent.invoke({ messages: turnMessages });
-  return extractReply(result);
+  return finish(result);
 }

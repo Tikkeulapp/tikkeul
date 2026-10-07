@@ -5,10 +5,10 @@ import { normalizeSido } from "@/lib/region";
 import { PERSONAS } from "@/data/personas";
 import { resolveProfile } from "@/services/profile";
 import { planTurn } from "@/agents/orchestrator";
-import { runPolicyCompare, runPolicyLookup, runPolicySearch } from "@/agents/policyAgent";
+import { runPolicyCompare, runPolicyLookup, runPolicySearch, type PolicyAgentResult } from "@/agents/policyAgent";
 import { runProfileAgent } from "@/agents/profileAgent";
 import type { Plan } from "@/agents/state";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage, ChatPolicy } from "@/types/chat";
 import type { ProfileCtx } from "@/agents/policyTools";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 import { classifyPolicyForUser } from "@/services/policyMatch";
@@ -208,6 +208,7 @@ export async function POST(request: Request) {
     // eligibility_conditions_not_defined sentinel은 카드가 다룰 수 있는 형태가 아니라 걸러진다).
     const DISPLAYABLE_FIELDS = new Set(["education_status", "employment_status", "income_bracket", "asset_bracket", "housing_type"]);
     let missingFields: string[] = [];
+    let policies: ChatPolicy[] = []; // 답변에 언급된 DB 정책 — 프론트가 "마이티끌에 담기" 카드로 보여준다
 
     if (plan.intents.includes("policy_search")) {
       const ctx: ProfileCtx = { userId, profileRow: profile.profileRow, financeRow: profile.financeRow };
@@ -226,25 +227,27 @@ export async function POST(request: Request) {
       // Policy Agent(ReAct)가 빈 답만 내는 게 아니라 아예 예외를 던지는 경우도 실제로 있다
       // (Groq 구조화 출력/도구 호출 파싱 실패) — extractReply의 "빈 답" 처리는 예외까진 못 잡으므로
       // 여기서 한 번 더 감싸 최대 2회(원 시도+재시도) 안에 실패하면 500대 에러 대신 안내문으로 대체.
-      const runWithRetry = async (fn: () => Promise<string>): Promise<string> => {
+      const runWithRetry = async (fn: () => Promise<PolicyAgentResult>): Promise<PolicyAgentResult> => {
         for (let i = 0; i < 2; i++) {
           try {
             const r = await fn();
-            if (!isEmptyReply(r)) return r;
+            if (!isEmptyReply(r.reply)) return r;
           } catch (e) {
             console.error("Policy Agent 실행 실패:", e instanceof Error ? e.message : e);
           }
         }
-        return FALLBACK_TEXT;
+        return { reply: FALLBACK_TEXT, policies: [] };
       };
-      let policyReply: string;
+      let policyResult: PolicyAgentResult;
       if (plan.policyMode === "compare") {
-        policyReply = await runWithRetry(() => runPolicyCompare(ctx, messages, plan.compareTargets ?? []));
+        policyResult = await runWithRetry(() => runPolicyCompare(ctx, messages, plan.compareTargets ?? []));
       } else if (plan.policyMode === "lookup_and_check") {
-        policyReply = await runWithRetry(() => runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId));
+        policyResult = await runWithRetry(() => runPolicyLookup(ctx, profile.sido, messages, plan.policyQuery, plan.referenceMatchId));
       } else {
-        policyReply = await runWithRetry(() => runPolicySearch(ctx, profile.sido, messages, plan.policyQuery));
+        policyResult = await runWithRetry(() => runPolicySearch(ctx, profile.sido, messages, plan.policyQuery));
       }
+      let policyReply = policyResult.reply;
+      policies = policyResult.policies;
       if (skipPolicySearchIfEmpty && /찾지 못했/.test(policyReply)) policyReply = ""; // 델타가 이미 답이므로 빈 결과로 덮어쓰지 않음
       reply = [prior, policyReply].filter(Boolean).join("\n\n");
 
@@ -267,7 +270,7 @@ export async function POST(request: Request) {
     await db.from("chat_messages").insert({ user_id: userId, role: "assistant", content: reply });
 
     await interestTask;
-    return NextResponse.json({ reply, plan, missingFields });
+    return NextResponse.json({ reply, plan, missingFields, policies });
   } catch (e) {
     await interestTask;
     return NextResponse.json({ error: e instanceof Error ? e.message : "채팅 처리 실패" }, { status: 502 });
