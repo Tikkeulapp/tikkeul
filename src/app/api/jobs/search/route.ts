@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { careerMatchesFilter, dday, expandKeyword, findKeywordEvidence, hireBuckets, isPublicOrg } from "@/data/ncs";
 import { llmJson } from "@/services/llm";
+import { condenseLine, normalizeCareer, normalizeEducation } from "@/lib/jobDisplay";
 
 const COLS = "job_id, source, title, company, region_names, region_sidos, is_national, ncs_codes, ncs_names, hire_types, career, education, salary_text, headcount, pbanc_begin, deadline, detail_url, search_text";
 const COLS_T = COLS + ", deadline_time, summary, requirements";
@@ -106,6 +107,16 @@ export async function POST(request: Request) {
 
   // 원문 전체(search_text)는 응답에서 제거 — 근거 스니펫만 내려보낸다.
   // 클라이언트가 10건씩 페이지네이션하므로 필터 통과분 전체(쿼리 상한 300건)를 내려보낸다.
-  const jobs = rows.map(({ search_text: _s, ...r }) => ({ deadline_time: null, ...r, dday: dday(r.deadline) }));
+  // 카드 폼 통일: 요약·자격은 1줄(≤70자), 경력·학력·고용형태는 표준 표기로 (필터 판정은 위에서 원본값으로 끝났음)
+  const jobs = rows.map(({ search_text: _s, ...r }) => ({
+    deadline_time: null,
+    ...r,
+    summary: condenseLine((r as Record<string, unknown>).summary as string | null, 70),
+    requirements: condenseLine((r as Record<string, unknown>).requirements as string | null, 70),
+    career_label: normalizeCareer(r.career),
+    education_label: normalizeEducation(r.education),
+    hire_label: (hireBuckets(r.hire_types, r.career) as string[])[0] ?? null,
+    dday: dday(r.deadline),
+  }));
   return NextResponse.json({ jobs, total: rows.length, keywords, aiExpanded });
 }

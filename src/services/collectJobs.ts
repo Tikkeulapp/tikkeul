@@ -13,6 +13,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeSido } from "@/lib/region";
 import { sanitizeDetailUrl } from "@/lib/url";
+import { normalizeJobCards } from "@/services/normalizeJobs";
 import { NCS_NAME_BY_CODE, ncsCodesForCategoryText } from "@/data/ncs";
 
 export type JobRow = {
@@ -574,5 +575,7 @@ export async function refreshJobPostings(db: SupabaseClient, log: (m: string) =>
   }
 
   const { count } = await db.from("job_postings").select("job_id", { count: "exact", head: true }).or(`deadline.is.null,deadline.gte.${today}`);
+  // 카드 표시용 요약·자격 1줄 정규화 (작업용 LLM=Groq, 일일 상한) — 실패해도 수집 결과엔 영향 없음
+  try { await normalizeJobCards(db, log, 150); } catch (e) { log(`⚠ normalize 실패: ${e instanceof Error ? e.message : String(e)}`); }
   return { collected, upserted: rows.length, withdrawn_removed: withdrawn, open_total: count, errors };
 }
