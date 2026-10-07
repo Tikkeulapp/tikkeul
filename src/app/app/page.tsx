@@ -285,20 +285,16 @@ export default function AppPage() {
     } catch { /* 무시 — 카드가 비어 보이는 정도 */ }
   }, []);
 
-  // 검색바 추천 질문 칩과 "티끌이 이해한 나" 카드
+  // 검색바 추천 질문 칩
   type StarterQ = { id: string; question: string };
   const [starters, setStarters] = useState<{ questions: StarterQ[] }>({ questions: [] });
-  type InterestItem = { tag: string; label: string; sources: string[] };
-  const [interestCard, setInterestCard] = useState<{ summary: string | null; items: InterestItem[]; jobItems: InterestItem[] } | null>(null);
-  /** 추천 질문은 LLM(Groq)이 생성하므로 하루 1회 브라우저 캐시. force=true면 다시 생성 (관심사 거절 등) */
-  const loadStarters = useCallback(async (s: Session, force = false) => {
+  /** 추천 질문은 LLM(Groq)이 생성하므로 하루 1회 브라우저 캐시 */
+  const loadStarters = useCallback(async (s: Session) => {
     const key = `tikkeul.starters.${s.userId}`;
-    if (!force) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) { const c = JSON.parse(raw) as { date: string; data: typeof starters }; if (c.date === TODAY) { setStarters(c.data); return; } }
-      } catch { /* 캐시 없음 */ }
-    }
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) { const c = JSON.parse(raw) as { date: string; data: typeof starters }; if (c.date === TODAY) { setStarters(c.data); return; } }
+    } catch { /* 캐시 없음 */ }
     try {
       const qs = new URLSearchParams({ userId: s.userId, ...(s.personaId ? { personaId: s.personaId } : {}), ...(s.profileId ? { profileId: s.profileId } : {}) });
       const json = await fetch(`/api/starters?${qs}`).then((r) => r.json());
@@ -306,13 +302,6 @@ export default function AppPage() {
       setStarters(data);
       try { localStorage.setItem(key, JSON.stringify({ date: TODAY, data })); } catch { /* 무시 */ }
     } catch { /* 기본 문구로 둔다 */ }
-  }, []);
-  const loadInterestCard = useCallback(async (s: Session) => {
-    try {
-      const qs = new URLSearchParams({ userId: s.userId, ...(s.personaId ? { personaId: s.personaId } : {}) });
-      const data = await fetch(`/api/interests?${qs}`).then((r) => r.json());
-      setInterestCard(Array.isArray(data.items) ? { summary: data.summary ?? null, items: data.items, jobItems: data.jobItems ?? [] } : null);
-    } catch { /* 카드 숨김 */ }
   }, []);
 
   const refreshProfileOverrides = useCallback(async (userId: string) => {
@@ -535,7 +524,6 @@ export default function AppPage() {
             void refreshProfileOverrides(s.userId);
             void refreshDirectProfile(s);
             void loadStarters(s);
-            void loadInterestCard(s);
           }
         }
       } catch {
@@ -543,7 +531,7 @@ export default function AppPage() {
       }
       setLoaded(true);
     })();
-  }, [loadEvents, loadSavedIds, loadRecs, refreshProfileOverrides, refreshDirectProfile, loadStarters, loadInterestCard]);
+  }, [loadEvents, loadSavedIds, loadRecs, refreshProfileOverrides, refreshDirectProfile, loadStarters]);
 
   /** 낙관적 업데이트 후 서버에 반영 — 실패해도 UI를 되돌리진 않는다(기존 localStorage 방식과
    * 동일하게 "일단 눈에 보이는 상태"를 우선하되, 다음 로드 때 서버 상태로 다시 맞춰진다). */
@@ -742,8 +730,6 @@ export default function AppPage() {
       setNeededFields(new Set(Array.isArray(json.missingFields) ? json.missingFields : []));
       // 채팅 중 새로 저장된 매칭이 있을 수 있으니 마이티끌 목록도 갱신
       if (session) void loadSavedIds(session.userId);
-      // 대화에서 관심사가 새로 잡혔을 수 있으니 관심사 카드 갱신 (추천 질문은 하루 캐시 — 매 채팅마다 재생성하지 않음)
-      if (session) void loadInterestCard(session);
       // 채팅으로 프로필(거주지 등)이 바뀌었으면 헤더 배지와 추천 탭을 새 프로필 기준으로 갱신
       if (session && Array.isArray(json.plan?.intents) && json.plan.intents.includes("profile_update")) {
         void loadRecs(session, true);
@@ -764,18 +750,6 @@ export default function AppPage() {
     const message = query.trim();
     setQuery("");
     await sendChatMessage(message);
-  };
-
-  /** "티끌이 이해한 나"에서 "아니에요" — 관심사를 내리고 추천을 다시 계산 */
-  const rejectInterest = async (tag: string) => {
-    if (!session) return;
-    const isJob = tag.includes(":");
-    setInterestCard((prev) => (prev ? { ...prev, items: prev.items.filter((x) => x.tag !== tag), jobItems: prev.jobItems.filter((x) => x.tag !== tag) } : prev));
-    await fetch("/api/interests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.userId, tag }) });
-    void loadInterestCard(session);
-    if (isJob) { void loadJobs(session, true); return; } // 채용 선호는 공고 추천만 다시 계산
-    void loadStarters(session, true);
-    void loadRecs(session, true);
   };
 
   const addEvent = async (e: React.FormEvent) => {
@@ -1515,29 +1489,6 @@ export default function AppPage() {
                 </dl>
               </div>
             )}
-
-            {/* 티끌이 이해한 나 — 관심사와 근거(신호 종류만). "아니에요"로 바로잡으면 추천이 다시 계산된다 */}
-            {interestCard && (interestCard.items.length > 0 || interestCard.jobItems.length > 0) && (
-              <div className="rounded-[18px] border border-line bg-card p-4">
-                <p className="text-[12.5px] font-bold text-mute">티끌이 이해한 나</p>
-                {interestCard.summary && <p className="mt-1.5 text-[13.5px] font-semibold leading-snug">{interestCard.summary}</p>}
-                <ul className="mt-2 flex flex-col gap-1.5">
-                  {[...interestCard.items, ...interestCard.jobItems.map((x) => ({ ...x, job: true }))].map((it) => (
-                    <li key={it.tag} className="flex items-start justify-between gap-2 rounded-[10px] bg-mint-soft/70 px-2.5 py-1.5">
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-bold">{"job" in it && <span className="mr-1 rounded bg-[#efe9fb] px-1 py-0.5 text-[10.5px] font-bold text-[#6b4fbb]">채용</span>}{it.label}</p>
-                        {it.sources.length > 0 && <p className="text-[11.5px] text-mute">{it.sources.join(" · ")}에서</p>}
-                      </div>
-                      <button onClick={() => void rejectInterest(it.tag)} className="shrink-0 text-[11.5px] font-semibold text-mute underline decoration-dotted hover:text-ink" title="이 관심사를 추천에서 빼요">
-                        아니에요
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2 text-[11px] leading-snug text-mute">추천 순서에만 쓰이고, 자격 판정에는 쓰이지 않아요.</p>
-              </div>
-            )}
-
           </aside>
         </div>
       </div>
