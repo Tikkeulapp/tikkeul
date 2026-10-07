@@ -91,3 +91,17 @@ test("requiredMonthlySaving: 목표 기간 내 달성에 필요한 월 저축액
   const n = monthsToReach(5_000_000, need, 50_000_000)!;
   assert.ok(n <= 36, `필요액으로 ${n}개월 — 36개월 이내여야 함`);
 });
+
+test("2026년 4대보험 요율 반영 — 국민연금 4.75%·건강 3.595%·장기요양 13.14%·고용 0.9%", () => {
+  const n = estimateNetPay(36_000_000, { companyType: "중소기업", age: 27 });
+  assert.equal(n.pensionKrw, 142_500); // 3,000,000 × 4.75%
+  assert.equal(n.healthKrw, 107_850); // 3,000,000 × 3.595%
+  assert.equal(n.ltcKrw, 14_171); // 107,850 × 13.14%
+  assert.equal(n.employmentKrw, 27_000);
+  assert.equal(n.netMonthlyKrw, 2_698_608);
+});
+
+test("국민연금은 기준소득월액 상한(2026.7~ 659만 원)까지만 부과", () => {
+  const n = estimateNetPay(120_000_000, { companyType: "대기업", age: 30 }); // 월 1,000만 원
+  assert.equal(n.pensionKrw, Math.round(6_590_000 * 0.0475));
+});
