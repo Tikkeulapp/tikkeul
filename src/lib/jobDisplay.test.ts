@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeCareer, normalizeEducation, condenseLine } from "./jobDisplay";
+import { normalizeCareer, normalizeEducation, condenseLine, NO_INFO } from "./jobDisplay";
 
 test("normalizeCareer: 소스별 제각각인 경력 표기를 5종으로 통일", () => {
   assert.equal(normalizeCareer("신입"), "신입");
@@ -39,6 +39,8 @@ test("condenseLine: 장문·불릿 섞인 원문을 한 줄로 압축", () => {
   // 빈 값/공백은 null
   assert.equal(condenseLine("   ", 60), null);
   assert.equal(condenseLine(null, 60), null);
+  // LLM이 "원문에 정보 없음"으로 판정한 센티널은 표시상 null (UI는 "공고 원문 참조")
+  assert.equal(condenseLine(NO_INFO, 60), null);
   // 절 경계(· / - / ,)에서 자른다 — 단어 중간에서 끊지 않음
   const long = "자동화 시나리오 제작 및 유지보수 - 다양한 보안 솔루션 데이터 수집 - 탐지 시나리오 기반 대응 프로세스 자동화 구현 및 최적화 - 운영 문서화";
   const c = condenseLine(long, 50)!;
