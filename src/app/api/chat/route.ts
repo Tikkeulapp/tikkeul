@@ -12,6 +12,7 @@ import type { ChatMessage } from "@/types/chat";
 import type { ProfileCtx } from "@/agents/policyTools";
 import { ELIGIBILITY_CONDITIONS_NOT_DEFINED } from "@/lib/eligibility";
 import { classifyPolicyForUser } from "@/services/policyMatch";
+import { recordChatInterests } from "@/services/interests";
 
 const HISTORY_LIMIT = 12;
 
@@ -118,6 +119,8 @@ export async function POST(request: Request) {
   const profileRowId = personaId ?? profileId ?? null;
 
   const db = supabaseAdmin();
+  // 대화 관심 추출(PANDA-lite)은 본 응답과 병렬로 — 응답 지연을 늘리지 않고, 실패해도 응답에 영향 없음
+  const interestTask = recordChatInterests(userId, message);
 
   try {
     const [{ data: history }, initialProfile] = await Promise.all([
@@ -263,8 +266,10 @@ export async function POST(request: Request) {
 
     await db.from("chat_messages").insert({ user_id: userId, role: "assistant", content: reply });
 
+    await interestTask;
     return NextResponse.json({ reply, plan, missingFields });
   } catch (e) {
+    await interestTask;
     return NextResponse.json({ error: e instanceof Error ? e.message : "채팅 처리 실패" }, { status: 502 });
   }
 }

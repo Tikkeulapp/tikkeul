@@ -2,9 +2,11 @@
  * 관심사 점수 (UFO-lite) — 행동 신호 → 관심 태그 → time-decay 점수.
  * 관심사는 추천 순위에만 쓴다. 자격 판정·금액에는 절대 넣지 않는다 ("숫자는 코드가, 해설은 AI가").
  */
-import type { InterestEvent, InterestSignal, InterestTagDef } from "@/types/interest";
+import type { InterestEvent, InterestExplanation, InterestSignal, InterestTagDef } from "@/types/interest";
 
-/** 신호별 기본 가중치. impression은 노출 기록(다운랭크용)일 뿐 관심이 아니다. */
+/** 신호별 기본 가중치. impression·선톡 노출/수락은 기록(다운랭크·주간 빈도 판단)일 뿐 관심이 아니다.
+ * 선톡 수락은 이어지는 채팅 발화가 chat 신호로 관심을 남기므로 여기서 또 더하지 않는다.
+ * reject("아니에요")는 반감기가 몇 번 지나도 다시 떠오르지 않을 만큼 강한 음수. */
 export const SIGNAL_WEIGHT: Record<InterestSignal, number> = {
   save: 3,
   calendar: 2,
@@ -12,7 +14,11 @@ export const SIGNAL_WEIGHT: Record<InterestSignal, number> = {
   chat: 1,
   view: 1,
   impression: 0,
+  starter_shown: 0,
+  starter_yes: 0,
+  starter_no: -1,
   remove: -2,
+  reject: -10,
 };
 
 const DAY_MS = 86_400_000;
@@ -24,6 +30,15 @@ export function matchTags(text: string | null | undefined, taxonomy: InterestTag
     .map((t) => t.id);
 }
 
+/** 이벤트 1건의 현재 기여값 (만료면 0). */
+function decayedValue(e: InterestEvent, now: Date, halfLife: number): number {
+  if (e.expiresAt && new Date(e.expiresAt).getTime() < now.getTime()) return 0;
+  const w = e.weight ?? SIGNAL_WEIGHT[e.signal];
+  if (!w) return 0;
+  const ageDays = Math.max(0, (now.getTime() - new Date(e.occurredAt).getTime()) / DAY_MS);
+  return w * Math.pow(0.5, ageDays / halfLife);
+}
+
 /** Σ weight × 0.5^(경과일/반감기). 미래 이벤트(다가오는 일정)는 경과 0으로 본다. */
 export function scoreInterests(
   events: InterestEvent[],
@@ -33,11 +48,8 @@ export function scoreInterests(
   const halfLife = opts.halfLifeDays ?? 30;
   const scores: Record<string, number> = {};
   for (const e of events) {
-    if (e.expiresAt && new Date(e.expiresAt).getTime() < now.getTime()) continue;
-    const w = e.weight ?? SIGNAL_WEIGHT[e.signal];
-    if (!w) continue;
-    const ageDays = Math.max(0, (now.getTime() - new Date(e.occurredAt).getTime()) / DAY_MS);
-    const v = w * Math.pow(0.5, ageDays / halfLife);
+    const v = decayedValue(e, now, halfLife);
+    if (!v) continue;
     for (const tag of e.tags) scores[tag] = (scores[tag] ?? 0) + v;
   }
   return scores;
@@ -77,4 +89,92 @@ export function eventsFromTexts(
     if (tags.length) out.push({ signal, tags, occurredAt: it.at });
   }
   return out;
+}
+
+// ── 대화 기반 관심 추출 (PANDA-lite) ─────────────────────────────────────────
+
+const GREETING = /^(안녕|하이|hi|hello|고마워|고맙|감사|ㅎㅎ|ㅋㅋ|네|응|ㅇㅇ|ok|오케이|좋아요?)[\s!.~?]*$/i;
+const INTEREST_HINT = /준비|공부|부담|비용|돈|지원|받고\s*싶|관심|알아보|필요|계획|고민/;
+
+/** LLM을 부를 가치가 있는 발화인지 (규칙 기반 1차 필터) — 인사·짧은 말은 건너뛴다. */
+export function shouldExtractInterests(text: string, taxonomy: InterestTagDef[]): boolean {
+  const t = text.trim();
+  if (t.length < 6 || GREETING.test(t)) return false;
+  return matchTags(t, taxonomy).length > 0 || INTEREST_HINT.test(t);
+}
+
+/** 강도 × 지속성 → 가중치. 일시적 관심은 TEMP_DAYS 뒤 만료. */
+const CHAT_WEIGHT = { strong: { persistent: 2, temporary: 1.5 }, weak: { persistent: 1, temporary: 0.5 } } as const;
+const TEMP_DAYS = 14;
+const MAX_CHAT_TAGS = 3;
+
+/** LLM 출력 {interests:[{tag,strength,persistence}]}을 검증해 chat 이벤트로 — 화이트리스트 밖·형식 오류는 버린다. */
+export function chatInterestEvents(raw: unknown, now: Date, validTags: string[]): InterestEvent[] {
+  const list = (raw as { interests?: unknown } | null)?.interests;
+  if (!Array.isArray(list)) return [];
+  const out: InterestEvent[] = [];
+  const seen = new Set<string>();
+  for (const it of list) {
+    const { tag, strength, persistence } = (it ?? {}) as Record<string, unknown>;
+    if (typeof tag !== "string" || !validTags.includes(tag) || seen.has(tag)) continue;
+    if ((strength !== "strong" && strength !== "weak") || (persistence !== "persistent" && persistence !== "temporary")) continue;
+    seen.add(tag);
+    out.push({
+      signal: "chat",
+      tags: [tag],
+      weight: CHAT_WEIGHT[strength][persistence],
+      occurredAt: now.toISOString(),
+      expiresAt: persistence === "temporary" ? new Date(now.getTime() + TEMP_DAYS * DAY_MS).toISOString() : null,
+    });
+    if (out.length >= MAX_CHAT_TAGS) break;
+  }
+  return out;
+}
+
+// ── "티끌이 이해한 나" (Persona-lite) ────────────────────────────────────────
+
+/** 상위 관심 태그별 점수와 근거(양수로 기여한 신호 종류, 큰 순). 근거는 신호 종류까지만 — 날짜·내역은 노출하지 않는다. */
+export function explainInterests(
+  events: InterestEvent[],
+  now: Date,
+  taxonomy: InterestTagDef[],
+  n: number,
+  opts: { halfLifeDays?: number } = {},
+): InterestExplanation[] {
+  const halfLife = opts.halfLifeDays ?? 30;
+  const scores = scoreInterests(events, now, opts);
+  const bySignal: Record<string, Partial<Record<InterestEvent["signal"], number>>> = {};
+  for (const e of events) {
+    const v = decayedValue(e, now, halfLife);
+    if (v <= 0) continue;
+    for (const tag of e.tags) {
+      const m = (bySignal[tag] ??= {});
+      m[e.signal] = (m[e.signal] ?? 0) + v;
+    }
+  }
+  return topInterests(scores, n).map((tag) => ({
+    tag,
+    label: taxonomy.find((t) => t.id === tag)?.label ?? tag,
+    score: Math.round(scores[tag] * 100) / 100,
+    sources: Object.entries(bySignal[tag] ?? {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([sig]) => sig as InterestEvent["signal"]),
+  }));
+}
+
+/** 자식 태그("시험>응시료")의 양수 점수를 부모("시험")로 합산. */
+export function rollupParents(scores: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [tag, v] of Object.entries(scores)) {
+    if (v <= 0) continue;
+    const parent = tag.split(">")[0];
+    out[parent] = (out[parent] ?? 0) + v;
+  }
+  return out;
+}
+
+/** 카드 머리 문장 — 상위 라벨 2개까지만, 근거·내역 없이. */
+export function summarizeInterests(labels: string[]): string | null {
+  if (!labels.length) return null;
+  return `${labels.slice(0, 2).join(", ")}에 관심이 많아 보여요.`; // 라벨 안에 "·"가 있어 구분자는 쉼표
 }
