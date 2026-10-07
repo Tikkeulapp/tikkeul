@@ -37,7 +37,7 @@ export function Hero() {
       </div>
 
       {/* ── 제품 목업: 일정을 적으면 돈이 붙는 캘린더 ── */}
-      <div className="relative pb-16" aria-label="서비스 화면 미리보기">
+      <div className="relative pb-18" aria-label="서비스 화면 미리보기">
         <div className="rounded-[24px] border border-line bg-card p-6">
           {/* 창 상단 */}
           <div className="mb-5 flex items-center justify-between">
@@ -121,10 +121,10 @@ export function Hero() {
         </div>
 
         {/* 떠 있는 절약액 카드 */}
-        <div className="absolute bottom-0 -left-3 rounded-[24px] border border-line bg-card px-5 py-4 sm:-left-8">
-          <p className="text-[12px] font-bold text-mute">이번 달 모은 티끌</p>
-          <p className="text-[22px] font-semibold tracking-tight text-leaf">
-            +140,000<span className="text-[14px] text-ink">원</span>
+        <div className="absolute bottom-0 -left-2 rounded-[24px] bg-leaf-deep px-6 py-4 text-white shadow-lift ring-4 ring-paper sm:-left-8">
+          <p className="text-[13px] font-bold text-white/70">이번 달 모은 티끌</p>
+          <p className="text-[30px] font-bold leading-tight tracking-tight text-lime">
+            +140,000<span className="ml-0.5 text-[16px] text-white">원</span>
           </p>
         </div>
       </div>
