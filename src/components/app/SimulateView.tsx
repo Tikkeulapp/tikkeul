@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { COMPANY_TYPES } from "@/lib/simulate";
 import type { CompanyType, GoalType, SimResult, SpendingProfile } from "@/types/simulate";
 import { HOUSE_REGIONS, type HouseRegion } from "@/data/postjob_reference";
@@ -14,6 +14,7 @@ type ApiResponse = {
   spending: SpendingProfile;
   profile: { age: number | null; housing: string | null; source: string; region: string | null };
   programs: { likely: JudgedProgram[]; needsCheck: JudgedProgram[]; unlikely: { id: string; name: string; reason: string }[] };
+  interests?: string[];
   dbPolicies: { policy_id: string; source: string; title: string; provider: string | null; region: string; theme: string | null; end_date: string | null; always_open: boolean; apply_url: string | null; score: number; reason: string; benefit_summary: string; goal_tags: string[] }[];
   dbCandidates: number;
   dbError: string | null;
@@ -64,6 +65,22 @@ const GOAL_META: Record<GoalType, { emoji: string; label: string; hint: string }
 export function SimulateView({ session }: { session: SimSession }) {
   const [stage, setStage] = useState<"idle" | "loading" | "result">("idle");
   const [companyType, setCompanyType] = useState<CompanyType>("중소기업");
+  // 채용에서 공공기관 공고를 주로 담았다면 기업 구분 기본값을 "공기업"으로 제안 (사용자가 이미 고른 뒤에는 건드리지 않음)
+  const companyTouched = useRef(false);
+  const [companyHint, setCompanyHint] = useState<string | null>(null);
+  useEffect(() => {
+    if (!session.userId) return;
+    const qs = new URLSearchParams({ userId: session.userId, ...(session.personaId ? { personaId: session.personaId } : {}) });
+    fetch(`/api/interests?${qs}`)
+      .then((r) => r.json())
+      .then((d: { suggestedCompanyType?: CompanyType | null }) => {
+        if (d.suggestedCompanyType && !companyTouched.current) {
+          setCompanyType(d.suggestedCompanyType);
+          setCompanyHint(`채용에서 공공기관 공고를 주로 담으셔서 ${d.suggestedCompanyType}으로 맞춰뒀어요. 바꿀 수 있어요.`);
+        }
+      })
+      .catch(() => { /* 기본값 유지 */ });
+  }, [session.userId, session.personaId]);
   const [salaryMan, setSalaryMan] = useState("3600");
   const [goals, setGoals] = useState<GoalType[]>(["LUMP_SUM"]);
   const [targetYears, setTargetYears] = useState<string>(""); // "" = 기간 미설정
@@ -124,12 +141,13 @@ export function SimulateView({ session }: { session: SimSession }) {
             <p className="mb-2 font-bold">기업 구분</p>
             <div className="flex flex-wrap gap-1.5">
               {COMPANY_TYPES.map((c) => (
-                <button key={c} type="button" onClick={() => setCompanyType(c)}
+                <button key={c} type="button" onClick={() => { companyTouched.current = true; setCompanyHint(null); setCompanyType(c); }}
                   className={`rounded-full border px-3 py-1.5 text-[15.5px] transition ${companyType === c ? "border-ink bg-ink text-white" : "border-line hover:border-ink"}`}>
                   {c}
                 </button>
               ))}
             </div>
+            {companyHint && <p className="mt-1.5 text-[13px] text-leaf-deep">💡 {companyHint}</p>}
           </div>
 
           <div className="mt-5 grid gap-3">
@@ -445,6 +463,9 @@ function Result({ data }: { data: ApiResponse }) {
       {/* 제도 */}
       <section className="rounded-3xl border border-line bg-card p-5 shadow-lift">
         <h3 className="text-[18px] font-extrabold">금융상품·세제 혜택 <span className="text-[15px] font-normal text-mute">기관 공고 요약 큐레이션 14종 중 규칙 판정 · {data.programs.likely.length + data.programs.needsCheck.length}건</span></h3>
+        {data.interests && data.interests.length > 0 && (
+          <p className="mt-1 text-[13px] text-mute">관심사({data.interests.join(", ")})에 가까운 제도를 같은 판정 안에서 먼저 보여드려요. 판정 자체는 관심사와 무관해요.</p>
+        )}
         <ul className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {[...data.programs.likely, ...data.programs.needsCheck].map((p) => (
             <li key={p.id} className="rounded-2xl bg-mint-soft p-4">

@@ -4,6 +4,7 @@
  * 관심사는 추천 "순위"에만 쓰인다. 자격 판정·금액에는 절대 쓰지 않는다 (CLAUDE.md).
  */
 import type { InterestTagDef } from "@/types/interest";
+import { NCS_NAME_BY_CODE } from "@/data/ncs";
 
 export const INTEREST_TAGS: InterestTagDef[] = [
   { id: "시험>응시료", label: "시험 응시료", keywords: ["응시료", "시험비", "검정료"] },
@@ -47,4 +48,26 @@ export const INTEREST_SOURCE_LABEL: Partial<Record<string, string>> = {
   spend: "취준 지출",
   chat: "대화",
   view: "살펴본 정책",
+  job_save: "캘린더에 담은 공고",
+  job_view: "열어본 공고",
+  job_keyword: "검색한 강점 키워드",
 };
+
+/** 채용 관심 태그(ncs:·org:·hire:·region:·kw:) → 카드·LLM용 라벨. 채용 태그가 아니면 null. */
+export function jobTagLabel(tag: string): string | null {
+  const i = tag.indexOf(":");
+  if (i <= 0) return null;
+  const ns = tag.slice(0, i);
+  const v = tag.slice(i + 1);
+  if (!v) return null;
+  switch (ns) {
+    case "ncs": return `${NCS_NAME_BY_CODE.get(v) ?? v} 분야`;
+    case "org": return v === "public" ? "공공기관 공고" : v === "private" ? "사기업 공고" : null;
+    case "hire": return `${v} 채용`;
+    case "region": return `${v} 근무`;
+    case "kw": return `'${v}' 관련 공고`;
+    default: return null;
+  }
+}
+
+export const isJobTag = (tag: string) => jobTagLabel(tag) !== null;

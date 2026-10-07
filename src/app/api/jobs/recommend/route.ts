@@ -4,10 +4,17 @@
  * 흐름: resolveProfile(이사 반영) → 목표 직무 → NCS 코드(코드 매핑) → 지역/전국 후보 풀(마감 전)
  *       → 코드 점수화 상위 25 → LLM이 6건 선별+이유 (실패 시 코드 점수순 폴백)
  * 마감 D-7 이하는 urgent로 따로 내려 "마감 임박" 표시에 쓴다.
+ * 개인화: 공고 담기·열람·강점 키워드에서 쌓인 채용 선호(직무분야·기관 구분·고용형태·지역·키워드)로
+ *         후보 풀을 넓히고 코드 점수 순위와 RRF 융합, 반복 노출·무반응 공고는 뒤로. 지원 자격 판단과는 무관.
  */
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/services/supabase";
 import { resolveProfile } from "@/services/profile";
+import { loadInterestContext, recordJobImpressions } from "@/services/interests";
+import { jobTagLabel } from "@/data/interests";
+import { jobInterestScore, jobTags } from "@/lib/jobInterest";
+import { topInterests } from "@/lib/interest";
+import { fuseWithInterest } from "@/lib/rank";
 import { getPersona } from "@/data/personas";
 import { llmJson } from "@/services/llm";
 import { ncsCodesForTargetJob, careerOpenToNewcomer, educationSatisfied, dday, NCS_NAME_BY_CODE, isPublicOrg } from "@/data/ncs";
@@ -29,7 +36,8 @@ const SYSTEM = `당신은 한국 취업준비생 채용공고 추천 어시스�
 - 후보에 없는 job_id 금지. reason은 그 후보의 정보에만 근거하고 자격요건을 지어내지 마세요.
 - 사용자의 목표 직무와 직무분야(NCS)가 가까울수록, 거주지와 근무지역이 가까울수록 우선.
 - "경력" 단독 공고는 제외. score 55 미만 제외. 무관하면 빈 배열.
-- 적합도가 비슷하면 사기업과 공공기관 공고를 섞어 추천하세요 (한쪽에 몰지 않기). 상시채용(마감 없음)도 불리하게 보지 마세요.`;
+- 적합도가 비슷하면 사기업과 공공기관 공고를 섞어 추천하세요 (한쪽에 몰지 않기). 상시채용(마감 없음)도 불리하게 보지 마세요.
+- [사용자]의 선호는 최근 공고 담기·열람·검색에서 추정한 참고 정보입니다. 비슷한 후보끼리의 우선순위에만 쓰고, 자격 판단 근거로 쓰거나 reason에서 행동을 구체적으로 언급하지 마세요.`;
 
 export async function POST(request: Request) {
   let body: { userId?: string | null; personaId?: string | null; profileId?: string | null };
@@ -41,7 +49,11 @@ export async function POST(request: Request) {
   if (!body.personaId && !body.profileId) return NextResponse.json({ error: "personaId 또는 profileId가 필요합니다" }, { status: 400 });
 
   const db = supabaseAdmin();
-  const prof = await resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId });
+  const [prof, interest] = await Promise.all([
+    resolveProfile({ userId: body.userId, personaId: body.personaId, profileId: body.profileId }),
+    loadInterestContext({ userId: body.userId, personaId: body.personaId }),
+  ]);
+  const prefTags = topInterests(interest.jobScores, 4);
   const persona = body.personaId ? getPersona(body.personaId) : null;
   const targetJob = (persona?.declared.targetJob ?? (prof.summary["목표직무"] as string | undefined) ?? "").toString();
   const education = (prof.summary["학력"] as string | undefined) ?? null;
@@ -60,6 +72,15 @@ export async function POST(request: Request) {
     if (prof.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${prof.sido}}`);
     return q as unknown as Promise<Res>;
   });
+  // 선호 직무분야(목표 직무 밖에서 자주 담은 분야)·강점 키워드로 후보 풀 보강
+  for (const code of prefTags.filter((t) => t.startsWith("ncs:")).map((t) => t.slice(4)).filter((c) => !ncs.includes(c)).slice(0, 2)) {
+    let q = db.from("job_postings").select(cols).or(openOr).contains("ncs_codes", [code]).order("deadline", { ascending: true }).limit(30);
+    if (prof.sido) q = q.or(`is_national.eq.true,region_sidos.cs.{${prof.sido}}`);
+    pools.push(q as unknown as Promise<Res>);
+  }
+  for (const kw of prefTags.filter((t) => t.startsWith("kw:")).map((t) => t.slice(3).replace(/[,%()*"'\\]/g, "")).filter(Boolean).slice(0, 2)) {
+    pools.push(db.from("job_postings").select(cols).or(openOr).ilike("search_text", `%${kw}%`).order("deadline", { ascending: true }).limit(20) as unknown as Promise<Res>);
+  }
   // 직무 무관, 거주 지역 공고도 소량 (지역 밀착 공고 커버)
   if (prof.sido) pools.push(db.from("job_postings").select(cols).or(openOr).contains("region_sidos", [prof.sido]).order("deadline", { ascending: true }).limit(30) as unknown as Promise<Res>);
 
@@ -87,11 +108,20 @@ export async function POST(request: Request) {
     return sc;
   };
 
+  // 코드 점수 순위 + 채용 선호 순위를 RRF로 합치고, 반복 노출에 반응 없던 공고는 뒤로
+  const scored = raw.map((r) => ({ r, sc: scoreOf(r) })).filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc);
+  const prefOf = new Map(scored.map(({ r }) => [
+    r.job_id,
+    jobInterestScore(jobTags({ ncs_codes: r.ncs_codes, isPublic: isPublicOrg(r.source, r.company), hire_types: r.hire_types, region_sidos: r.region_sidos }), `${r.title} ${r.search_text ?? ""}`, interest.jobScores),
+  ]));
+  const fused = fuseWithInterest(scored.map((x) => x.r.job_id), (id) => prefOf.get(id) ?? 0);
+  const order = [...fused.filter((id) => !interest.jobStale.has(id)), ...fused.filter((id) => interest.jobStale.has(id))];
+  const rankOf = new Map(order.map((id, i) => [id, i]));
+  const sorted = [...scored].sort((a, b) => rankOf.get(a.r.job_id)! - rankOf.get(b.r.job_id)!);
   // 후보 25건 — 공채(마감 가중) 위주로 쏠리지 않게 민간(company) 상위 8건은 쿼터로 보장
-  const sorted = raw.map((r) => ({ r, sc: scoreOf(r) })).filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc);
   const companyTop = sorted.filter((x) => x.r.source === "company").slice(0, 8);
   const rest = sorted.filter((x) => !companyTop.includes(x));
-  const cands = [...companyTop, ...rest].slice(0, 25).sort((a, b) => b.sc - a.sc);
+  const cands = [...companyTop, ...rest].slice(0, 25).sort((a, b) => rankOf.get(a.r.job_id)! - rankOf.get(b.r.job_id)!);
   const byId = new Map(cands.map((x) => [x.r.job_id, x]));
 
   const toRec = (r: Row, score: number, reason: string) => ({
@@ -102,6 +132,7 @@ export async function POST(request: Request) {
     pbancBegin: r.pbanc_begin, dday: dday(r.deadline), url: r.detail_url, score, reason,
   });
 
+  const prefLabels = prefTags.map(jobTagLabel).filter((l): l is string => !!l);
   let recommendations: ReturnType<typeof toRec>[] = [];
   let aiError: string | null = null;
   if (cands.length > 0) {
@@ -110,7 +141,8 @@ export async function POST(request: Request) {
         job_id: r.job_id, 제목: r.title, 회사: r.company, 구분: isPublicOrg(r.source, r.company) ? "공공기관" : "사기업", 지역: r.region_names.join(","),
         직무분야: r.ncs_names.join(","), 채용구분: r.career, 학력: r.education, 급여: r.salary_text, 마감: r.deadline ?? "상시",
       }));
-      const userMsg = `[사용자]\n${JSON.stringify({ 목표직무: targetJob || "미상", 직무분야추정: ncs.map((c) => NCS_NAME_BY_CODE.get(c)), 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 나이: prof.age, 학력: education })}\n\n[공고 후보]\n${JSON.stringify(listForLlm)}`;
+      const 선호 = prefLabels.length ? { 선호: prefLabels } : {};
+      const userMsg = `[사용자]\n${JSON.stringify({ 목표직무: targetJob || "미상", 직무분야추정: ncs.map((c) => NCS_NAME_BY_CODE.get(c)), 거주지: `${prof.sido ?? ""} ${prof.sigungu ?? ""}`.trim(), 나이: prof.age, 학력: education, ...선호 })}\n\n[공고 후보]\n${JSON.stringify(listForLlm)}`;
       let out = await llmJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);
       if (!Array.isArray(out?.picks) || out.picks.length === 0) out = await llmJson<{ picks: { job_id: string; score: number; reason: string }[] }>(SYSTEM, userMsg, 1600);
       recommendations = (out.picks ?? [])
@@ -144,6 +176,8 @@ export async function POST(request: Request) {
     recommendations = [...recommendations.slice(0, 6 - extra.length), ...extra];
   }
 
+  if (body.userId) await recordJobImpressions(body.userId, recommendations.map((x) => x.id));
+
   const urgent = recommendations.filter((x) => x.dday !== null && x.dday <= 7).sort((a, b) => (a.dday ?? 99) - (b.dday ?? 99)).slice(0, 3);
-  return NextResponse.json({ recommendations, urgent, candidates: raw.length, aiError, profile: { sido: prof.sido, targetJob, ncs: ncs.map((c) => NCS_NAME_BY_CODE.get(c)) } });
+  return NextResponse.json({ recommendations, urgent, candidates: raw.length, aiError, preferences: prefLabels, profile: { sido: prof.sido, targetJob, ncs: ncs.map((c) => NCS_NAME_BY_CODE.get(c)) } });
 }

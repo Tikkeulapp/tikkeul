@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rrf, demotedPolicies, diversify } from "@/lib/rank";
+import { rrf, demotedPolicies, demotedJobs, fuseWithInterest, diversify } from "@/lib/rank";
 import type { InterestEvent } from "@/types/interest";
 
 const NOW = new Date("2026-10-07T00:00:00Z");
@@ -45,4 +45,20 @@ test("diversify: 같은 키가 연속되지 않게 재배치(가능한 한), 상
 test("diversify: 불가능하면 남은 것을 순서대로, 키 없음(null)은 연속 허용", () => {
   assert.deepEqual(diversify([{ k: "A", id: 1 }, { k: "A", id: 2 }], (x) => x.k).map((x) => x.id), [1, 2]);
   assert.deepEqual(diversify([{ k: null, id: 1 }, { k: null, id: 2 }], (x) => x.k).map((x) => x.id), [1, 2]);
+});
+
+test("demotedJobs: 공고도 반복 노출·무반응이면 stale (담기·열람하면 제외)", () => {
+  const je = (jobId: string, signal: InterestEvent["signal"], occurredAt: string): InterestEvent => ({ jobId, signal, tags: [], occurredAt });
+  const d = demotedJobs([
+    je("j1", "job_impression", "2026-10-01"), je("j1", "job_impression", "2026-10-05"),
+    je("j2", "job_impression", "2026-10-01"), je("j2", "job_impression", "2026-10-05"), je("j2", "job_save", "2026-10-06"),
+    ev("p1", "impression", "2026-10-01"), ev("p1", "impression", "2026-10-05"),
+  ], NOW);
+  assert.deepEqual([...d.stale], ["j1"]);
+});
+
+test("fuseWithInterest: 원래 순서와 관심 순서를 RRF로 합침, 관심 없으면 원래 순서 유지", () => {
+  const interest: Record<string, number> = { c: 5, b: 1 };
+  assert.deepEqual(fuseWithInterest(["a", "b", "c"], (id) => interest[id] ?? 0), ["c", "b", "a"]);
+  assert.deepEqual(fuseWithInterest(["a", "b", "c"], () => 0), ["a", "b", "c"]);
 });

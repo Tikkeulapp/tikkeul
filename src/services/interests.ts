@@ -7,12 +7,14 @@ import { supabaseAdmin } from "@/services/supabase";
 import { llmJson } from "@/services/llm";
 import { resolveProfile } from "@/services/profile";
 import { getPersona } from "@/data/personas";
-import { INTEREST_SOURCE_LABEL, INTEREST_TAGS } from "@/data/interests";
+import { INTEREST_SOURCE_LABEL, INTEREST_TAGS, isJobTag } from "@/data/interests";
+import { isPublicOrg } from "@/data/ncs";
 import { DEFAULT_STARTER_IDS, STARTER_TEMPLATES } from "@/data/starters";
 import { derive } from "@/lib/derive";
 import { normalizeSido } from "@/lib/region";
 import { chatInterestEvents, eventsFromTexts, explainInterests, matchTags, scoreInterests, shouldExtractInterests, topInterests } from "@/lib/interest";
-import { demotedPolicies } from "@/lib/rank";
+import { demotedJobs, demotedPolicies } from "@/lib/rank";
+import { jobTags, keywordEvents } from "@/lib/jobInterest";
 import { avoidTagsFromScores, buildProfileReport, buildStarters, filterGeneratedStarters, profileStarterSignals, upcomingEventTags } from "@/lib/starters";
 import type { InterestEvent, InterestSignal, StarterPick, StarterTemplate } from "@/types/interest";
 
@@ -50,9 +52,41 @@ export async function recordImpressions(userId: string, policyIds: string[]): Pr
   await insertEvents(policyIds.map((policy_id) => ({ user_id: userId, signal: "impression", policy_id, tags: [] })), "노출");
 }
 
-/** "티끌이 이해한 나" 카드의 "아니에요" — 해당 태그를 강하게 내린다. */
+/** 채용공고 신호(캘린더 담기·원문 열람) — job_postings에서 공고 속성을 읽어 채용 태그로 기록. */
+export async function recordJobSignal(userId: string, jobId: string, signal: Extract<InterestSignal, "job_save" | "job_view">): Promise<void> {
+  let tags: string[] = [];
+  try {
+    const { data } = await supabaseAdmin()
+      .from("job_postings")
+      .select("source, company, ncs_codes, hire_types, region_sidos")
+      .eq("job_id", jobId)
+      .maybeSingle();
+    if (data) {
+      tags = jobTags({
+        ncs_codes: data.ncs_codes ?? [],
+        isPublic: isPublicOrg(data.source, data.company),
+        hire_types: data.hire_types ?? [],
+        region_sidos: data.region_sidos ?? [],
+      });
+    }
+  } catch { /* 태그 없이 기록 — 다운랭크 판단에는 여전히 쓰인다 */ }
+  await insertEvents([{ user_id: userId, signal, job_id: jobId, tags }], `채용 신호(${signal})`);
+}
+
+/** 강점 키워드 검색 — 명시적인 채용 관심. */
+export async function recordJobKeywords(userId: string, keywords: string[]): Promise<void> {
+  const events = keywordEvents(keywords, new Date());
+  await insertEvents(events.map((e) => ({ user_id: userId, signal: e.signal, tags: e.tags })), "강점 키워드");
+}
+
+/** 공고 추천 노출 기록 — 반복 노출·무반응 다운랭크용. */
+export async function recordJobImpressions(userId: string, jobIds: string[]): Promise<void> {
+  await insertEvents(jobIds.map((job_id) => ({ user_id: userId, signal: "job_impression", job_id, tags: [] })), "공고 노출");
+}
+
+/** "티끌이 이해한 나" 카드의 "아니에요" — 해당 태그(정책 관심사 또는 채용 선호)를 강하게 내린다. */
 export async function rejectInterest(userId: string, tag: string): Promise<boolean> {
-  if (!INTEREST_TAGS.some((t) => t.id === tag)) return false;
+  if (!INTEREST_TAGS.some((t) => t.id === tag) && !isJobTag(tag)) return false;
   await insertEvents([{ user_id: userId, signal: "reject", tags: [tag] }], "관심사 거절");
   return true;
 }
@@ -85,10 +119,12 @@ export async function recordChatInterests(userId: string, message: string): Prom
 export type InterestContext = {
   events: InterestEvent[];
   calendar: { title: string; start_at: string }[];
-  scores: Record<string, number>;
+  scores: Record<string, number>;    // 정책 관심 (택소노미 태그만)
+  jobScores: Record<string, number>; // 채용 선호 (ncs:·org:·hire:·region:·kw:)
   topTags: string[];
   removed: Set<string>;
   stale: Set<string>;
+  jobStale: Set<string>;
 };
 
 /** 저장된 신호 + 캘린더 일정 + (페르소나) 마이데이터 취준 지출 → 관심 점수·다운랭크 대상. */
@@ -110,12 +146,12 @@ export async function loadInterestContext(opts: { userId?: string | null; person
       const db = supabaseAdmin();
       const since = new Date(now.getTime() - LOOKBACK_DAYS * 86_400_000).toISOString();
       const [ev, cal] = await Promise.all([
-        db.from("user_interest_events").select("signal, tags, policy_id, weight, occurred_at, expires_at").eq("user_id", opts.userId).gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(1000),
+        db.from("user_interest_events").select("signal, tags, policy_id, job_id, weight, occurred_at, expires_at").eq("user_id", opts.userId).gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(1000),
         db.from("user_calendar").select("title, start_at").eq("user_id", opts.userId).gte("start_at", since.slice(0, 10)),
       ]);
       if (ev.error) console.error("관심 신호 조회 실패:", ev.error.message);
       for (const r of ev.data ?? []) {
-        events.push({ signal: r.signal, tags: r.tags ?? [], policyId: r.policy_id, weight: r.weight, occurredAt: r.occurred_at, expiresAt: r.expires_at });
+        events.push({ signal: r.signal, tags: r.tags ?? [], policyId: r.policy_id, jobId: r.job_id, weight: r.weight, occurredAt: r.occurred_at, expiresAt: r.expires_at });
       }
       calendar = cal.data ?? [];
       events.push(...eventsFromTexts(calendar.map((c) => ({ text: c.title, at: c.start_at })), "calendar", INTEREST_TAGS));
@@ -124,8 +160,16 @@ export async function loadInterestContext(opts: { userId?: string | null; person
     }
   }
 
-  const scores = scoreInterests(events, now);
-  return { events, calendar, scores, topTags: topInterests(scores, 3), ...demotedPolicies(events, now) };
+  const all = scoreInterests(events, now);
+  const scores: Record<string, number> = {};
+  const jobScores: Record<string, number> = {};
+  for (const [tag, v] of Object.entries(all)) (isJobTag(tag) ? jobScores : scores)[tag] = v;
+  return {
+    events, calendar, scores, jobScores,
+    topTags: topInterests(scores, 3),
+    ...demotedPolicies(events, now),
+    jobStale: demotedJobs(events, now).stale,
+  };
 }
 
 const GEN_SYSTEM = `당신은 청년 취업준비생에게 지원정책을 안내하는 서비스 "티끌"의 질문 추천기입니다.

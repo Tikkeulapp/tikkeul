@@ -186,9 +186,16 @@ export function JobsView({ session }: { session: SimSession }) {
     setKwDraft("");
   };
 
+  /** 채용 관심 신호 (공고 담기·원문 열람·강점 키워드) — 추천 순위용, 실패해도 무시 */
+  const sendJobSignal = (payload: { signal: "save" | "view"; jobId: string } | { signal: "keyword"; keywords: string[] }) => {
+    if (!session.userId) return;
+    void fetch("/api/job-signals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: session.userId, ...payload }) }).catch(() => {});
+  };
+
   const runSearch = (chipsOverride?: string[]) => {
     const chips = chipsOverride ?? (kwDraft.trim() ? [...kwChips, cleanKw(kwDraft)].filter(Boolean).slice(0, 8) : kwChips);
     if (kwDraft.trim()) { setKwChips(chips); setKwDraft(""); }
+    if (chips.length) sendJobSignal({ signal: "keyword", keywords: chips });
     void search({ sido, ncs, education, career, hire, org, keywords: chips });
   };
 
@@ -255,6 +262,7 @@ export function JobsView({ session }: { session: SimSession }) {
       const results = await Promise.all(reqs);
       if (results.some((r) => !r.ok)) throw new Error("등록 실패");
       setCalSaved((prev) => new Set(prev).add(j.job_id));
+      sendJobSignal({ signal: "save", jobId: j.job_id });
     } catch {
       setError("캘린더 등록에 실패했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
@@ -461,7 +469,7 @@ export function JobsView({ session }: { session: SimSession }) {
                               {calBusy === j.job_id ? "담는 중…" : "📅 캘린더에 담기"}
                             </button>
                       )}
-                      {j.detail_url?.startsWith("http") && <a href={j.detail_url} target="_blank" rel="noreferrer" className="font-bold underline">공고 원문 ↗</a>}
+                      {j.detail_url?.startsWith("http") && <a href={j.detail_url} target="_blank" rel="noreferrer" onClick={() => sendJobSignal({ signal: "view", jobId: j.job_id })} className="font-bold underline">공고 원문 ↗</a>}
                     </span>
                   </div>
                 </li>
