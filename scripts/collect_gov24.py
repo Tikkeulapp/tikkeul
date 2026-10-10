@@ -5,7 +5,9 @@ from pathlib import Path
 
 for line in Path(".env.local").read_text().splitlines():
     if "=" in line and not line.startswith("#"):
-        k, v = line.split("=", 1); os.environ.setdefault(k.strip(), v.strip())
+        k, v = line.split("=", 1)
+        # .env.example처럼 "KEY=값   # 설명" 형태의 줄 끝 주석은 값에서 뺀다
+        os.environ.setdefault(k.strip(), v.split(" #")[0].strip())
 # (과거) gov24 키가 READY_TO_WORK .env에 있던 시절의 폴백 — 지금은 .env.local에 있음
 _legacy = Path("../READY_TO_WORK/.env")
 if "DATA_GO_KR_API_KEY" not in os.environ and _legacy.exists():
