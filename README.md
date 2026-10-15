@@ -17,8 +17,8 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](tsconfig.json)
 
-🏆 **2026 금융 AI Challenge 출품작**
-<!-- 수상 시 여기에 결과를 적으세요. 예) 🏆 2026 금융 AI Challenge · ○○상 -->
+🏆 **2026 금융 AI Challenge 본선 진출(14팀 이내/ 536팀) (10/23 결과 업데이트 예정)**
+금융보안 주최 — 팀 **코딩맹수**
 
 </div>
 
